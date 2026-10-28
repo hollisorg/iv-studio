@@ -6,13 +6,18 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { dataDir, readSettings, resourcesDir } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
+import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' })
 
-const ok = (value) => ({ content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: value })
+// MCP structured results must be objects, so lists go out as { items }.
+const ok = (value) => {
+  const structured = value && typeof value === 'object' && !Array.isArray(value) ? value : { items: value }
+  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: structured }
+}
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: err.message }] })
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
@@ -59,6 +64,45 @@ tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, ()
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))
 tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, (args) => studio.generatePreviews(args))
 tool('finish_candidate', "Finish one preview candidate (2 MP pass + DLSS, optional RTX 2x and frame generation) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
+const sequenceFields = {
+  name: z.string().optional(),
+  method: z.enum(['take', 'shots']).optional().describe('take: every shot in one seamless render. shots: hunt and finish shot by shot, each continuing from the last.'),
+  character: z.string().optional().describe('Character preset id, or "none"'),
+  aspect: z.enum(Object.keys(ASPECTS)).optional(),
+  megapixels: z.number().min(0.3).max(1.5).optional().describe('Render size of the sequence. 0.9 (1280x736 at 16:9) is the tested default.'),
+  shotSeconds: z.number().refine((v) => SHOT_SECONDS.includes(v)).optional().describe(`Length of every shot: ${SHOT_SECONDS.join(' or ')} seconds`),
+  steps: z.number().int().min(4).max(20).optional(),
+  seed: z.number().int().min(0).optional(),
+  voiceRef: z.string().nullable().optional().describe('take: absolute path to a voice sample the whole take keeps'),
+  shots: z
+    .array(z.object({ id: z.string().optional(), prompt: z.string(), mode: z.enum(['text', 'reference', 'frames']).optional(), media: media }))
+    .optional()
+    .describe("One prompt per shot. Each later shot should open holding the previous shot's closing arrangement and stay quiet ~2 s before anyone speaks; end settled with ~2 s to spare. {char} = trigger word.")
+}
+tool('list_sequences', 'Sequences (several shots that play as one continuous video), newest first.', {}, () => studio.listSequences())
+tool('get_sequence', 'A sequence with its shots, versions (takes, shot-by-shot result, retakes) and render-outs.', { sequenceId: z.string() }, ({ sequenceId }) => studio.refreshSequence(sequenceId))
+tool('save_sequence', 'Create a sequence (no sequenceId) or update its settings and shots.', { sequenceId: z.string().optional(), ...sequenceFields }, ({ sequenceId, ...patch }) =>
+  sequenceId ? studio.saveSequence(sequenceId, patch) : studio.saveSequence(studio.createSequence().id, patch)
+)
+tool('render_take', 'Render every shot of a sequence as one seamless take (H3 Multishot). Adds a version; follow with get_job.', { sequenceId: z.string() }, ({ sequenceId }) => studio.renderTake(sequenceId))
+tool('hunt_shot', 'Shot by shot: start previews for one shot (index from 0). Shot 1 gets 3 candidates; later shots continue from the previous finished shot.', { sequenceId: z.string(), index: z.number().int().min(0), seed: z.number().int().optional() }, ({ sequenceId, index, seed }) => studio.huntShot(sequenceId, index, { seed }))
+tool('finish_shot', 'Shot by shot: finish the picked candidate of one shot at the sequence size.', { sequenceId: z.string(), index: z.number().int().min(0), candidate: z.number().int().min(1).max(3).default(1) }, ({ sequenceId, index, candidate }) => studio.finishShot(sequenceId, index, { candidate }))
+tool('retake', 'Redo start..end seconds of a finished version and keep the rest. Adds a new version.', {
+  sequenceId: z.string(),
+  versionId: z.string().describe('From get_sequence versions, e.g. v1 or shots'),
+  prompt: z.string().describe('What happens in that stretch, written like a shot prompt'),
+  start: z.number().min(0),
+  end: z.number().min(0.1),
+  mode: z.enum(Object.keys(RETAKE_MODES)).default('both').describe('both: picture and sound. video: keep the performance (audio). audio: keep the picture.'),
+  seed: z.number().int().optional()
+}, ({ sequenceId, ...opts }) => studio.retakeSequence(sequenceId, opts))
+tool('render_out', 'Finish a version: optional colour smoothing across the joins, then DLSS (scale 1 or 2, frame generation).', {
+  sequenceId: z.string(),
+  versionId: z.string(),
+  normalize: z.boolean().default(false).describe('Smooth colour shifts at the joins (most useful for shot by shot)'),
+  scale: z.number().int().min(1).max(2).default(1),
+  fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`)
+}, ({ sequenceId, ...opts }) => studio.renderOutSequence(sequenceId, opts))
 tool('get_job', 'Status, progress and outputs of a job.', { jobId: z.string() }, ({ jobId }) => studio.refreshJob(jobId))
 tool('cancel_job', 'Cancel an IV Studio job (removes it from the queue or interrupts it if running); never touches other work.', { jobId: z.string() }, ({ jobId }) => studio.cancelJob(jobId))
 tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that made them, for a job or a whole project.', { jobId: z.string().optional(), projectId: z.string().optional() }, async ({ jobId, projectId }) => {

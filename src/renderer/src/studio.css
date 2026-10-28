@@ -424,3 +424,117 @@ input.mini {
 .character-head .link-btn:hover {
   color: var(--red);
 }
+
+/* ---------- sequences ---------- */
+.seq-tiles {
+  margin-top: 24px;
+}
+.seq-hint summary {
+  cursor: pointer;
+}
+.seq-hint p {
+  max-width: 760px;
+  margin: 8px 0 0;
+}
+.seq-shot {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.seq-shot-head,
+.seq-row-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.seq-shot-no {
+  font: 600 18px/1 var(--display);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.seq-shot-tools {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+.link-btn.danger:not(:disabled):hover {
+  color: var(--red);
+}
+.seq-prompt {
+  min-height: 110px;
+}
+.seq-add {
+  justify-self: start;
+}
+.seq-method-hint {
+  margin: -4px 0 4px 162px;
+  max-width: 640px;
+}
+.seq-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.seq-row.done .seq-shot-no {
+  color: #6ee7a8;
+}
+.seq-row-prompt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seq-row-head > .btn {
+  flex: none;
+}
+.seq-use {
+  justify-self: start;
+}
+.seq-row-video {
+  display: block;
+  max-width: 520px;
+  width: 100%;
+  background: #000;
+}
+.timeline {
+  position: relative;
+  height: 28px;
+}
+.timeline-track {
+  position: absolute;
+  inset: 12px 0 auto;
+  height: 4px;
+  background: var(--ink-3);
+}
+.timeline-sel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--red);
+}
+.timeline input[type='range'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.timeline input[type='range']::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 22px;
+  background: var(--paper);
+  border: 0;
+  cursor: ew-resize;
+}

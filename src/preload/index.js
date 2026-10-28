@@ -21,6 +21,18 @@ contextBridge.exposeInMainWorld('ivstudio', {
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
   characters: { list: call('characters:list'), save: call('characters:save') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename') },
+  sequences: {
+    list: call('sequences:list'),
+    get: call('sequences:get'),
+    create: call('sequences:create'),
+    save: call('sequences:save'),
+    delete: call('sequences:delete'),
+    take: call('sequences:take'),
+    retake: call('sequences:retake'),
+    renderOut: call('sequences:renderOut'),
+    huntShot: call('sequences:huntShot'),
+    finishShot: call('sequences:finishShot')
+  },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), previews: call('render:previews'), finish: call('render:finish') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update') },
   files: { pick: call('files:pick'), reveal: call('files:reveal') },

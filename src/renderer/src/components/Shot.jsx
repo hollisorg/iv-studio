@@ -5,7 +5,7 @@ const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
 const FPS = [0, 30, 50, 60, 120]
 
-function Progress({ job }) {
+export function Progress({ job }) {
   if (!job || DONE.includes(job.status)) return null
   const p = job.progress
   const pct = p ? Math.round((p.value / p.max) * 100) : null

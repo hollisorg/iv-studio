@@ -7,6 +7,7 @@ import path from 'node:path'
 import { Comfy } from './comfy.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
+import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup } from './setup.js'
 
 const DEFAULT_CHARACTERS = [
@@ -66,8 +67,8 @@ export class Studio {
     if (!p) throw new Error(`No project ${id}`)
     return p
   }
-  createProject(name) {
-    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [] }
+  createProject(name, sequenceId = null) {
+    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [], sequenceId }
     writeJson(this.projectFile(p.id), p)
     return p
   }
@@ -138,13 +139,19 @@ export class Studio {
 
   async submit({ kind, project, plan, name, parent, previewPlan }) {
     const prompt = buildPrompt(this.template, this.meta, plan.groups, plan.values)
-    const problems = checkPrompt(prompt)
+    return this.submitGraph({ kind, graph: prompt, projectId: project.id, plan, name, parent, previewPlan })
+  }
+
+  // Queues any graph and records it as a job. Sequence graphs carry plan.saves so their outputs can be read.
+  async submitGraph({ kind, graph, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
+    const problems = checkPrompt(graph)
     if (problems.length) throw new Error(`Internal graph error: ${problems.join('; ')}`)
-    const promptId = await this.comfy.submit(prompt, { iv_studio: { kind, project: project.id } })
+    const promptId = await this.comfy.submit(graph, { iv_studio: { kind, project: projectId, sequence: sequenceId } })
     const job = {
       id: randomUUID().slice(0, 12),
       kind,
-      projectId: project.id,
+      projectId,
+      sequenceId,
       parent: parent || null,
       name,
       promptId,
@@ -155,8 +162,177 @@ export class Studio {
       outputs: []
     }
     writeJson(this.jobFile(job.id), job)
-    this.touchProject(project.id, job.id)
+    if (projectId) this.touchProject(projectId, job.id)
     return this.publicJob(job)
+  }
+
+  // ---------- sequences ----------
+  // A sequence is a list of shots that plays as one video. Each render (a whole take, the last shot of a
+  // shot-by-shot chain, or a retake) is a version; a render-out finishes one version with DLSS.
+  sequenceFile = (id) => path.join(this.dataDir, 'sequences', `${id}.json`)
+  listSequences() {
+    const dir = path.join(this.dataDir, 'sequences')
+    if (!fs.existsSync(dir)) return []
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => readJson(path.join(dir, f), null))
+      .filter(Boolean)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((s) => ({ id: s.id, name: s.name, method: s.method, shots: s.shots.length, versions: s.versions.length, renders: s.renders.length, updatedAt: s.updatedAt }))
+  }
+  getSequence(id) {
+    const s = readJson(this.sequenceFile(id), null)
+    if (!s) throw new Error(`No sequence ${id}`)
+    return s
+  }
+  writeSequence(s) {
+    s.updatedAt = now()
+    writeJson(this.sequenceFile(s.id), s)
+    return s
+  }
+  createSequence(init = {}) {
+    const s = { ...SEQUENCE_DEFAULTS, name: 'Untitled sequence', shots: [{ id: randomUUID().slice(0, 6), prompt: '', mode: 'text', media: [] }], ...init, id: randomUUID().slice(0, 8), createdAt: now(), projectId: null, shotJobs: {}, versions: [], renders: [], jobs: [] }
+    return this.writeSequence(s)
+  }
+  // Edits name, settings and shots. Renders already made stay; shot-by-shot shots go stale when their inputs change.
+  saveSequence(id, patch) {
+    const s = this.getSequence(id)
+    const allowed = ['name', 'method', 'character', 'aspect', 'megapixels', 'shotSeconds', 'steps', 'seed', 'voiceRef', 'shots']
+    for (const k of allowed) if (k in (patch || {})) s[k] = patch[k]
+    s.shots = s.shots.map((sh) => ({ id: sh.id || randomUUID().slice(0, 6), prompt: sh.prompt || '', mode: sh.mode || 'text', media: sh.media || [] }))
+    return this.writeSequence(s)
+  }
+  deleteSequence(id) {
+    fs.rmSync(this.sequenceFile(id), { force: true })
+    return true
+  }
+
+  // The sequence plus everything derived from its jobs: version files, shot-by-shot state, render-outs.
+  sequenceView(id) {
+    const s = this.getSequence(id)
+    const job = (jid) => (jid ? readJson(this.jobFile(jid), null) : null)
+    const out = (j, kind) => j?.outputs?.find((o) => o.kind === kind) || null
+
+    // Shot by shot: a shot is fresh when its finish succeeded from the inputs it has now,
+    // including the previous shot's video.
+    const shots = []
+    let prevRaw = null
+    for (const [i, sh] of s.shots.entries()) {
+      const rec = s.shotJobs[sh.id] || {}
+      const pj = job(rec.previews)
+      const fj = job(rec.finish)
+      const raw = out(fj, i === 0 ? 'before_dlss' : 'continued_before_dlss')
+      const key = this.shotKey(s, i, prevRaw)
+      const fresh = !!(raw && rec.key === key)
+      shots.push({ id: sh.id, previews: pj ? this.publicJob(pj) : null, finish: fj ? this.publicJob(fj) : null, raw, fresh, stale: !!rec.key && rec.key !== key, ready: i === 0 || !!prevRaw })
+      prevRaw = fresh ? raw.path : null
+    }
+
+    const versions = s.versions.map((v) => {
+      const j = job(v.jobId)
+      return { ...v, job: j ? this.publicJob(j) : null, file: out(j, 'master') }
+    })
+    if (prevRaw && shots.length) versions.unshift({ id: 'shots', kind: 'shots', label: 'Shot by shot', createdAt: shots.at(-1).finish?.createdAt, job: shots.at(-1).finish, file: shots.at(-1).raw })
+    const renders = s.renders.map((r) => {
+      const j = job(r.jobId)
+      return { ...r, job: j ? this.publicJob(j) : null, file: out(j, 'final') }
+    })
+    return { sequence: s, shots, versions, renders }
+  }
+
+  // sequenceView after asking ComfyUI about any of the sequence's jobs that haven't finished.
+  async refreshSequence(id) {
+    for (const jid of this.getSequence(id).jobs) {
+      const j = readJson(this.jobFile(jid), null)
+      if (j && !['success', 'error', 'cancelled'].includes(j.status)) await this.refreshJob(jid).catch(() => {})
+    }
+    return this.sequenceView(id)
+  }
+
+  shotKey(s, i, prevRaw) {
+    const sh = s.shots[i]
+    return JSON.stringify([sh.prompt, sh.mode, sh.media, s.character, s.aspect, s.megapixels, s.shotSeconds, s.steps, i ? prevRaw : null])
+  }
+
+  sequenceCharacter(s) {
+    return validateSequence(s, this.characters())
+  }
+  sequenceJob(s, j) {
+    s.jobs.push(j.id)
+    this.writeSequence(s)
+    return j
+  }
+
+  async renderTake(id) {
+    const s = this.getSequence(id)
+    const character = this.sequenceCharacter(s)
+    const voiceRef = s.voiceRef ? await this.stage(s.voiceRef, 'iv_studio') : null
+    const n = s.versions.length + 1
+    const name = `${slug(s.name)}_${s.id}_v${n}`
+    const { graph, resolved } = takeGraph({ template: this.template, seq: s, character, name, voiceRef })
+    const j = await this.submitGraph({ kind: 'take', graph, sequenceId: s.id, name, plan: { saves: SAVES, resolved } })
+    s.versions.push({ id: `v${n}`, kind: 'take', label: `Take ${s.versions.filter((v) => v.kind === 'take').length + 1}`, jobId: j.id, createdAt: j.createdAt, seed: s.seed })
+    return this.sequenceJob(s, j)
+  }
+
+  versionPath(id, versionId) {
+    const v = this.sequenceView(id).versions.find((x) => x.id === versionId)
+    if (!v?.file?.path) throw new Error(`Version ${versionId} has no finished video yet.`)
+    return { v, path: v.file.path }
+  }
+
+  async retakeSequence(id, { versionId, prompt, start, end, mode = 'both', seed }) {
+    const s = this.getSequence(id)
+    const character = this.sequenceCharacter(s)
+    if (!prompt?.trim()) throw new Error('Describe what should happen in the retake.')
+    if (!(end > start)) throw new Error('The retake must end after it starts.')
+    const { v, path: sourcePath } = this.versionPath(id, versionId)
+    const n = s.versions.length + 1
+    const name = `${slug(s.name)}_${s.id}_v${n}`
+    const { graph } = retakeGraph({ template: this.template, seq: s, character, name, sourcePath, prompt, start, end, mode, seed: seed ?? s.seed + n })
+    const j = await this.submitGraph({ kind: 'retake', graph, sequenceId: s.id, name, plan: { saves: SAVES, resolved: { start, end, mode } } })
+    s.versions.push({ id: `v${n}`, kind: 'retake', label: `Retake of ${v.label}, ${start}–${end} s`, jobId: j.id, createdAt: j.createdAt, source: versionId, start, end, mode, prompt })
+    return this.sequenceJob(s, j)
+  }
+
+  async renderOutSequence(id, { versionId, normalize = false, scale = 1, fps = 0 }) {
+    const s = this.getSequence(id)
+    const { path: sourcePath } = this.versionPath(id, versionId)
+    const name = `${slug(s.name)}_${s.id}_${versionId}_final`
+    const { graph } = renderOutGraph({ template: this.template, name, sourcePath, normalize, scale, fps })
+    const j = await this.submitGraph({ kind: 'renderout', graph, sequenceId: s.id, name, plan: { saves: SAVES, resolved: { normalize, scale, fps } } })
+    s.renders.push({ id: j.id, versionId, jobId: j.id, createdAt: j.createdAt, normalize, scale, fps })
+    return this.sequenceJob(s, j)
+  }
+
+  // Shot by shot: shot 1 is hunted like any shot; every later shot continues from the previous shot's video.
+  async huntShot(id, index, { seed } = {}) {
+    const s = this.getSequence(id)
+    this.sequenceCharacter(s)
+    const view = this.sequenceView(id)
+    const sh = s.shots[index]
+    if (!sh) throw new Error(`No shot ${index + 1}.`)
+    const prev = index > 0 ? view.shots[index - 1] : null
+    if (prev && !prev.fresh) throw new Error(`Finish shot ${index} first; shot ${index + 1} continues from it.`)
+    if (!s.projectId) s.projectId = this.createProject(`${s.name} (sequence)`, s.id).id
+    const base = { prompt: sh.prompt, character: s.character, aspect: s.aspect, seconds: s.shotSeconds, steps: s.steps, seed: seed ?? s.seed + index * 100 }
+    const request = prev
+      ? { ...base, mode: 'continue', media: [{ kind: 'video', file: prev.raw.path }], megapixels: s.megapixels, overlapFrames: 22 }
+      : { ...base, mode: sh.mode || 'text', media: sh.media || [], megapixels: 0.4, previews: 3 }
+    const j = await this.generatePreviews({ projectId: s.projectId, ...request })
+    s.shotJobs[sh.id] = { previews: j.id, finish: null, key: this.shotKey(s, index, prev?.raw?.path || null) }
+    return this.sequenceJob(s, j)
+  }
+
+  async finishShot(id, index, { candidate = 1 } = {}) {
+    const s = this.getSequence(id)
+    const sh = s.shots[index]
+    const rec = s.shotJobs[sh?.id]
+    if (!rec?.previews) throw new Error(`Hunt shot ${index + 1} first.`)
+    const j = await this.finishCandidate({ jobId: rec.previews, candidate, megapixels: Math.max(0.5, s.megapixels), audio: 'pass', fps: 0, upscale2x: false })
+    rec.finish = j.id
+    return this.sequenceJob(s, j)
   }
 
   // ---------- jobs ----------
@@ -215,6 +391,13 @@ export class Studio {
     const list = []
     const file = (f, kind, extra = {}) => ({ kind, path: f.fullpath || null, url: this.comfy.viewUrl(f), filename: f.filename, subfolder: f.subfolder, ...extra })
     const videoOf = (o) => (o?.gifs || []).filter((f) => /\.mp4$/i.test(f.filename)).sort((a, b) => /-audio/.test(b.filename) - /-audio/.test(a.filename))[0]
+    if (job.plan?.saves) {
+      const master = videoOf(outputs[SAVES.master])
+      if (master) list.push(file(master, 'master'))
+      const p = outputs[SAVES.final]?.text?.[0]
+      if (p) list.push(this.fileFromPath(p, 'final'))
+      return list
+    }
     for (const [k, nid] of Object.entries(PREVIEW_SAVES)) {
       const v = videoOf(outputs[nid])
       if (v) list.push(file(v, 'preview', { candidate: Number(k), seed: job.kind === 'previews' ? job.plan.resolved.seeds[k - 1] : undefined }))

@@ -128,13 +128,28 @@ app.whenReady().then(() => {
   handle('characters:list', () => studio.characters())
   handle('characters:save', (list) => studio.saveCharacters(list))
   handle('projects:list', () =>
-    studio.listProjects().map((p) => {
+    studio.listProjects().filter((p) => !p.sequenceId).map((p) => {
       const jobs = studio.listJobs(p.id)
       const finals = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'final'))
       const previews = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'preview'))
       return { ...p, jobCount: jobs.length, cover: (finals.at(-1) || previews.at(-1))?.url || null, finals: finals.length, running: jobs.some((j) => !['success', 'error', 'cancelled'].includes(j.status)) }
     })
   )
+  handle('sequences:list', () => studio.listSequences())
+  handle('sequences:get', (id) => studio.refreshSequence(id))
+  handle('sequences:create', (init) => studio.createSequence(init))
+  handle('sequences:save', (id, patch) => studio.saveSequence(id, patch))
+  handle('sequences:delete', (id) => studio.deleteSequence(id))
+  const track = async (p) => {
+    const job = await p
+    pending.add(job.id)
+    return job
+  }
+  handle('sequences:take', (id) => track(studio.renderTake(id)))
+  handle('sequences:retake', (id, opts) => track(studio.retakeSequence(id, opts)))
+  handle('sequences:renderOut', (id, opts) => track(studio.renderOutSequence(id, opts)))
+  handle('sequences:huntShot', (id, index, opts) => track(studio.huntShot(id, index, opts)))
+  handle('sequences:finishShot', (id, index, opts) => track(studio.finishShot(id, index, opts)))
   handle('projects:get', (id) => ({ project: studio.getProject(id), jobs: studio.listJobs(id) }))
   handle('projects:rename', (id, name) => studio.renameProject(id, name))
   handle('render:plan', (request, finish) => studio.planRender(request, finish))

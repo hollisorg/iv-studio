@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Create from './components/Create'
 import Library from './components/Library'
+import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
@@ -8,6 +9,7 @@ import Shot from './components/Shot'
 const PAGES = [
   ['create', 'Create'],
   ['library', 'Shots'],
+  ['sequences', 'Sequences'],
   ['setup', 'Setup'],
   ['settings', 'Settings']
 ]
@@ -15,6 +17,7 @@ const PAGES = [
 export default function App() {
   const [page, setPage] = useState('create')
   const [projectId, setProjectId] = useState(null)
+  const [sequenceId, setSequenceId] = useState(null)
   const [setup, setSetup] = useState(null)
   const [checking, setChecking] = useState(false)
   const [characters, setCharacters] = useState([])
@@ -52,8 +55,13 @@ export default function App() {
     setPage('shot')
   }
 
+  const openSequence = (id) => {
+    setSequenceId(id)
+    setPage('sequence')
+  }
+
   const ready = setup?.ready
-  const ctx = { setup, recheck, checking, characters, setCharacters, notify, openShot, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, recheck, checking, characters, setCharacters, notify, openShot, openSequence, jobs, setJobs, info, go: setPage }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -70,7 +78,7 @@ export default function App() {
       </header>
       <nav className="nav">
         {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') ? 'on' : ''}`} onClick={() => setPage(id)}>
+          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
@@ -82,6 +90,8 @@ export default function App() {
         {page === 'create' && <Create {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
+        {page === 'sequences' && <SequenceList {...ctx} />}
+        {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}
       </main>
