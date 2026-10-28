@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, scree
 import fs from 'node:fs'
 import path from 'node:path'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { Cloud, GPUS } from '../service/cloud'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
@@ -13,6 +14,8 @@ if (!app.requestSingleInstanceLock()) app.quit()
 protocol.registerSchemesAsPrivileged([{ scheme: 'ivmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }])
 
 const BG = '#100c0e'
+// A copy started with its own user data (testing beside the installed app) says so everywhere.
+const TEST_COPY = !!process.env.IV_STUDIO_USER_DATA
 const DATA = process.env.IV_STUDIO_DATA || dataDir()
 let win = null
 let studio = null
@@ -24,10 +27,22 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
 
+// Secrets at rest (the Comfy.org key, the cloud token) are encrypted with Windows' per-user key.
+const seal = (text) => (text ? safeStorage.encryptString(text).toString('base64') : null)
+const unseal = (enc) => {
+  if (!enc) return null
+  try {
+    return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+  } catch {
+    return null
+  }
+}
+
 function makeStudio() {
   stopWatch?.()
   const s = readSettings(DATA)
-  studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), comfyUrl: s.comfyUrl })
+  const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
+  studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ...cloud })
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -69,7 +84,7 @@ function createWindow() {
     minHeight: 720,
     show: false,
     backgroundColor: BG,
-    title: 'IV Studio',
+    title: TEST_COPY ? 'IV Studio (TEST COPY)' : 'IV Studio',
     icon: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: BG, symbolColor: '#f1ede5', height: 40 },
@@ -83,6 +98,7 @@ function createWindow() {
     return { action: 'deny' }
   })
   win.once('ready-to-show', () => win.show())
+  if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
   win.on('close', () => writeSettings({ window: win.getBounds() }, DATA))
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(path.join(__dirname, '../renderer/index.html'))
@@ -112,29 +128,93 @@ app.whenReady().then(() => {
     const u = new URL(req.url)
     if (u.hostname !== 'view') return new Response('Not found', { status: 404 })
     const range = req.headers.get('range')
-    return fetch(`${studio.comfy.url}/view${u.search}`, { headers: range ? { Range: range } : {} })
+    return fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers(range ? { Range: range } : {}) })
   })
 
-  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand() }))
+  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY }))
   // The window never sees the Comfy.org key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, ...rest } = s
-    return { ...rest, hasComfyKey: !!comfyApiKey }
+    const { comfyApiKey, cloudToken, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken }
   }
-  const comfyKey = () => {
-    const enc = readSettings(DATA).comfyApiKey
-    if (!enc) return null
-    try {
-      return safeStorage.decryptString(Buffer.from(enc, 'base64'))
-    } catch {
-      return null
-    }
-  }
+  const comfyKey = () => unseal(readSettings(DATA).comfyApiKey)
   handle('settings:get', () => publicSettings(readSettings(DATA)))
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()
     if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
-    return publicSettings(writeSettings({ comfyApiKey: k ? safeStorage.encryptString(k).toString('base64') : null }, DATA))
+    return publicSettings(writeSettings({ comfyApiKey: seal(k) }, DATA))
+  })
+  // ---------- cloud (Modal, the user's own account) ----------
+  const cloud = new Cloud({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), onLog: (line) => send('cloud:log', line) })
+  let cloudBusy = null
+  const cloudTask = async (label, fn) => {
+    if (cloudBusy) throw new Error(`Still busy: ${cloudBusy}.`)
+    cloudBusy = label
+    try {
+      return await fn()
+    } finally {
+      cloudBusy = null
+    }
+  }
+  const saveCloud = (patch) => writeSettings({ cloud: { ...(readSettings(DATA).cloud || {}), ...patch } }, DATA)
+  handle('cloud:status', async () => {
+    const s = readSettings(DATA)
+    return { toolkit: cloud.toolkitReady(), workspace: await cloud.workspace(), cloud: s.cloud, target: s.target, gpus: GPUS, busy: cloudBusy, hasToken: !!s.cloudToken }
+  })
+  handle('cloud:install', () => cloudTask('installing the cloud tools', () => cloud.installToolkit()))
+  handle('cloud:signIn', () => cloudTask('signing in to Modal', async () => (await cloud.signIn(), cloud.workspace())))
+  handle('cloud:deploy', ({ gpu, idleSeconds }) =>
+    cloudTask('setting up the cloud', async () => {
+      const { url, token } = await cloud.deploy({ gpu, idleSeconds })
+      writeSettings({ cloudToken: seal(token) }, DATA)
+      saveCloud({ url, gpu, idleSeconds, workspace: await cloud.workspace(), deployedAt: new Date().toISOString() })
+      return readSettings(DATA).cloud
+    })
+  )
+  handle('cloud:fetchModels', () =>
+    cloudTask('downloading the models', async () => {
+      await cloud.fetchModels()
+      return saveCloud({ modelsAt: new Date().toISOString() }).cloud
+    })
+  )
+  // Each character's LoRA and the RefMods it uses, found through the local ComfyUI's model folders.
+  handle('cloud:uploadCharacters', () =>
+    cloudTask('uploading characters', async () => {
+      const local = await fetch(`${readSettings(DATA).comfyUrl}/experiment/models`).then((r) => r.json())
+      const roots = (name) => local.find((f) => f.name === name)?.folders || []
+      const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
+      const done = []
+      for (const c of studio.characters()) {
+        const lora = find('loras', c.lora)
+        if (lora) await cloud.uploadModel(lora, `loras/${c.lora.replace(/\\/g, '/')}`), done.push(c.lora)
+        for (const r of [c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
+          const file = find('refmods', `${r}.safetensors`)
+          if (file) await cloud.uploadModel(file, `refmods/${r}.safetensors`), done.push(r)
+        }
+      }
+      saveCloud({ charactersAt: new Date().toISOString() })
+      return done
+    })
+  )
+  handle('cloud:use', (target) => {
+    const s = readSettings(DATA)
+    if (target === 'cloud' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
+    writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, DATA)
+    makeStudio()
+    return target
+  })
+  // Wakes the cloud GPU (a cold start loads ComfyUI; Modal holds the request until it is up).
+  handle('cloud:wake', async () => {
+    const t0 = Date.now()
+    for (;;) {
+      try {
+        const stats = await studio.comfy.req('/system_stats', { timeout: 600000 })
+        return { seconds: Math.round((Date.now() - t0) / 1000), gpu: stats.devices?.[0]?.name }
+      } catch (err) {
+        if (!err.starting || Date.now() - t0 > 900000) throw err
+        await new Promise((r) => setTimeout(r, 5000))
+      }
+    }
   })
   handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(DATA).promptEngine, model: readSettings(DATA).ollamaModel, hasComfyKey: !!readSettings(DATA).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE }))
   handle('prompts:write', (request) => {
@@ -145,7 +225,7 @@ app.whenReady().then(() => {
   handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(DATA).ollamaModel }))
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, cloud, target, ...safe } = patch || {}
     const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
     return s
@@ -208,9 +288,23 @@ app.whenReady().then(() => {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile', ...(kind === 'picture' ? ['multiSelections'] : [])], filters })
     return r.canceled ? [] : r.filePaths
   })
-  handle('files:reveal', (p) => {
-    if (p && fs.existsSync(p)) shell.showItemInFolder(p)
-    return true
+  // A path on this PC opens in Explorer. An output that lives in the cloud is downloaded to
+  // Videos\IV Studio first (same file name), then shown.
+  handle('files:reveal', async (file) => {
+    const p = typeof file === 'string' ? file : file?.path
+    if (p && fs.existsSync(p)) return shell.showItemInFolder(p), p
+    if (!file?.url) throw new Error('That file is not on this PC.')
+    const u = new URL(file.url)
+    const dest = path.join(app.getPath('videos'), 'IV Studio', u.searchParams.get('filename'))
+    if (!fs.existsSync(dest)) {
+      const res = await fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers() })
+      if (!res.ok) throw new Error(`Download failed (${res.status}).`)
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.writeFileSync(`${dest}.part`, Buffer.from(await res.arrayBuffer()))
+      fs.renameSync(`${dest}.part`, dest)
+    }
+    shell.showItemInFolder(dest)
+    return dest
   })
   handle('links:open', (url) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)

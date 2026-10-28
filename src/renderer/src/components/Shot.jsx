@@ -4,7 +4,6 @@ import Hero from './Hero'
 
 const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
-const FPS = [0, 30, 50, 60, 120]
 
 export function Progress({ job }) {
   if (!job || DONE.includes(job.status)) return null
@@ -25,7 +24,9 @@ export function Progress({ job }) {
   )
 }
 
-function FinishPanel({ job, candidate, onStart, notify }) {
+function FinishPanel({ job, candidate, onStart, notify, caps }) {
+  const FPS = caps?.fps || [0, 30, 50, 60, 120]
+  const dlss = caps?.dlss !== false
   const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass' })
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -67,7 +68,7 @@ function FinishPanel({ job, candidate, onStart, notify }) {
         </div>
       )}
       <div className="row">
-        <span className="row-label">RTX upscale</span>
+        <span className="row-label">{dlss ? 'RTX upscale' : '2× upscale'}</span>
         <div className="segmented">
           <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
             Off
@@ -115,7 +116,7 @@ function FinishPanel({ job, candidate, onStart, notify }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote }) {
   const [project, setProject] = useState(null)
   const [jobIds, setJobIds] = useState([])
   const [picked, setPicked] = useState({})
@@ -188,7 +189,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go }) {
                 ))}
               </div>
             )}
-            {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} />}
+            {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} />}
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
               return (
@@ -199,8 +200,8 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go }) {
                       {f.plan.resolved?.width}×{f.plan.resolved?.height} · {f.plan.resolved?.fps} fps{f.seconds ? ` · ${f.seconds} s render` : ''}
                     </span>
                     {final?.path && (
-                      <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final.path)}>
-                        Show in folder
+                      <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final).catch((err) => notify(err.message))}>
+                        {remote ? 'Download' : 'Show in folder'}
                       </button>
                     )}
                   </div>

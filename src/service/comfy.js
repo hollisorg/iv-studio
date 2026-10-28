@@ -3,9 +3,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 export class Comfy {
-  constructor(url = 'http://127.0.0.1:8188', clientId = 'iv-studio') {
+  // token: a cloud ComfyUI sits behind IV Studio's gate (resources/cloud/gate.py), which wants it as a
+  // Bearer header. A local ComfyUI has none.
+  constructor(url = 'http://127.0.0.1:8188', clientId = 'iv-studio', token = null) {
     this.url = url.replace(/\/$/, '')
     this.clientId = clientId
+    this.token = token
+  }
+
+  get remote() {
+    return !!this.token
+  }
+
+  headers(extra = {}) {
+    return { ...extra, ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }
   }
 
   async req(route, { method = 'GET', body, json, timeout = 15000 } = {}) {
@@ -15,7 +26,7 @@ export class Comfy {
       const res = await fetch(this.url + route, {
         method,
         signal: ctl.signal,
-        headers: json !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+        headers: this.headers(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
         body: json !== undefined ? JSON.stringify(json) : body
       })
       const text = await res.text()
@@ -31,6 +42,7 @@ export class Comfy {
     } catch (err) {
       if (err.name === 'AbortError') throw new Error(`ComfyUI did not answer ${route} within ${timeout / 1000} s`)
       if (err.cause?.code === 'ECONNREFUSED') throw new Error(`ComfyUI is not running at ${this.url}`)
+      if (err.status === 503 && this.remote) throw Object.assign(new Error('The cloud GPU is still starting up.'), { status: 503, starting: true })
       throw err
     } finally {
       clearTimeout(t)

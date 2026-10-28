@@ -1,0 +1,22 @@
+{
+  "_note": "What the IV Studio cloud image installs, pinned to the versions IV Studio is tested with on Windows (2026-10-28). git packs are cloned at a commit; registry packs are the Comfy Registry archive of that exact version. DLSS5 is left out: it is Windows-only (Direct3D 12). Frame Interpolation (RIFE) stands in for its frame generation in the cloud.",
+  "comfyui": { "repo": "https://github.com/Comfy-Org/ComfyUI", "tag": "v0.42.5" },
+  "torch": { "index": "https://download.pytorch.org/whl/cu128", "packages": ["torch", "torchvision", "torchaudio"] },
+  "packs": [
+    { "dir": "ComfyUI-MiniMaxH3Mod", "registry": "https://cdn.comfy.org/luisacaotica/ComfyUI-MiniMaxH3Mod/0.2.9/node.zip" },
+    { "dir": "ComfyUI-Fantastic-MiniMaxH3-PromptBuilder", "git": "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder", "commit": "22e719f" },
+    { "dir": "Comfyui_Minimax_h3_latent_Upscaler", "git": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler", "commit": "40316cf" },
+    { "dir": "ComfyUI-VideoHelperSuite", "git": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite", "commit": "4d907be" },
+    { "dir": "rgthree-comfy", "git": "https://github.com/rgthree/rgthree-comfy", "commit": "d7297b4" },
+    { "dir": "comfyui-impact-pack", "registry": "https://cdn.comfy.org/drltdata/comfyui-impact-pack/8.28.3/node.zip" },
+    { "dir": "ComfyUI-Pixaroma", "git": "https://github.com/pixaroma/ComfyUI-Pixaroma", "commit": "30d4d942" },
+    { "dir": "ComfyUI-Easy-Use", "git": "https://github.com/yolain/ComfyUI-Easy-Use", "commit": "b0b47ca" },
+    { "dir": "comfyui_essentials", "registry": "https://cdn.comfy.org/matteo/comfyui_essentials/1.1.0/node.tar.gz" },
+    { "dir": "ComfyUI-KJNodes", "git": "https://github.com/kijai/ComfyUI-KJNodes", "commit": "37ca7af" },
+    { "dir": "comfyui-h3-multishot", "registry": "https://cdn.comfy.org/joeygambino/comfyui-h3-multishot/2.7.2/node.zip" },
+    { "dir": "comfyui-frame-interpolation", "registry": "https://cdn.comfy.org/fannovel16/comfyui-frame-interpolation/1.0.7/node.zip" }
+  ],
+  "extraModels": [
+    { "id": "esrgan_x2", "label": "Real-ESRGAN x2 (cloud 2x upscale)", "match": "RealESRGAN_x2plus.pth", "folder": "upscale_models", "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth", "size": null }
+  ]
+}

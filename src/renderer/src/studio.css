@@ -711,3 +711,42 @@ input.mini {
 .story-toggle {
   justify-self: start;
 }
+
+.test-copy {
+  margin-left: 8px;
+  padding: 3px 8px;
+  background: #f4c430;
+  color: #100c0e;
+}
+
+/* ---------- cloud ---------- */
+.cloud-badge {
+  padding: 2px 7px;
+  background: var(--red);
+  color: var(--ink);
+}
+.cloud-switch {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.cloud-n {
+  margin-right: 6px;
+}
+.cloud-ok {
+  color: #6ee7a8;
+}
+.cloud-step.done .group-head h2 {
+  color: var(--paper-dim);
+}
+.cloud-gpus {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.cloud-log {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0 0 24px;
+}

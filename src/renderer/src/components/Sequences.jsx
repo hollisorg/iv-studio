@@ -7,7 +7,6 @@ import PromptWriter, { StoryWriter } from './PromptWriter'
 const DONE = ['success', 'error', 'cancelled']
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const SIZES = [0.6, 0.9, 1.2]
-const FPS = [0, 30, 50, 60, 120]
 const RETAKE_MODES = [
   ['both', 'Picture and sound'],
   ['video', 'Picture only'],
@@ -168,7 +167,8 @@ function RetakePanel({ version, onStart, notify }) {
   )
 }
 
-function RenderOutPanel({ version, method, onStart, notify }) {
+function RenderOutPanel({ version, method, onStart, notify, caps }) {
+  const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const [opts, setOpts] = useState({ normalize: method === 'shots', scale: 1, fps: 0 })
   const [busy, setBusy] = useState(false)
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
@@ -190,7 +190,7 @@ function RenderOutPanel({ version, method, onStart, notify }) {
         <Seg value={opts.normalize} options={[[false, 'Off'], [true, 'On']]} onChange={(normalize) => set({ normalize })} />
       </div>
       <div className="row">
-        <span className="row-label">RTX upscale</span>
+        <span className="row-label">{caps?.dlss === false ? '2× upscale' : 'RTX upscale'}</span>
         <Seg value={opts.scale} options={[[1, 'Off'], [2, '2×']]} onChange={(scale) => set({ scale })} />
       </div>
       <div className="row">
@@ -198,7 +198,7 @@ function RenderOutPanel({ version, method, onStart, notify }) {
         <Seg value={opts.fps} options={FPS} format={(f) => (f ? f : '24')} onChange={(fps) => set({ fps })} />
       </div>
       <div className="finish-go">
-        <span className="mono dim">DLSS clean-up{opts.normalize ? ', colour matched across the joins' : ''}.</span>
+        <span className="mono dim">{caps?.dlss === false ? 'Cloud finish' : 'DLSS clean-up'}{opts.normalize ? ', colour matched across the joins' : ''}.</span>
         <button className="btn btn-primary" disabled={busy} onClick={go}>
           {busy ? 'Starting…' : 'Render out'}
         </button>
@@ -269,7 +269,7 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
   )
 }
 
-export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live }) {
+export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live, caps, remote }) {
   const [seq, setSeq] = useState(null)
   const [view, setView] = useState(null)
   const [panel, setPanel] = useState(null) // {kind: 'retake'|'out', versionId}
@@ -492,8 +492,8 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
                     <button className="link-btn mono" onClick={() => setPanel(panel?.versionId === v.id && panel.kind === 'out' ? null : { kind: 'out', versionId: v.id })}>
                       Render out…
                     </button>
-                    <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(v.file.path)}>
-                      Show in folder
+                    <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(v.file).catch((err) => notify(err.message))}>
+                      {remote ? 'Download' : 'Show in folder'}
                     </button>
                   </>
                 )}
@@ -506,7 +506,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
               ) : (
                 v.file && <video className="final-video" src={media(v.file.url)} controls preload="metadata" />
               )}
-              {panel?.versionId === v.id && panel.kind === 'out' && <RenderOutPanel version={ver} method={seq.method} onStart={onStart} notify={notify} />}
+              {panel?.versionId === v.id && panel.kind === 'out' && <RenderOutPanel version={ver} method={seq.method} onStart={onStart} notify={notify} caps={caps} />}
             </div>
           )
         })}
@@ -528,8 +528,8 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
                     {r.fps || 24} fps{j?.seconds ? ` · ${j.seconds} s render` : ''}
                   </span>
                   {r.file?.path && (
-                    <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(r.file.path)}>
-                      Show in folder
+                    <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(r.file).catch((err) => notify(err.message))}>
+                      {remote ? 'Download' : 'Show in folder'}
                     </button>
                   )}
                 </div>

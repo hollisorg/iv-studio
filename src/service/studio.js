@@ -7,6 +7,7 @@ import path from 'node:path'
 import { Comfy } from './comfy.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
+import { adaptGraph, capabilities } from './remote.js'
 import { contextIrGraph, fromContextIr, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup } from './setup.js'
@@ -32,12 +33,12 @@ const slug = (s) => (s || 'shot').toLowerCase().replace(/[^a-z0-9]+/g, '_').repl
 const now = () => new Date().toISOString()
 
 export class Studio {
-  constructor({ dataDir, resourcesDir, comfyUrl, outputDir }) {
+  constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, outputDir }) {
     this.dataDir = dataDir
     this.template = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.json'), 'utf8'))
     this.meta = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.groups.json'), 'utf8'))
     this.manifest = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'models.json'), 'utf8'))
-    this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`)
+    this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken)
     this.outputDir = outputDir || null
     this.progress = new Map() // promptId -> {value, max, node}
   }
@@ -88,8 +89,19 @@ export class Studio {
   }
 
   // ---------- setup ----------
-  checkSetup() {
-    return checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters() })
+  async checkSetup() {
+    const result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters() })
+    if (result.items[0]?.status === 'ok') result.caps = await this.capabilities(true).catch(() => null)
+    return { ...result, remote: this.comfy.remote }
+  }
+
+  // What the connected ComfyUI can do (Linux paths, DLSS or the cloud's upscale + RIFE); cached.
+  async capabilities(refresh = false) {
+    if (!this._caps || refresh) {
+      const [info, stats] = await Promise.all([this.comfy.objectInfo(), this.comfy.systemStats()])
+      this._caps = capabilities(info, stats)
+    }
+    return this._caps
   }
 
   // ---------- planning ----------
@@ -133,6 +145,9 @@ export class Studio {
   async finishCandidate({ jobId, ...finish }) {
     const source = this.getJob(jobId, { refresh: false })
     if (source.kind !== 'previews') throw new Error('finish_candidate needs a previews job id.')
+    const caps = await this.capabilities()
+    if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
+    if (finish.upscale2x && !caps.upscale2x) throw new Error('This ComfyUI has no 2x upscaler.')
     const plan = planFinish(source.plan, finish)
     plan.values['80'] = source.name
     return this.submit({ kind: 'finish', project: this.getProject(source.projectId), plan, name: source.name, parent: source.id, previewPlan: source.plan })
@@ -144,7 +159,8 @@ export class Studio {
   }
 
   // Queues any graph and records it as a job. Sequence graphs carry plan.saves so their outputs can be read.
-  async submitGraph({ kind, graph, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
+  async submitGraph({ kind, graph: built, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
+    const graph = adaptGraph(built, await this.capabilities())
     const problems = checkPrompt(graph)
     if (problems.length) throw new Error(`Internal graph error: ${problems.join('; ')}`)
     const promptId = await this.comfy.submit(graph, { iv_studio: { kind, project: projectId, sequence: sequenceId } })
@@ -476,6 +492,8 @@ export class Studio {
 
   // Live progress from ComfyUI's websocket (the studio window keeps one open; the MCP server polls).
   watch(onEvent) {
+    // A cloud ComfyUI shuts down when idle; an open websocket would keep it (and its bill) running.
+    if (this.comfy.remote) return () => {}
     let ws
     let stopped = false
     const connect = () => {

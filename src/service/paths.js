@@ -16,7 +16,8 @@ export function resourcesDir(hint) {
 }
 
 // comfyApiKey is stored encrypted by the app (Electron safeStorage); it is never sent to the window.
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null }
+// target: 'local' (comfyUrl) or 'cloud' (cloud.url behind the gate, cloudToken; both set by the Cloud page).
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null }
 
 export function readSettings(dir = dataDir()) {
   try {

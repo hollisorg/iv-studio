@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Create from './components/Create'
 import Library from './components/Library'
+import Cloud from './components/Cloud'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
 import Setup from './components/Setup'
@@ -11,6 +12,7 @@ const PAGES = [
   ['library', 'Shots'],
   ['sequences', 'Sequences'],
   ['setup', 'Setup'],
+  ['cloud', 'Cloud'],
   ['settings', 'Settings']
 ]
 
@@ -61,7 +63,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, recheck, checking, characters, setCharacters, notify, openShot, openSequence, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, jobs, setJobs, info, go: setPage }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -70,8 +72,10 @@ export default function App() {
         <span className="brand-mark">IV</span>
         <span className="mono">Infinite Variance</span>
         <span className="mono dim">/ Studio</span>
+        {info?.testCopy && <span className="mono test-copy">Test copy · separate data</span>}
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
+          {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
         </div>
@@ -93,6 +97,7 @@ export default function App() {
         {page === 'sequences' && <SequenceList {...ctx} />}
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}
+        {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}
       </main>
       {toast && (

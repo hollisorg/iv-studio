@@ -39,7 +39,7 @@ function ModelAction({ item, dl }) {
   )
 }
 
-export default function Setup({ setup, recheck, checking }) {
+export default function Setup({ setup, recheck, checking, remote }) {
   const [dl, setDl] = useState({})
   const items = setup?.items || []
 
@@ -51,7 +51,7 @@ export default function Setup({ setup, recheck, checking }) {
     })
   }, [recheck])
 
-  const missingModels = items.filter((i) => i.kind === 'model' && i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
+  const missingModels = remote ? [] : items.filter((i) => i.kind === 'model' && i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
   const missingBytes = missingModels.reduce((n, i) => n + (i.size || 0), 0)
   const errors = Object.entries(dl).filter(([, s]) => s.status === 'error')
 
@@ -103,7 +103,7 @@ export default function Setup({ setup, recheck, checking }) {
                       </button>
                     )}
                   </div>
-                  {i.kind === 'model' ? <ModelAction item={i} dl={dl} /> : <span />}
+                  {i.kind === 'model' && !remote ? <ModelAction item={i} dl={dl} /> : <span />}
                 </li>
               ))}
             </ul>

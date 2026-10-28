@@ -19,7 +19,9 @@ export const ASPECTS = {
   '21:9': '21:9 (Ultrawide)'
 }
 
-export const FRAME_GEN_FPS = [0, 30, 50, 60, 120] // the DLSS program refuses anything else
+// DLSS takes 30/50/60/120; the cloud's RIFE takes whole multiples of 24 (48/72/120). The studio
+// checks a request against what the connected ComfyUI can do (remote.js capabilities).
+export const FRAME_GEN_FPS = [0, 30, 48, 50, 60, 72, 120]
 const RATIO = { '16:9': [16, 9], '9:16': [9, 16], '1:1': [1, 1], '4:3': [4, 3], '3:4': [3, 4], '3:2': [3, 2], '2:3': [2, 3], '21:9': [21, 9] }
 
 // ComfyUI's ResolutionSelector, multiple 32.
@@ -132,7 +134,7 @@ export function planFinish(previewPlan, finish) {
   const errors = []
   const n = previewPlan.resolved.previews
   if (!(f.candidate >= 1 && f.candidate <= n)) errors.push(`candidate must be 1..${n}.`)
-  if (!FRAME_GEN_FPS.includes(f.fps)) errors.push('fps must be 0 (off), 30, 50, 60 or 120.')
+  if (!FRAME_GEN_FPS.includes(f.fps)) errors.push(`fps must be one of ${FRAME_GEN_FPS.join(', ')} (0 = off).`)
   if (!(f.megapixels >= 0.5 && f.megapixels <= 4)) errors.push('megapixels must be between 0.5 and 4.')
   if (f.audio === 'voice' && !previewPlan.request.voiceLine) errors.push('Final audio "voice" needs a voice line.')
   if (errors.length) throw Object.assign(new Error(errors.join(' ')), { errors })
