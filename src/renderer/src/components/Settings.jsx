@@ -30,6 +30,12 @@ export default function Settings({ info, recheck, notify, characters, setCharact
     setCharacters(await window.ivstudio.characters.save(list))
   }
 
+  // Shots already made with a character keep working: their finish uses the saved plan, not this list.
+  async function deleteCharacter(i) {
+    if (!window.confirm(`Delete ${characters[i].name}? Its LoRA file stays in ComfyUI; only the preset is removed.`)) return
+    setCharacters(await window.ivstudio.characters.save(characters.filter((_, j) => j !== i)))
+  }
+
   if (!settings) return null
   return (
     <div className="settings">
@@ -60,7 +66,12 @@ export default function Settings({ info, recheck, notify, characters, setCharact
         <div className="group-body">
           {characters.map((c, i) => (
             <div key={c.id} className="character-card">
-              <input value={c.name} onChange={(e) => saveCharacter(i, { name: e.target.value })} />
+              <div className="character-head">
+                <input value={c.name} onChange={(e) => saveCharacter(i, { name: e.target.value })} />
+                <button className="link-btn mono" onClick={() => deleteCharacter(i)}>
+                  Delete
+                </button>
+              </div>
               <div className="row tight">
                 <span className="row-label">LoRA</span>
                 <input value={c.lora} onChange={(e) => saveCharacter(i, { lora: e.target.value })} />

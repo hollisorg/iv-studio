@@ -407,10 +407,20 @@ input.mini {
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
-.character-card > input {
+.character-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.character-head input {
+  flex: 1;
+  min-width: 0;
   font: 600 20px/1 var(--display);
   text-transform: uppercase;
   background: none;
   border: 0;
   padding: 0 0 6px;
+}
+.character-head .link-btn:hover {
+  color: var(--red);
 }
