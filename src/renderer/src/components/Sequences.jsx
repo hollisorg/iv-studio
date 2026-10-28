@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { Progress } from './Shot'
 import Hero from './Hero'
+import PromptWriter, { StoryWriter } from './PromptWriter'
 
 const DONE = ['success', 'error', 'cancelled']
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
@@ -75,7 +76,8 @@ function Seg({ value, options, onChange, format = (v) => v }) {
   )
 }
 
-function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete }) {
+function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete, writer }) {
+  const [writing, setWriting] = useState(false)
   return (
     <div className="seq-shot">
       <div className="seq-shot-head">
@@ -87,6 +89,9 @@ function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete }) {
           <button className="link-btn mono" disabled={i === count - 1} onClick={() => onMove(1)} title="Move down">
             ↓
           </button>
+          <button className="link-btn mono" onClick={() => setWriting(!writing)}>
+            {writing ? 'Hide writer' : '✦ Write it for me'}
+          </button>
           <button className="link-btn mono" onClick={onDuplicate}>
             Duplicate
           </button>
@@ -95,6 +100,7 @@ function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete }) {
           </button>
         </div>
       </div>
+      {writing && <PromptWriter compact context={writer.context} current={shot.prompt} onWritten={(prompt) => onChange({ prompt })} notify={writer.notify} go={writer.go} />}
       <textarea className="prompt seq-prompt" rows={5} value={shot.prompt} placeholder="{char} sits at the kitchen table… and says: <d>[English] …</d>" onChange={(e) => onChange({ prompt: e.target.value })} />
     </div>
   )
@@ -355,6 +361,13 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
           <p className="mono label">01 · Shots</p>
           <span className="mono dim small">{char ? <>Write {'{char}'} for {char.name.split(' ')[0]} ({char.trigger})</> : 'No character'}</span>
         </div>
+        <StoryWriter
+          character={seq.character}
+          shotSeconds={seq.shotSeconds}
+          existing={shots.filter((s) => s.prompt.trim()).length}
+          onShots={(list) => edit({ shots: list.map((prompt, k) => ({ id: shots[k]?.id || newId(), prompt, mode: 'text', media: [] })) })}
+          notify={notify}
+        />
         <details className="seq-hint">
           <summary className="mono dim">How to write shots that join cleanly</summary>
           <p className="small dim">{SHOT_HINT}</p>
@@ -369,6 +382,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
             onMove={(d) => moveShot(i, d)}
             onDuplicate={() => edit({ shots: [...shots.slice(0, i + 1), { ...s, id: newId() }, ...shots.slice(i + 1)] })}
             onDelete={() => edit({ shots: shots.filter((_, j) => j !== i) })}
+            writer={{ notify, go, context: { mode: 'text', seconds: seq.shotSeconds, aspect: seq.aspect, character: seq.character, sequence: true, previous: i > 0 ? shots[i - 1].prompt : null } }}
           />
         ))}
         <button className="btn btn-small seq-add" disabled={shots.length >= 8} onClick={() => edit({ shots: [...shots, { id: newId(), prompt: '', mode: 'text', media: [] }] })}>

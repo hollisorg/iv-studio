@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ModelInstaller } from '../service/models'
+import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
@@ -115,9 +116,37 @@ app.whenReady().then(() => {
   })
 
   handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand() }))
-  handle('settings:get', () => readSettings(DATA))
+  // The window never sees the Comfy.org key, only whether one is saved.
+  const publicSettings = (s) => {
+    const { comfyApiKey, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey }
+  }
+  const comfyKey = () => {
+    const enc = readSettings(DATA).comfyApiKey
+    if (!enc) return null
+    try {
+      return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+    } catch {
+      return null
+    }
+  }
+  handle('settings:get', () => publicSettings(readSettings(DATA)))
+  handle('settings:setComfyKey', (key) => {
+    const k = String(key || '').trim()
+    if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    return publicSettings(writeSettings({ comfyApiKey: k ? safeStorage.encryptString(k).toString('base64') : null }, DATA))
+  })
+  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(DATA).promptEngine, model: readSettings(DATA).ollamaModel, hasComfyKey: !!readSettings(DATA).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE }))
+  handle('prompts:write', (request) => {
+    const s = readSettings(DATA)
+    const engine = request?.engine || s.promptEngine
+    return studio.writePrompt(request, { engine, apiKey: engine === 'contextir' ? comfyKey() : null, model: s.ollamaModel })
+  })
+  handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(DATA).ollamaModel }))
+  handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const s = writeSettings(patch, DATA)
+    const { comfyApiKey, ...safe } = patch || {}
+    const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
     return s
   })

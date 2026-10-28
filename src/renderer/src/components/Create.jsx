@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Hero from './Hero'
+import PromptWriter from './PromptWriter'
 
 const MODES = [
   ['text', 'Text', 'Just the prompt.'],
@@ -146,6 +147,13 @@ export default function Create({ setup, characters, notify, openShot, go }) {
             </button>
           </div>
         </div>
+        <PromptWriter
+          context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
+          current={form.prompt}
+          onWritten={(prompt) => set({ prompt })}
+          notify={notify}
+          go={go}
+        />
         <div className="prompt-head">
           <span className="row-label">
             Prompt {char && <span className="dim small">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]} ({char.trigger})</span>}

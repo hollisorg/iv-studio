@@ -42,8 +42,9 @@ export class Comfy {
   history = (id) => this.req(`/history/${id}`)
   objectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: 60000 })
 
-  async submit(prompt, extra = {}) {
-    const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra } })
+  // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
+  async submit(prompt, extra = {}, { front = false } = {}) {
+    const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra, ...(front ? { front: true } : {}) } })
     return r.prompt_id
   }
 

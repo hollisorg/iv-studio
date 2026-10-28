@@ -103,6 +103,27 @@ tool('render_out', 'Finish a version: optional colour smoothing across the joins
   scale: z.number().int().min(1).max(2).default(1),
   fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`)
 }, ({ sequenceId, ...opts }) => studio.renderOutSequence(sequenceId, opts))
+tool('write_prompt', 'Write a MiniMax H3 prompt from a plain-words idea, using the same writer as the app. engine local = free model in Ollama (default); contextir = MiniMax Context IR, paid per call, needs COMFY_ORG_API_KEY in the environment of this server.', {
+  idea: z.string(),
+  mode: z.enum(Object.keys(MODES)).default('text'),
+  seconds: z.number().min(1).max(15).default(5),
+  aspect: z.enum(Object.keys(ASPECTS)).default('16:9'),
+  character: z.string().default('tess').describe('Character preset id or "none"; the result uses {char} for it'),
+  media,
+  sequence: z.boolean().default(false).describe('Write it as one shot of a continuous sequence (join rules)'),
+  previous: z.string().optional().describe('sequence: the prompt of the previous shot'),
+  engine: z.enum(['local', 'contextir']).optional()
+}, ({ engine, ...request }) => {
+  const s = readSettings(DATA)
+  const e = engine || (s.promptEngine === 'contextir' && process.env.COMFY_ORG_API_KEY ? 'contextir' : 'local')
+  return studio.writePrompt(request, { engine: e, apiKey: process.env.COMFY_ORG_API_KEY || null, model: s.ollamaModel }).then((prompt) => ({ prompt, engine: e }))
+})
+tool('write_shots_from_story', 'Split a short story into sequence shots and write each one so they join as one continuous take (free local writer).', {
+  story: z.string(),
+  shots: z.number().int().min(1).max(8).default(3),
+  seconds: z.number().refine((v) => SHOT_SECONDS.includes(v)).default(10),
+  character: z.string().default('tess')
+}, (args) => studio.writeStory(args, { model: readSettings(DATA).ollamaModel }).then((shots) => ({ shots })))
 tool('get_job', 'Status, progress and outputs of a job.', { jobId: z.string() }, ({ jobId }) => studio.refreshJob(jobId))
 tool('cancel_job', 'Cancel an IV Studio job (removes it from the queue or interrupts it if running); never touches other work.', { jobId: z.string() }, ({ jobId }) => studio.cancelJob(jobId))
 tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that made them, for a job or a whole project.', { jobId: z.string().optional(), projectId: z.string().optional() }, async ({ jobId, projectId }) => {

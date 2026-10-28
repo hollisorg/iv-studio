@@ -7,6 +7,7 @@ import path from 'node:path'
 import { Comfy } from './comfy.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
+import { contextIrGraph, fromContextIr, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup } from './setup.js'
 
@@ -164,6 +165,48 @@ export class Studio {
     writeJson(this.jobFile(job.id), job)
     if (projectId) this.touchProject(projectId, job.id)
     return this.publicJob(job)
+  }
+
+  // ---------- prompt writer ----------
+  // request: {idea, mode, seconds, aspect, character, media, sequence, previous}. engine: local | contextir.
+  async writePrompt(request, { engine = 'local', apiKey = null, model } = {}) {
+    const { idea, character: charId = 'none', mode = 'text', seconds = 5, aspect = '16:9', media = [], sequence = false, previous = null } = request
+    if (!idea?.trim()) throw new Error('Describe the idea first.')
+    const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
+    const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
+    if (engine === 'local') return writeLocal({ idea, mode, seconds, character, sequence, previous, media: files, model, cpu: await this.gpuBusy() })
+    if (engine !== 'contextir') throw new Error(`Unknown writer "${engine}".`)
+    if (!apiKey) throw new Error('MiniMax Context IR needs a Comfy.org API key. Add it in Settings → Prompt writer.')
+    const staged = []
+    for (const m of files) staged.push({ kind: m.kind, name: await this.stage(m.file, 'iv_studio') })
+    const graph = contextIrGraph({ idea, mode, seconds, aspect, character, media: staged, sequence })
+    const promptId = await this.comfy.submit(graph, { api_key_comfy_org: apiKey, iv_studio: { kind: 'write_prompt' } }, { front: true })
+    for (let i = 0; i < 150; i++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      const h = (await this.comfy.history(promptId))[promptId]
+      if (!h) continue
+      const err = h.status?.messages?.find((m) => m[0] === 'execution_error')
+      if (err) throw new Error(`Context IR: ${err[1].exception_message}`.slice(0, 600))
+      const text = h.outputs?.out?.text?.[0]
+      if (!text) throw new Error('Context IR returned no prompt.')
+      return fromContextIr(text, character)
+    }
+    throw new Error('Context IR took too long. Try again.')
+  }
+
+  async writeStory({ story, shots = 3, seconds = 10, character: charId = 'none' }, { model } = {}) {
+    if (!story?.trim()) throw new Error('Write the story first.')
+    const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
+    return writeStoryLocal({ story, shots: Math.min(8, Math.max(1, shots)), seconds, character, model, cpu: await this.gpuBusy() })
+  }
+
+  // True while ComfyUI is rendering; the local writer then stays on the CPU so it can't take H3's VRAM.
+  async gpuBusy() {
+    try {
+      return (await this.comfy.queue()).queue_running.length > 0
+    } catch {
+      return false
+    }
   }
 
   // ---------- sequences ----------

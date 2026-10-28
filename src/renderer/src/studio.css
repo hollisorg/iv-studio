@@ -669,3 +669,45 @@ input.mini {
   border-top: 0;
   padding-top: 0;
 }
+
+/* ---------- prompt writer ---------- */
+.writer {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(90deg, rgba(244, 72, 89, 0.08), rgba(244, 72, 89, 0) 70%), var(--ink-2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--red);
+}
+.writer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.writer-label {
+  margin: 0;
+}
+.writer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+.writer-row.tight {
+  align-items: center;
+}
+.writer textarea {
+  width: 100%;
+  resize: vertical;
+  font: 400 14px/1.5 var(--body);
+}
+.writer-note {
+  margin: 0;
+}
+.writer.compact {
+  padding: 10px 12px;
+}
+.story-toggle {
+  justify-self: start;
+}

@@ -1,6 +1,156 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
 
+const WRITER_MODEL = 'qwen3-vl:8b-instruct'
+const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
+
+// Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
+function WriterSettings({ settings, setSettings, notify }) {
+  const [status, setStatus] = useState(null)
+  const [key, setKey] = useState('')
+  const [pull, setPull] = useState(null)
+  const refresh = () => window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
+
+  useEffect(() => {
+    refresh()
+    return window.ivstudio.prompts.onPull((ev) => setPull(ev))
+  }, [])
+
+  const save = async (patch) => {
+    try {
+      setSettings(await window.ivstudio.settings.set(patch))
+      refresh()
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  async function install(model) {
+    setPull({ status: 'starting' })
+    try {
+      await window.ivstudio.prompts.pull(model)
+      await save({ ollamaModel: model })
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setPull(null)
+    }
+  }
+  async function saveKey(k) {
+    try {
+      setSettings(await window.ivstudio.settings.setComfyKey(k))
+      setKey('')
+      refresh()
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+
+  const engine = settings.promptEngine
+  const models = status?.models || []
+  const hasModel = models.some((m) => m.name === settings.ollamaModel)
+  const pct = pull?.total ? Math.floor((pull.completed / pull.total) * 100) : null
+
+  return (
+    <section className="group">
+      <div className="group-head">
+        <h2>Prompt writer</h2>
+        <p className="dim small">Writes the H3 prompt from your idea in plain words (✦ Write it for me).</p>
+      </div>
+      <div className="group-body">
+        <div className="segmented">
+          <button className={engine === 'local' ? 'on' : ''} onClick={() => save({ promptEngine: 'local' })}>
+            Local · free
+          </button>
+          <button className={engine === 'contextir' ? 'on' : ''} onClick={() => save({ promptEngine: 'contextir' })}>
+            MiniMax Context IR
+          </button>
+        </div>
+
+        {engine === 'local' ? (
+          <>
+            <p className="small dim">
+              A model in Ollama on this PC, with IV Studio's H3 rules. Private and free. It loads only while writing, then frees the GPU for rendering.
+            </p>
+            {!status ? null : !status.installed ? (
+              <p className="small pink">
+                Ollama isn't installed.{' '}
+                <button className="link-btn" onClick={() => window.ivstudio.links.open('https://ollama.com/download')}>
+                  Get Ollama
+                </button>
+              </p>
+            ) : (
+              <>
+                <div className="row">
+                  <span className="row-label">Model</span>
+                  {models.length ? (
+                    <select value={hasModel ? settings.ollamaModel : ''} onChange={(e) => save({ ollamaModel: e.target.value })}>
+                      {!hasModel && <option value="">Choose a model</option>}
+                      {models.map((m) => (
+                        <option key={m.name} value={m.name}>
+                          {m.name} · {GB(m.size)}
+                          {m.vision ? ' · sees pictures' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="small dim">{status.running ? 'No models yet.' : 'Ollama starts when you first write a prompt.'}</span>
+                  )}
+                </div>
+                {!models.some((m) => m.name === WRITER_MODEL) && (
+                  <div className="dl">
+                    {pull ? (
+                      <>
+                        <div className="bar">
+                          <span style={{ width: `${pct ?? 6}%` }} className={pct == null ? 'indeterminate' : ''} />
+                        </div>
+                        <span className="mono dim">{pct != null ? `${pct}%` : pull.status}</span>
+                      </>
+                    ) : (
+                      <button className="btn btn-small" onClick={() => install(WRITER_MODEL)}>
+                        Install the recommended writer ({WRITER_MODEL}, about 6 GB)
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="small dim">
+              MiniMax's own prompt rewriter: it writes in the exact format H3 was trained on and looks at your reference media. Paid through your Comfy.org account, {status?.contextIrPrice || 'a few cents a prompt'}. It runs through ComfyUI.
+            </p>
+            {settings.hasComfyKey ? (
+              <p className="small">
+                A Comfy.org API key is saved (encrypted on this PC).{' '}
+                <button className="link-btn" onClick={() => saveKey('')}>
+                  Remove it
+                </button>
+              </p>
+            ) : (
+              <>
+                <div className="key-form">
+                  <input type="password" value={key} placeholder="Comfy.org API key (comfyui-…)" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+                  <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
+                    Save
+                  </button>
+                </div>
+                <p className="small dim">
+                  Create one at{' '}
+                  <button className="link-btn" onClick={() => window.ivstudio.links.open('https://platform.comfy.org/login')}>
+                    platform.comfy.org
+                  </button>{' '}
+                  and add credits there. The key stays on this PC.
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export default function Settings({ info, recheck, notify, characters, setCharacters }) {
   const [settings, setSettings] = useState(null)
   const [url, setUrl] = useState('')
@@ -56,6 +206,8 @@ export default function Settings({ info, recheck, notify, characters, setCharact
           </div>
         </div>
       </section>
+
+      <WriterSettings settings={settings} setSettings={setSettings} notify={notify} />
 
       <section className="group">
         <div className="group-head">

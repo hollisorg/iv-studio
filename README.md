@@ -35,6 +35,42 @@ hunt a few quick previews, pick the take you like, then finish it at full size w
   </tr>
 </table>
 
+## Write it for me
+
+You don't need to know H3's prompt format. Type the idea in plain words, for example "Tess in a
+parked car at night admits she kept the letter", and press **Write my prompt**. You get a finished
+H3 prompt back to edit, keep or undo. The writer always uses your mode, length, aspect, character
+and media, and writes `{char}` where the character goes. Choose the writer under **Settings → Prompt
+writer**:
+
+- **Local (free):** a model in [Ollama](https://ollama.com) on your PC, with IV Studio's H3 rule
+  sheet. The recommended model is `qwen3-vl:8b-instruct` (about 6 GB, one click to install). It can
+  also look at your pictures. It loads only while writing; while ComfyUI is rendering it runs on the
+  CPU, so it never takes H3's VRAM.
+- **MiniMax Context IR:** MiniMax's own prompt rewriter, run through ComfyUI. It writes in the exact
+  format H3 was trained on and looks at your reference media. It's paid through your Comfy.org
+  account (about $0.02 a prompt, $0.05 with first/last frames, $0.06–0.11 with reference media).
+  Your API key is stored encrypted on your PC.
+
+In a sequence, every shot has its own writer, and **Write all shots from a story** turns a few
+sentences into one prompt per shot that join cleanly.
+
+## Sequences
+
+Several shots that play as one continuous video.
+
+- **One take:** every shot renders together in one seamless take through
+  [H3 Multishot](https://github.com/jlucasmcrell/ComfyUI-H3-Multishot)'s sampler, so there are no
+  cuts, colour shifts or breaks in the sound. You can add a voice sample for the whole take to keep.
+- **Shot by shot:** hunt and pick each shot in turn. Each one carries on from the end of the shot
+  before. Change a shot and only the shots after it need redoing.
+- **Retake:** mark a stretch of any version and redo the picture and sound, the picture only, or the
+  sound only. Everything around it stays as it was.
+- **Render out:** optional colour smoothing across the joins, then the DLSS pass with RTX 2× and
+  frame generation.
+
+Shots are 10 or 15 seconds, the windows H3 Multishot is tested at. Needs the H3 Multishot node pack.
+
 ## Characters
 
 A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
@@ -69,8 +105,16 @@ command for your install is under **Settings → Agents (MCP)**. For a developme
 claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "<checkout>\node_modules\electron\dist\electron.exe" "<checkout>\out\main\mcp.js"
 ```
 
-Tools: `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
-`finish_candidate`, `get_job`, `cancel_job`, `get_outputs`.
+Tools:
+
+- **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
+  `finish_candidate`.
+- **Sequences:** `list_sequences`, `get_sequence`, `save_sequence`, `render_take`, `hunt_shot`,
+  `finish_shot`, `retake`, `render_out`.
+- **Prompt writing:** `write_prompt`, `write_shots_from_story`.
+- **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
+
+`write_prompt` uses the local writer unless `COMFY_ORG_API_KEY` is set in the server's environment.
 
 ## Develop
 
@@ -88,6 +132,8 @@ Tests are in `test/`:
 - `service-e2e.mjs`: renders previews and a finish on a live ComfyUI.
 - `mcp-smoke.mjs`: runs the MCP server over stdio.
 - `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
+- `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out.
+- `prompt-writer.mjs`: writes a prompt and a two-shot story with the local writer.
 
 Data (projects, jobs, characters, settings) is stored in `%APPDATA%\IV Studio`. Renders are saved
 to ComfyUI's output folder under `H3\`.
