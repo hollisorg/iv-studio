@@ -538,3 +538,134 @@ input.mini {
   border: 0;
   cursor: ew-resize;
 }
+
+/* ---------- "What If?" look: hero band, condensed type, eye art ---------- */
+.page {
+  --pad: clamp(28px, 4vw, 52px);
+  overflow-x: hidden;
+}
+.hero {
+  position: relative;
+  width: calc(100vw - 210px);
+  height: 250px;
+  margin: calc(-1 * var(--pad)) 0 34px calc(-1 * var(--pad));
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: #0b0809;
+}
+.hero-eye {
+  position: absolute;
+  width: 760px;
+  height: 400px;
+  top: -75px;
+  left: calc(72% - 375px);
+  background: url('./assets/eye.webp') center / 100% 100% no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 34%, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 34%, #000 100%);
+  opacity: 0.92;
+}
+.hero::after {
+  /* keeps the title legible where the art starts */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #0b0809 0%, rgba(11, 8, 9, 0.85) 30%, rgba(11, 8, 9, 0) 58%), linear-gradient(0deg, rgba(11, 8, 9, 0.55), rgba(11, 8, 9, 0) 40%);
+  pointer-events: none;
+}
+.hero-text {
+  position: absolute;
+  z-index: 1;
+  left: var(--pad);
+  bottom: 34px;
+  right: 40%;
+  display: grid;
+  gap: 10px;
+}
+.hero-title,
+.hero .shot-name {
+  margin: 0;
+  font: 800 clamp(64px, 7.4vw, 104px) / 0.82 var(--display);
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--cream);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+}
+.hero .shot-name {
+  font-size: clamp(46px, 5.4vw, 80px);
+  padding: 0 0 4px;
+  width: 100%;
+}
+.hero-kicker {
+  margin: 0;
+  font: 400 12px/1 var(--mono);
+  letter-spacing: 0.58em;
+  text-transform: uppercase;
+  color: var(--cream);
+  opacity: 0.85;
+  padding-left: 3px;
+}
+.hero-back {
+  position: absolute;
+  z-index: 1;
+  top: 22px;
+  left: var(--pad);
+}
+
+/* the sidebar carries a faint slice of the same art */
+.nav {
+  position: relative;
+  overflow: hidden;
+}
+.nav::before {
+  content: '';
+  position: absolute;
+  left: -40px;
+  right: -40px;
+  bottom: 0;
+  height: 300px;
+  background: url('./assets/eye.webp') 18% 60% / auto 520px no-repeat;
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
+  pointer-events: none;
+}
+.nav > * {
+  position: relative;
+}
+.nav-item {
+  font-weight: 700;
+  font-size: 23px;
+  letter-spacing: 0.02em;
+}
+.nav-item.on {
+  color: var(--cream);
+}
+.mode-name {
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+}
+.run-head h2,
+.tile-name,
+.seq-shot-no,
+.character-card > input,
+.character-head input {
+  font-weight: 800;
+}
+.group-head h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.nav-foot {
+  color: var(--cream);
+  text-shadow: 0 1px 6px #000, 0 0 2px #000;
+}
+.hero + .block,
+.hero + .notice + .block {
+  border-top: 0;
+  padding-top: 0;
+}
+.hero + .group {
+  border-top: 0;
+  padding-top: 0;
+}

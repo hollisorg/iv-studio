@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { media } from '../media'
+import Hero from './Hero'
 
 export default function Library({ openShot, go }) {
   const [projects, setProjects] = useState(null)
@@ -10,9 +11,7 @@ export default function Library({ openShot, go }) {
 
   return (
     <div className="library">
-      <h1 className="page-title">
-        <span className="accent">Shots</span>
-      </h1>
+      <Hero title="Shots" kicker="Infinite Variance" />
       {projects?.length === 0 && (
         <p className="dim">
           Nothing yet.{' '}

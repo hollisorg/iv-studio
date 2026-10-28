@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Hero from './Hero'
 
 const MODES = [
   ['text', 'Text', 'Just the prompt.'],
@@ -107,9 +108,7 @@ export default function Create({ setup, characters, notify, openShot, go }) {
 
   return (
     <div className="create">
-      <h1 className="page-title">
-        New <span className="accent">shot</span>
-      </h1>
+      <Hero title="What if?" kicker="New shot" />
 
       {blocked && (
         <p className="notice">

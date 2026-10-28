@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Hero from './Hero'
 
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
 const GROUPS = [
@@ -56,9 +57,7 @@ export default function Setup({ setup, recheck, checking }) {
 
   return (
     <div className="setup">
-      <h1 className="page-title">
-        <span className="accent">Setup</span>
-      </h1>
+      <Hero title="Setup" kicker="Infinite Variance" />
       <p className="lede">
         IV Studio drives your own ComfyUI. This checks it has everything the workflow needs.
         <span className="lede-small dim">Models download from their upstream hosts straight into ComfyUI's models folder and are checked against the SHA-256 the host publishes. A paused download picks up where it stopped. Node packs install from their GitHub pages.</span>

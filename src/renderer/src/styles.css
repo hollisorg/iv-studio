@@ -9,7 +9,8 @@
   --paper-dim: rgba(241, 237, 229, 0.58);
   --pink: #f19dac;
   --red: #f44859;
-  --display: 'Barlow', Impact, sans-serif;
+  --display: 'Barlow Condensed', 'Barlow', Impact, sans-serif;
+  --cream: #f4ecdc; /* the "What If?" lettering */
   --body: 'DM Sans', Arial, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   color-scheme: dark;

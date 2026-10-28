@@ -10,9 +10,13 @@ with the app.
 | @modelcontextprotocol/sdk | MIT | MCP server |
 | zod | MIT | MCP tool schemas |
 | electron-updater | MIT | Updates from GitHub Releases |
-| Barlow (Jeremy Tribby) | SIL OFL 1.1 | Display type |
+| Barlow and Barlow Condensed (Jeremy Tribby) | SIL OFL 1.1 | Display type |
 | DM Sans (Colophon Foundry) | SIL OFL 1.1 | Body type |
 | JetBrains Mono (JetBrains) | SIL OFL 1.1 | Monospace type |
+
+## Artwork
+
+`src/renderer/src/assets/eye.webp` is Infinite Variance's own artwork (the "What If?" eye from infinitevariance.ai). It is © Infinite Variance and is **not** covered by the MIT licence; don't reuse it outside IV Studio without permission.
 
 ## Not bundled
 

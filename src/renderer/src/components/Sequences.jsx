@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { Progress } from './Shot'
+import Hero from './Hero'
 
 const DONE = ['success', 'error', 'cancelled']
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
@@ -34,9 +35,7 @@ export function SequenceList({ openSequence, notify }) {
 
   return (
     <div className="sequences">
-      <h1 className="page-title">
-        <span className="accent">Sequences</span>
-      </h1>
+      <Hero title="Sequences" kicker="Infinite Variance" />
       <p className="lede">
         Several shots that play as one continuous video.
         <span className="lede-small dim">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</span>
@@ -347,10 +346,9 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live 
 
   return (
     <div className="sequence">
-      <button className="link-btn mono" onClick={() => go('sequences')}>
-        ← All sequences
-      </button>
-      <input className="shot-name" value={seq.name} onChange={(e) => edit({ name: e.target.value })} />
+      <Hero back={{ label: 'All sequences', onClick: () => go('sequences') }} kicker={`Sequence · ${shots.length} shot${shots.length === 1 ? '' : 's'}`}>
+        <input className="shot-name" value={seq.name} onChange={(e) => edit({ name: e.target.value })} />
+      </Hero>
 
       <section className="block">
         <div className="prompt-head">

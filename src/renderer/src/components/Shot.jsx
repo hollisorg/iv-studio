@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { media } from '../media'
+import Hero from './Hero'
 
 const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
@@ -147,10 +148,9 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go }) {
 
   return (
     <div className="shot">
-      <button className="link-btn mono" onClick={() => go('library')}>
-        ← All shots
-      </button>
-      <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
+      <Hero back={{ label: 'All shots', onClick: () => go('library') }} kicker={`Shot · ${runs.length} run${runs.length === 1 ? '' : 's'}`}>
+        <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
+      </Hero>
       <div className="shot-actions">
         <button className="btn btn-small" onClick={() => go('create')}>
           New run

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Hero from './Hero'
 
 export default function Settings({ info, recheck, notify, characters, setCharacters }) {
   const [settings, setSettings] = useState(null)
@@ -39,9 +40,7 @@ export default function Settings({ info, recheck, notify, characters, setCharact
   if (!settings) return null
   return (
     <div className="settings">
-      <h1 className="page-title">
-        <span className="accent">Settings</span>
-      </h1>
+      <Hero title="Settings" kicker="Infinite Variance" />
 
       <section className="group">
         <div className="group-head">
