@@ -1,0 +1,99 @@
+# IV Studio
+
+A free Infinite Variance desktop app for making MiniMax H3 video on your own PC. It drives your own
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI) through the **IV Studio** workflow: write a shot,
+hunt a few quick previews, pick the take you like, then finish it at full size with the same motion.
+
+<p align="center">
+  <img src="docs/images/create.png" alt="IV Studio's Create page with a prompt for Tess in a parked car" width="100%">
+</p>
+
+## How it works
+
+1. **Create.** Pick a mode, a character and write the shot.
+   - **Text:** just the prompt.
+   - **References:** pictures, videos or audio guide the shot (`<Picture 1>`, `<Video 1>`, `<Audio 1>`).
+   - **First / last frame:** the clip opens on a picture and can end on a second one.
+   - **Continue a video:** carries a clip on from its last frames.
+
+   Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras:
+   a voice recording to lip-sync, RefMods, extra LoRAs and the step count.
+2. **Hunt.** IV Studio queues the previews on ComfyUI and shows them as they finish.
+3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), RTX 2× upscale,
+   frame generation (30/50/60/120 fps) and the sound source. The finish reuses the preview's
+   cached latent, so the motion stays the same and stage 1 doesn't run again.
+4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/candidates.png" alt="A preview ready to pick"></td>
+    <td width="50%"><img src="docs/images/finish.png" alt="The finish panel and a finished clip"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Pick a preview</sub></td>
+    <td align="center"><sub>Finish it at full size</sub></td>
+  </tr>
+</table>
+
+## Characters
+
+A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
+the character goes. Add characters under **Settings**.
+
+## Setup
+
+**Setup** checks ComfyUI, the GPU, every node pack and every model the workflow needs, using
+ComfyUI's own `/object_info`. That way it works with any install.
+
+- **Missing models:** they download straight into ComfyUI's models folder from their upstream
+  hosts. Each download is checked against the SHA-256 that Hugging Face publishes before it's put in
+  place. A paused or interrupted download resumes where it stopped.
+- **Missing node packs:** these link to their GitHub pages.
+- **Bundled nodes:** the IV Studio pack (latent cache and shot list) is in
+  `resources/comfy-nodes/ComfyUI-IV-Studio`. Copy it into `ComfyUI/custom_nodes`.
+
+<p align="center">
+  <img src="docs/images/setup.png" alt="The Setup page" width="100%">
+</p>
+
+Requirements: Windows 10 or 11, an NVIDIA GPU (16 GB of VRAM or more recommended; 24 GB tested)
+and a ComfyUI recent enough for MiniMax H3. You'll need about 60 GB free for the models.
+
+## Agents (MCP)
+
+IV Studio includes a local MCP server (stdio). It uses the same service, projects and results as
+the window, so Claude Code or any other MCP client can plan, hunt, finish and collect shots. The
+command for your install is under **Settings → Agents (MCP)**. For a development checkout:
+
+```
+claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "<checkout>\node_modules\electron\dist\electron.exe" "<checkout>\out\main\mcp.js"
+```
+
+Tools: `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
+`finish_candidate`, `get_job`, `cancel_job`, `get_outputs`.
+
+## Develop
+
+```
+npm install
+node node_modules/electron/install.js   # npm 11 skips Electron's install script
+npm run build
+"Start IV Studio (dev).bat"
+npm run dist                           # unsigned NSIS installer in dist/
+```
+
+Tests are in `test/`:
+
+- `graph-parity.mjs`: the headless graph matches the ComfyUI GUI export for 32 switch states.
+- `service-e2e.mjs`: renders previews and a finish on a live ComfyUI.
+- `mcp-smoke.mjs`: runs the MCP server over stdio.
+- `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
+
+Data (projects, jobs, characters, settings) is stored in `%APPDATA%\IV Studio`. Renders are saved
+to ComfyUI's output folder under `H3\`.
+
+## Licences
+
+IV Studio is MIT-licensed (see `LICENSE`). Third-party notices are in `THIRD_PARTY_NOTICES.md`.
+The models aren't bundled: each one downloads from its own host under its own licence. Check its
+page (linked from Setup) before using it for commercial work.

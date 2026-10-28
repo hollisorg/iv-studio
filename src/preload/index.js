@@ -1,0 +1,28 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+// Every call resolves to its value or throws the service's error message.
+const call =
+  (channel) =>
+  async (...args) => {
+    const r = await ipcRenderer.invoke(channel, ...args)
+    if (!r.ok) throw Object.assign(new Error(r.error), { errors: r.errors })
+    return r.value
+  }
+const on = (channel) => (cb) => {
+  const listener = (_e, payload) => cb(payload)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
+contextBridge.exposeInMainWorld('ivstudio', {
+  app: { info: call('app:info') },
+  settings: { get: call('settings:get'), set: call('settings:set') },
+  setup: { check: call('setup:check') },
+  models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
+  characters: { list: call('characters:list'), save: call('characters:save') },
+  projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename') },
+  render: { plan: call('render:plan'), planFinish: call('render:planFinish'), previews: call('render:previews'), finish: call('render:finish') },
+  jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update') },
+  files: { pick: call('files:pick'), reveal: call('files:reveal') },
+  links: { open: call('links:open') }
+})

@@ -1,0 +1,58 @@
+// Readiness check: is ComfyUI up, is there a capable GPU, are the node packs and models IV Studio needs there?
+// Everything is read from ComfyUI itself (/system_stats and /object_info), so it works with any install.
+
+const TEMPLATE_SKIP = new Set(['PixaromaGroupSwitch', 'PixaromaLabel', 'MarkdownNote', 'Note'])
+
+function comboOptions(info, cls, input) {
+  const spec = info[cls]?.input?.required?.[input] || info[cls]?.input?.optional?.[input]
+  if (!spec) return null
+  return Array.isArray(spec[0]) ? spec[0] : spec[1]?.options || []
+}
+
+export async function checkSetup({ comfy, template, manifest, characters }) {
+  const items = []
+  let stats
+  try {
+    stats = await comfy.systemStats()
+    items.push({ id: 'comfyui', label: 'ComfyUI', status: 'ok', detail: `Version ${stats.system?.comfyui_version || '?'} at ${comfy.url}` })
+  } catch (err) {
+    items.push({ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message, fix: 'Start ComfyUI, or set its address in Settings.' })
+    return { ready: false, items }
+  }
+
+  const gpu = stats.devices?.find((d) => d.type === 'cuda') || stats.devices?.[0]
+  const vramGb = gpu ? gpu.vram_total / 1024 ** 3 : 0
+  items.push({
+    id: 'gpu',
+    label: 'GPU',
+    status: !gpu || gpu.type !== 'cuda' ? 'missing' : vramGb < 15 ? 'warn' : 'ok',
+    detail: gpu ? `${gpu.name.replace(/^cuda:\d+ /, '').replace(/ : \w+$/, '')} · ${vramGb.toFixed(0)} GB` : 'No GPU reported',
+    fix: vramGb && vramGb < 15 ? 'Under 16 GB of VRAM: keep previews at 0.4 MP and finals at or below 1.5 MP.' : undefined
+  })
+
+  const info = await comfy.objectInfo()
+  const needed = [...new Set(Object.values(template).map((n) => n.class_type))].filter((c) => !TEMPLATE_SKIP.has(c))
+  const missingClasses = needed.filter((c) => !info[c])
+  for (const pack of manifest.node_packs) {
+    const miss = pack.classes.filter((c) => missingClasses.includes(c))
+    items.push({ id: `pack:${pack.label}`, label: pack.label, status: miss.length ? 'missing' : 'ok', detail: miss.length ? `Missing nodes: ${miss.join(', ')}` : 'Installed', fix: miss.length ? `Install from ${pack.url}, then restart ComfyUI.` : undefined, kind: 'node_pack', url: /^https:/.test(pack.url) ? pack.url : undefined })
+  }
+  const unknown = missingClasses.filter((c) => !manifest.node_packs.some((p) => p.classes.includes(c)))
+  if (unknown.length) items.push({ id: 'pack:other', label: 'Other nodes', status: 'missing', detail: unknown.join(', '), kind: 'node_pack' })
+
+  for (const m of manifest.models) {
+    const [cls, input] = m.loader.split('.')
+    const opts = comboOptions(info, cls, input) || []
+    const found = opts.find((o) => o.replace(/\\/g, '/').split('/').pop() === m.match)
+    items.push({ id: `model:${m.id}`, label: m.label, status: found ? 'ok' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+  }
+
+  const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []
+  for (const c of characters) {
+    const ok = loras.some((l) => l.replace(/\\/g, '/') === c.lora.replace(/\\/g, '/'))
+    items.push({ id: `character:${c.id}`, label: `Character: ${c.name}`, status: ok ? 'ok' : 'warn', detail: ok ? c.lora : `LoRA not found: ${c.lora}`, kind: 'character' })
+  }
+
+  const blocking = items.filter((i) => i.status === 'missing')
+  return { ready: blocking.length === 0, items, refmods: comboOptions(info, 'MiniMaxH3RefModsLoader', 'mod_1')?.filter((m) => m !== '(none)') || [], loras }
+}
