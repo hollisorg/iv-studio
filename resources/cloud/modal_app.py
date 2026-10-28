@@ -42,10 +42,11 @@ def _pack_commands():
         if "git" in p:
             cmds.append(f"git clone {p['git']} {dest} && git -C {dest} checkout {p['commit']}")
         else:
-            ext = "tar.gz" if p["registry"].endswith(".tar.gz") else "zip"
-            unpack = f"tar -xzf /tmp/pack.{ext} -C {dest}" if ext == "tar.gz" else f"unzip -q /tmp/pack.zip -d {dest}"
-            cmds.append(f"mkdir -p {dest} && curl -fsSL {p['registry']} -o /tmp/pack.{ext} && {unpack} && rm /tmp/pack.{ext}")
-        cmds.append(f"if [ -f {dest}/requirements.txt ]; then pip install -r {dest}/requirements.txt; fi")
+            # Registry archives are usually zips, whatever their extension says; try zip, then tar.
+            cmds.append(f"mkdir -p {dest} && curl -fsSL {p['registry']} -o /tmp/pack && (unzip -q /tmp/pack -d {dest} || tar -xzf /tmp/pack -C {dest}) && rm /tmp/pack")
+        # uv, not pip: inside Modal's gVisor sandbox pip crashes on requirement markers that compare the
+        # kernel version ('4.19.0-gvisor' is not a valid version to it).
+        cmds.append(f"if [ -f {dest}/requirements.txt ]; then uv pip install --system -r {dest}/requirements.txt; fi")
     return cmds
 
 
@@ -58,7 +59,7 @@ image = (
     .pip_install(*torch_cfg["packages"], index_url=torch_cfg["index"])
     .run_commands(
         f"git clone --depth 1 --branch {comfy_cfg['tag']} {comfy_cfg['repo']} /comfy",
-        "pip install -r /comfy/requirements.txt aiohttp",
+        "pip install -r /comfy/requirements.txt aiohttp uv",
     )
     .run_commands(*_pack_commands())
     .env({"PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_TELEMETRY": "1"})
@@ -128,7 +129,11 @@ def download_models(models):
         want = _hf_sha256(m["url"]) if "huggingface.co" in m["url"] else None
         print(f"downloading {m['label']}", flush=True)
         h = hashlib.sha256()
-        with urllib.request.urlopen(m["url"], timeout=60) as r, open(part, "wb") as f:
+        try:
+            r = urllib.request.urlopen(m["url"], timeout=60)
+        except urllib.error.HTTPError as e:  # plain text, so the error reaches IV Studio intact
+            raise RuntimeError(f"{m['label']}: the host answered {e.code} for {m['url']}") from None
+        with r, open(part, "wb") as f:
             total = int(r.headers.get("Content-Length") or 0)
             got, last = 0, -5
             while chunk := r.read(1 << 22):

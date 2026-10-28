@@ -12,7 +12,8 @@ const MODEL_FILE = /\.(safetensors|gguf|sft|pth|pt|ckpt|bin)$/i
 
 // What the target ComfyUI has, from /object_info and /system_stats.
 export function capabilities(objectInfo, systemStats) {
-  const upscalers = objectInfo.UpscaleModelLoader?.input?.required?.model_name?.[0] || []
+  const spec = objectInfo.UpscaleModelLoader?.input?.required?.model_name
+  const upscalers = (Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options) || [] // old and new combo formats
   return {
     posix: systemStats?.system?.os !== 'nt',
     dlss: !!objectInfo.DLSS5_Enhance_Video,

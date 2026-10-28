@@ -109,6 +109,7 @@ export class Cloud {
 
   // Downloads the H3 models into the iv-studio-models volume (CPU, once; ~60 GB).
   fetchModels() {
+    this.stage() // the current models.json, not the copy from the last deploy
     this.onLog('Downloading the H3 models into your cloud storage (about 60 GB, once)…')
     return this.modal(['run', 'modal_app.py::fetch_models'])
   }

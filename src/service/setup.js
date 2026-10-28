@@ -33,8 +33,14 @@ export async function checkSetup({ comfy, template, manifest, characters }) {
   const info = await comfy.objectInfo()
   const needed = [...new Set(Object.values(template).map((n) => n.class_type))].filter((c) => !TEMPLATE_SKIP.has(c))
   const missingClasses = needed.filter((c) => !info[c])
+  const linux = stats.system?.os !== 'nt'
   for (const pack of manifest.node_packs) {
     const miss = pack.classes.filter((c) => missingClasses.includes(c))
+    // DLSS is Windows-only; on Linux (the cloud) IV Studio finishes with its own upscale + RIFE instead.
+    if (miss.length && linux && pack.classes.includes('DLSS5_Enhance_Video')) {
+      items.push({ id: `pack:${pack.label}`, label: pack.label, status: 'warn', detail: 'Windows only. Finals here use a 2× AI upscale and RIFE frame interpolation instead.', kind: 'node_pack' })
+      continue
+    }
     items.push({ id: `pack:${pack.label}`, label: pack.label, status: miss.length ? 'missing' : 'ok', detail: miss.length ? `Missing nodes: ${miss.join(', ')}` : 'Installed', fix: miss.length ? `Install from ${pack.url}, then restart ComfyUI.` : undefined, kind: 'node_pack', url: /^https:/.test(pack.url) ? pack.url : undefined })
   }
   const unknown = missingClasses.filter((c) => !manifest.node_packs.some((p) => p.classes.includes(c)))
