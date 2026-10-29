@@ -28,11 +28,17 @@
       "id": "theo",
       "name": "Theo Lindqvist",
       "who": "a man in his early thirties",
-      "about": "Calm, dry humour, a light Scandinavian accent; the scar through his left eyebrow is his own. Designed and trained in IV Studio, 2026-10-28.",
+      "about": "Calm, dry humour, a light Scandinavian accent; the scar through his left eyebrow is his own. Designed and trained in IV Studio, 2026-10-28 (epoch 60 of 120, H200).",
       "trigger": "th30l16",
       "strength": 0.8,
       "picture": "theo.jpg",
-      "lora": null,
+      "lora": {
+        "file": "theo_lindqvist_f2a08cc3_2_mmh3-000060.safetensors",
+        "folder": "MiniMax H3/theo_lindqvist",
+        "url": "https://github.com/hollisorg/iv-studio/releases/download/characters-v1/theo_lindqvist_f2a08cc3_2_mmh3-000060.safetensors",
+        "sha256": "6518e36825417fc573df030efd551c0f40c7e69970b061abd7e2a138691b46a0",
+        "size": 149162080
+      },
       "voice": {
         "file": "theo-voice.wav",
         "engine": "voxcpm2",
