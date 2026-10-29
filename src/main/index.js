@@ -242,16 +242,31 @@ app.whenReady().then(() => {
   handle('music:rename', (id, name) => music.rename(id, name))
   handle('music:cancel', (id) => music.cancel(id))
   handle('music:delete', (id) => music.delete(id))
-  // A song onto an edit's A1, after what is already there; no edit id makes a new edit around it.
+  // A file onto the end of a track of an edit (A1 for sound, V1 for video); no edit id makes a new edit.
+  const putOnEdit = async (file, name, editId, type) => {
+    const e = editId ? edits.get(editId) : edits.create(name)
+    const m = await edits.addMedia(file, { type, label: name })
+    const track = m.kind === 'audio' ? 'A1' : 'V1'
+    const start = Math.max(0, ...e.clips.filter((c) => c.track === track).map((c) => c.start + (c.out - c.in)))
+    const clip = { id: `c${m.id}`, track, media: m.id, start, in: 0, out: m.duration || 4, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }
+    return edits.save(e.id, { media: { ...e.media, [m.id]: m }, clips: [...e.clips, clip] })
+  }
   handle('music:toEdit', async (id, editId = null) => {
     const song = await music.get(id)
     if (!song.file) throw new Error('That song has not finished yet.')
-    const e = editId ? edits.get(editId) : edits.create(song.name)
-    const m = await edits.addMedia(song.file, { type: 'music', label: song.name })
-    const start = Math.max(0, ...e.clips.filter((c) => c.track === 'A1').map((c) => c.start + (c.out - c.in)))
-    const clip = { id: `m${m.id}`, track: 'A1', media: m.id, start, in: 0, out: m.duration || song.duration || 10, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }
-    return edits.save(e.id, { media: { ...e.media, [m.id]: m }, clips: [...e.clips, clip] })
+    return putOnEdit(song.file, song.name, editId, 'music')
   })
+  // ---------- Library: everything made in IV Studio, in one place ----------
+  handle('library:all', () => {
+    const items = studio.library().map((i) => ({ ...i, type: 'video' }))
+    for (const e of edits.list()) {
+      for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file } })
+    }
+    for (const s of music.all()) if (s.file && fs.existsSync(s.file)) items.push({ key: `music:${s.id}`, type: 'music', group: 'Music', label: s.name, detail: `${s.engine === 'minimax' ? 'MiniMax Music 3' : 'ACE-Step 1.5'}${s.instrumental ? ' · instrumental' : ''}`, duration: s.duration, at: s.finishedAt || s.createdAt, file: { path: s.file } })
+    for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file } })
+    return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  })
+  handle('library:toEdit', async (item, editId = null) => putOnEdit(await localCopy(item.file), item.label.slice(0, 60), editId, item.type === 'video' ? 'iv' : item.type))
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
   const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })

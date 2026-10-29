@@ -13,10 +13,12 @@ import Replace from './components/Replace'
 import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
+import MediaLibrary from './components/MediaLibrary'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
-// The sidebar's two halves, switched at its foot. Characters and Settings are in both.
+// The sidebar's two halves, switched at its foot. Characters and Settings are in both; the Library (everything
+// made, page 'media') sits above the switch and belongs to neither.
 const SECTIONS = {
   video: [
     ['create', 'Create'],
@@ -114,7 +116,7 @@ export default function App() {
     try {
       localStorage.setItem('iv.section', next)
     } catch {}
-    if (!SECTIONS[next].some(([id]) => id === page || SUBPAGES[id]?.includes(page))) setPage(SECTIONS[next][0][0])
+    if (page !== 'media' && !SECTIONS[next].some(([id]) => id === page || SUBPAGES[id]?.includes(page))) setPage(SECTIONS[next][0][0])
   }
   // Edit is on the Video side; Music opens it from Audio
   const openEdit = (id) => {
@@ -155,6 +157,9 @@ export default function App() {
           </button>
         ))}
         <div className="nav-foot mono">
+          <button className={`nav-library ${page === 'media' ? 'on' : ''}`} onClick={() => setPage('media')}>
+            Library
+          </button>
           <div className="section-switch" role="tablist" aria-label="Video or audio">
             {['video', 'audio'].map((id) => (
               <button key={id} role="tab" aria-selected={section === id} className={section === id ? 'on' : ''} onClick={() => switchSection(id)}>
@@ -173,6 +178,7 @@ export default function App() {
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}
         {page === 'music' && <MusicPage {...ctx} />}
+        {page === 'media' && <MediaLibrary {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}
