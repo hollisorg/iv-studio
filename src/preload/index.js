@@ -125,6 +125,17 @@ contextBridge.exposeInMainWorld('ivstudio', {
     deleteLine: call('voices:deleteLine'),
     transcribe: call('voices:transcribe')
   },
+  music: {
+    meta: call('music:meta'),
+    status: call('music:status'),
+    create: call('music:create'),
+    list: call('music:list'),
+    get: call('music:get'),
+    rename: call('music:rename'),
+    cancel: call('music:cancel'),
+    delete: call('music:delete'),
+    toEdit: call('music:toEdit')
+  },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
   sequences: {

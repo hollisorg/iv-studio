@@ -22,6 +22,7 @@ import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
 import { VOICE_ENGINES, Voices } from '../service/voices'
+import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -592,6 +593,28 @@ tool('speak_line', `Say a line in a voice (or a character's voice) and get a WAV
 tool('list_lines', 'Lines spoken so far, newest first (optionally for one voice): text, file, duration, engine, seed.', { voiceId: z.string().optional() }, ({ voiceId }) => ({ items: voices.lines(voiceId) }))
 tool('delete_line', 'Delete a spoken line and its file.', { id: z.string() }, ({ id }) => voices.deleteLine(id))
 tool('release_voice_engine', 'Ask VoiceStudio to unload its voice models so the GPU memory goes back to ComfyUI (IV Studio also does this before a render, and ten minutes after the last line).', {}, async () => (await voices.release(), { released: true }))
+
+// ---------- Audio: music (MiniMax Music 3 and ACE-Step 1.5 on this PC's ComfyUI) ----------
+const music = new Music({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
+tool('music_status', `Whether this PC's ComfyUI can make music, per engine: ${MUSIC_ENGINES.map((e) => `${e.id} = ${e.label} (${e.note}; ${e.licence})`).join(' ')} Lists missing models; the person downloads them on Audio > Music.`, {}, () => music.status())
+tool('make_music', 'Make a song or an instrumental on this PC (free, local). Returns the song at once; follow with get_music until status is success, then use its file: add_media (files) puts it on an edit, generate_previews voiceLine makes a character sing to it (trim it with prepare_media first). MiniMax takes a few minutes per song; ACE-Step seconds.', {
+  engine: z.enum(MUSIC_ENGINES.map((e) => e.id)).default(MUSIC_DEFAULTS.engine),
+  caption: z.string().describe('The style: genre, mood, instruments, the voice and how it sings, tempo, how the song builds.'),
+  lyrics: z.string().optional().describe('Lyrics with section tags on their own lines: [Intro], [Verse], [Chorus], [Bridge], [Instrumental], [Outro]. Leave out for an instrumental.'),
+  instrumental: z.boolean().default(false),
+  seconds: z.number().min(5).max(600).default(MUSIC_DEFAULTS.seconds).describe('minimax: up to 300, a limit; it sets the length from the lyrics (two short sections give about 15 s). ace: up to 600, exact.'),
+  name: z.string().optional(),
+  seed: z.number().int().min(0).optional(),
+  bpm: z.number().int().min(30).max(300).optional().describe('ace only'),
+  key: z.enum(ACE_KEYS).optional().describe('ace only, e.g. "E minor"'),
+  timesignature: z.enum(['2', '3', '4', '6']).optional().describe('ace only: beats per bar'),
+  language: z.string().optional().describe('ace only: lyrics language code, e.g. en, es, ja')
+}, async (args) => (readSettings(DATA).target === 'cloud' || (await voices.release()), music.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('list_music', 'Every song made in IV Studio, newest first, with status, file (once finished), length, engine, style, lyrics and seed.', {}, () => music.list())
+tool('get_music', 'One song, brought up to date: status (queued, running, success, error), progress, and its file once finished.', { songId: z.string() }, ({ songId }) => music.get(songId))
+tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
+tool('rename_music', 'Rename a song.', { songId: z.string(), name: z.string().min(1) }, ({ songId, name }) => music.rename(songId, name))
+tool('delete_music', "Delete a song and its file in IV Studio's music folder (ComfyUI's own output copy stays). Ask the person first.", { songId: z.string() }, ({ songId }) => music.delete(songId))
 
 const catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir() })
 tool('list_ready_characters', "IV Studio's ready-made characters (Tess, Theo…): who they are, their face picture's path, and whether they're downloaded and usable.", {}, () => catalog.list())

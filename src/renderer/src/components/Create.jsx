@@ -97,11 +97,18 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   }
 
   // A line spoken in the character's voice (here, or from Audio > Lines) becomes the voice line, and its
-  // words go into the prompt's dialogue so H3 says what it lip-syncs.
+  // words go into the prompt's dialogue so H3 says what it lip-syncs. A song from Audio > Music becomes the
+  // voice line as it is.
   const [say, setSay] = useState('')
   const [speaking, setSpeaking] = useState(false)
   async function takeLine(line) {
     const info = await window.ivstudio.media.probe(line.file).catch(() => null)
+    // a song (Music): it becomes what the character sings to; the prompt is the person's to write
+    if (line.kind === 'music') {
+      set({ voiceLine: line.file, voiceItem: { kind: 'audio', path: line.file, info } })
+      notify(`"${line.name}" is the voice line now. Click its tile to trim it to the shot, and say in the prompt that they sing.`, 'info')
+      return
+    }
     const prompt = withLine(form.prompt.trim() ? form.prompt : form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE, line.text)
     set({ voiceLine: line.file, voiceItem: { kind: 'audio', path: line.file, info }, prompt })
     if (!DIALOGUE.test(prompt)) notify('The line is the voice line now. Put the same words in the prompt, inside <d>[English] …</d>.', 'info')

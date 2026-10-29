@@ -12,6 +12,7 @@ import { ShinobiList, ShinobiProject } from './components/Shinobi'
 import Replace from './components/Replace'
 import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
+import { MusicPage } from './components/Music'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
@@ -31,6 +32,7 @@ const SECTIONS = {
   audio: [
     ['voices', 'Voices'],
     ['lines', 'Lines'],
+    ['music', 'Music'],
     ['characters', 'Characters'],
     ['settings', 'Settings']
   ]
@@ -47,7 +49,7 @@ const savedSection = () => {
 export default function App() {
   const [section, setSection] = useState(savedSection)
   const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'create'))
-  // a spoken line on its way to Create's voice line (Lines > Use in a shot)
+  // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
@@ -106,11 +108,6 @@ export default function App() {
     setPage('character')
   }
 
-  const openEdit = (id) => {
-    setEditId(id)
-    setPage('edit')
-  }
-
   const switchSection = (next) => {
     if (next === section) return
     setSection(next)
@@ -118,6 +115,12 @@ export default function App() {
       localStorage.setItem('iv.section', next)
     } catch {}
     if (!SECTIONS[next].some(([id]) => id === page || SUBPAGES[id]?.includes(page))) setPage(SECTIONS[next][0][0])
+  }
+  // Edit is on the Video side; Music opens it from Audio
+  const openEdit = (id) => {
+    setEditId(id)
+    switchSection('video')
+    setPage('edit')
   }
   const sendToCreate = (line) => {
     setLineForCreate(line)
@@ -169,6 +172,7 @@ export default function App() {
         {page === 'create' && <Create {...ctx} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} />}
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}
+        {page === 'music' && <MusicPage {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}

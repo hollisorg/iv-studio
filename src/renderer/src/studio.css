@@ -2005,3 +2005,91 @@ input.mini {
 .seed-note {
   margin: -4px 0 0;
 }
+
+/* ---------- music ---------- */
+.music-field {
+  display: grid;
+  gap: 6px;
+}
+.music-length {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.music-length input.mini {
+  width: 72px;
+}
+.music-licence {
+  display: block;
+  margin-top: 4px;
+}
+.music-needed {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+}
+.music-needed .btn {
+  justify-self: start;
+}
+.music-model {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(140px, auto);
+  gap: 12px;
+  align-items: center;
+}
+.song-row {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: var(--ink-2);
+}
+.song-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+}
+.song-name {
+  flex: 1 1 220px;
+  min-width: 0;
+  background: transparent;
+  border-color: transparent;
+  font-weight: 600;
+  padding-left: 0;
+}
+.song-name:hover,
+.song-name:focus {
+  border-color: var(--line);
+  padding-left: 6px;
+}
+.song-style {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.song-row audio {
+  width: 100%;
+  height: 36px;
+}
+.song-row > p.mono {
+  margin: 0;
+}
+.song-actions {
+  flex-wrap: wrap;
+}
+.song-edit {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.song-edit select {
+  max-width: 200px;
+}
+.music input.seed-input {
+  width: 120px;
+}

@@ -547,6 +547,11 @@ export class Studio {
       }
       return list
     }
+    if (job.plan?.music) {
+      // a song (Music): the SaveAudio output
+      for (const nid of Object.keys(outputs).sort()) for (const a of outputs[nid].audio || []) list.push(file(a, 'audio'))
+      return list
+    }
     if (job.plan?.images) {
       // a picture graph (character design stills): every SaveImage output, in node order
       for (const nid of Object.keys(outputs).sort()) for (const img of outputs[nid].images || []) list.push(file(img, 'image'))

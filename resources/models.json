@@ -166,6 +166,73 @@
       ],
       "optional": true,
       "optionalFor": "Replace"
+    },
+    {
+      "id": "music3_dit",
+      "label": "MiniMax Music 3 DiT (fp16)",
+      "loader": "UNETLoader.unet_name",
+      "match": "minimax_music3_dit_fp16.safetensors",
+      "alt": [
+        "minimax_music3_dit_int8_convrot.safetensors",
+        "minimax_music3_dit_fp32.safetensors"
+      ],
+      "folder": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_fp16.safetensors",
+      "size": 4914197682,
+      "needed_for": [
+        "music"
+      ],
+      "optional": true,
+      "optionalFor": "Music"
+    },
+    {
+      "id": "music3_te",
+      "label": "MiniMax Music 3 text encoder (int8)",
+      "loader": "CLIPLoader.clip_name",
+      "match": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "alt": [
+        "minimax_music3_text_encoder_pruned_bf16.safetensors",
+        "minimax_music3_text_encoder_bf16.safetensors"
+      ],
+      "folder": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "size": 9196611886,
+      "needed_for": [
+        "music"
+      ],
+      "optional": true,
+      "optionalFor": "Music"
+    },
+    {
+      "id": "music3_vae",
+      "label": "MiniMax Music 3 audio VAE",
+      "loader": "VAELoader.vae_name",
+      "match": "minimax_music3_dav.safetensors",
+      "folder": "vae",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors",
+      "size": 216696128,
+      "needed_for": [
+        "music"
+      ],
+      "optional": true,
+      "optionalFor": "Music"
+    },
+    {
+      "id": "ace15",
+      "label": "ACE-Step 1.5 Turbo (all-in-one)",
+      "loader": "CheckpointLoaderSimple.ckpt_name",
+      "match": "ace_step_1.5_turbo_aio.safetensors",
+      "alt": [
+        "ace_step_1.5_turbo_aio_ace_step_1.5_turbo_aio.safetensors"
+      ],
+      "folder": "checkpoints",
+      "url": "https://huggingface.co/Comfy-Org/ACE-Step-1.5/resolve/main/checkpoints/ace_step_1.5_turbo_aio.safetensors",
+      "size": 10025478736,
+      "needed_for": [
+        "music"
+      ],
+      "optional": true,
+      "optionalFor": "Music"
     }
   ],
   "node_packs": [

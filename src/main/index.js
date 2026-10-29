@@ -16,6 +16,7 @@ import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { Voices } from '../service/voices'
+import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -57,6 +58,7 @@ let trainings = null
 let replace = null
 let catalog = null
 let voices = null
+let music = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -82,6 +84,7 @@ function makeStudio() {
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
+  if (music) music.studio = studio
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -226,6 +229,29 @@ app.whenReady().then(() => {
   handle('voices:lines', (voiceId) => voices.lines(voiceId))
   handle('voices:deleteLine', (id) => voices.deleteLine(id))
   handle('voices:transcribe', (file) => voices.transcribe(file))
+  // ---------- Audio: music (MiniMax Music 3 and ACE-Step 1.5 on this PC's ComfyUI) ----------
+  music = new Music({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
+  handle('music:meta', () => ({ engines: MUSIC_ENGINES, defaults: MUSIC_DEFAULTS, keys: ACE_KEYS }))
+  handle('music:status', () => music.status())
+  handle('music:create', async (opts) => {
+    await voices.release()
+    return music.create(opts)
+  })
+  handle('music:list', () => music.list())
+  handle('music:get', (id) => music.get(id))
+  handle('music:rename', (id, name) => music.rename(id, name))
+  handle('music:cancel', (id) => music.cancel(id))
+  handle('music:delete', (id) => music.delete(id))
+  // A song onto an edit's A1, after what is already there; no edit id makes a new edit around it.
+  handle('music:toEdit', async (id, editId = null) => {
+    const song = await music.get(id)
+    if (!song.file) throw new Error('That song has not finished yet.')
+    const e = editId ? edits.get(editId) : edits.create(song.name)
+    const m = await edits.addMedia(song.file, { type: 'music', label: song.name })
+    const start = Math.max(0, ...e.clips.filter((c) => c.track === 'A1').map((c) => c.start + (c.out - c.in)))
+    const clip = { id: `m${m.id}`, track: 'A1', media: m.id, start, in: 0, out: m.duration || song.duration || 10, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }
+    return edits.save(e.id, { media: { ...e.media, [m.id]: m }, clips: [...e.clips, clip] })
+  })
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
   const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })

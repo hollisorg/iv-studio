@@ -88,6 +88,21 @@ IV Studio keeps a voice per character and speaks lines in it through VoiceStudio
    `generate_previews` and write the same words in the prompt's `<d>[English] …</d>`.
 4. A different `seed` gives another read of the same words; `list_lines` shows what was said before.
 
+## Music (Audio)
+
+IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
+- `minimax`, MiniMax Music 3: full songs up to 5 minutes with the clearest sung words; a minute or two per
+  song. Its length follows the lyrics (`seconds` is only a limit), so write full verses and choruses for
+  a full song. Its licence allows commercial use; a product that uses it must show "MiniMax-Music3".
+- `ace`, ACE-Step 1.5 Turbo (Apache-2.0): seconds per song, for drafts and background music. It also takes
+  bpm, key, time signature and language.
+1. `music_status`; if an engine lacks models, ask the person to download them on Audio > Music.
+2. `make_music` with a style caption and lyrics (section tags such as [Verse] and [Chorus] on their own
+   lines), or instrumental true. It returns a song; poll `get_music` until status is success.
+3. Use its `file`: `add_media` files (append true puts it on A1 of an edit), or trim it with
+   `prepare_media` and pass it as `voiceLine` to `generate_previews` so a character sings it.
+4. The same settings and seed give the same song; a new seed gives a new take.
+
 ## Shinobi: edits you cut as an agent
 
 Shinobi is IV Studio's agent-driven editor (its engine is OpenKatana). Where Edit is a hand-made timeline,
@@ -141,6 +156,8 @@ The Characters page (and these tools) turn an invented person into a character p
   before anything that costs money (the Context IR writer).
 - Voices too: only invented voices, the person's own, or someone who agreed. Never clone a real person's
   voice from a found recording.
+- Music: write original lyrics and describe a style, not a named artist's voice. Don't feed in someone
+  else's song lyrics.
 - Characters must be invented, or real people who agreed to it. Don't make a real person say or do
   things without their consent.
 - The MCP server renders on the local ComfyUI, even when the app window is set to the cloud.
