@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     removeItem: call('training:removeItem'),
     makeClips: call('training:makeClips'),
     keepClip: call('training:keepClip'),
+    remakeClips: call('training:remakeClips'),
     estimate: call('training:estimate'),
     openDataset: call('training:openDataset'),
     start: call('training:start'),

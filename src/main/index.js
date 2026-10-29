@@ -226,6 +226,7 @@ app.whenReady().then(() => {
   handle('training:setCaption', (id, kind, itemId, text) => trainings.setCaption(id, kind, itemId, text))
   handle('training:removeItem', (id, kind, itemId) => trainings.removeItem(id, kind, itemId))
   handle('training:makeClips', (id, opts) => trainings.makeClips(id, opts))
+  handle('training:remakeClips', (id, clipIds) => trainings.remakeClips(id, clipIds))
   handle('training:keepClip', (id, clipId, keep) => trainings.keepClip(id, clipId, keep))
   handle('training:estimate', (id, opts) => trainings.estimateFor(trainings.get(id), opts))
   handle('training:buildDataset', (id) => trainings.buildDataset(id))

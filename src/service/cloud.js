@@ -57,7 +57,9 @@ export class Cloud {
         fs.rmSync(zip, { force: true })
         throw new Error('The uv download did not match its published checksum.')
       }
-      await this.exec('tar', ['-xf', zip, '-C', path.join(this.dir, 'uv')])
+      // Windows' own tar (bsdtar) unpacks zips; a GNU tar earlier on PATH (Git's) can't, and reads C: as a host
+      const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
+      await this.exec(tar, ['-xf', zip, '-C', path.join(this.dir, 'uv')])
       fs.rmSync(zip, { force: true })
     }
     this.onLog('Setting up Python and Modal’s client…')

@@ -356,7 +356,7 @@ tool('pick_face', 'Choose one face candidate (by index from get_character_traini
   trainings.pickFace(trainingId, { jobId: c.jobId, file: await firstOutput(trainingId, c.jobId, 'image') })
   return trainingView(trainingId)
 })
-tool('design_scenes', 'Render the picked face in eight scenes (two candidates each), for the training stills.', { trainingId: z.string() }, ({ trainingId }) => trainings.designScenes(trainingId).then(() => trainingView(trainingId)))
+tool('design_scenes', 'Render the picked face in eight scenes (four candidates each), for the training stills. Pick the closest to the face in each; weak stills teach the LoRA a blend.', { trainingId: z.string() }, ({ trainingId }) => trainings.designScenes(trainingId).then(() => trainingView(trainingId)))
 tool('pick_still', 'Keep one candidate of a scene in the training set (index), or leave the scene out (null). reroll: two more candidates instead.', {
   trainingId: z.string(),
   stillId: z.string(),
@@ -371,10 +371,11 @@ tool('pick_still', 'Keep one candidate of a scene in the training set (index), o
   }
   return trainingView(trainingId)
 })
-tool('make_training_clips', 'Render talking clips (H3 reference-to-video from two kept stills and the voice sample, about a minute each on this PC). lines: replace the default lines, one per clip.', {
+tool('make_training_clips', 'Render talking clips (H3 reference-to-video from the picked face, one kept still and the voice sample, about 1.5 minutes each on this PC). lines: replace the default lines, one per clip. redo: clip ids to render again instead (new seed), for clips where the face drifts.', {
   trainingId: z.string(),
-  lines: z.array(z.string()).max(TALKS.length).optional()
-}, ({ trainingId, lines }) => trainings.makeClips(trainingId, { talks: lines ? lines.map((line, k) => ({ ...TALKS[k], line })) : TALKS }).then(() => trainingView(trainingId)))
+  lines: z.array(z.string()).max(TALKS.length).optional(),
+  redo: z.array(z.string()).optional()
+}, ({ trainingId, lines, redo }) => (redo?.length ? trainings.remakeClips(trainingId, redo) : trainings.makeClips(trainingId, { talks: lines ? lines.map((line, k) => ({ ...TALKS[k], line })) : TALKS })).then(() => trainingView(trainingId)))
 tool('set_training_item', 'Edit a still or clip caption (trigger first, then clothes, place, action, framing, any line; never the face or voice), keep or drop a clip, or remove an uploaded item.', {
   trainingId: z.string(),
   kind: z.enum(['still', 'clip']),

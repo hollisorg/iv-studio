@@ -232,7 +232,7 @@ function Design({ t, job, act, save, trainingId }) {
 
       <section className="block">
         <p className="mono label">02 · Scenes</p>
-        <p className="small dim">Eight stills in different places, clothes and light, so none of them welds to the trigger. Pick the one in each scene that looks most like your face, or leave a scene out.</p>
+        <p className="small dim">Eight stills in different places, clothes and light, so none of them welds to the trigger. Each scene has four candidates: pick the one that looks most like your face ("Two more" if none do), or leave the scene out. A weak still teaches the LoRA a blend.</p>
         {t.face && !t.stills.some((s) => s.source === 'generated') && (
           <button className="btn btn-primary" onClick={() => act('Making the scenes', () => T.designScenes(trainingId))}>
             Make the scene stills
@@ -357,16 +357,22 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
                 <label className="me-snap small">
                   <input type="checkbox" checked={c.keep} onChange={(e) => act('Saving', () => T.keepClip(trainingId, c.id, e.target.checked))} /> In the set
                 </label>
-                {c.source === 'upload' && (
+                {c.source === 'upload' ? (
                   <button className="link-btn mono" onClick={() => act('Removing', () => T.removeItem(trainingId, 'clip', c.id))}>
                     Remove
                   </button>
+                ) : (
+                  DONE.includes(job(c.jobId)?.status) && (
+                    <button className="link-btn mono" onClick={() => act('Rendering again', () => T.remakeClips(trainingId, [c.id]))}>
+                      Render again
+                    </button>
+                  )
                 )}
               </div>
             </div>
           ))}
         </div>
-        <p className="small dim">Leave out any clip where the face drifts or the mouth smears.</p>
+        <p className="small dim">If the face drifts or the mouth smears, render that clip again or leave it out. Every clip uses the picked face as its main reference.</p>
       </section>
 
       <section className="block">

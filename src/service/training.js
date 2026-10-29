@@ -120,7 +120,7 @@ cache_directory = "/vol/train/${name}/cache"
 export function talkPrompt({ who, talk, voice }) {
   return `subject_definitions: <Subject 1> is the person in <Picture 1> and <Picture 2>: ${who}.
 
-retention_analysis: <Picture 1>, <Picture 2>: identity - keep the face and hair exactly; the clothes and the place follow the description.${voice ? ' <Audio 1>: voice - keep this voice exactly.' : ''}
+retention_analysis: <Picture 1>: identity - keep this face and hair exactly. <Picture 2>: the same person in other clothes and light - identity only; the clothes and the place follow the description.${voice ? ' <Audio 1>: voice - keep this voice exactly.' : ''}
 
 detailed_description: [Shot 1] Live-action, filmed on a smartphone held at arm's length, one continuous take. There is no writing anywhere in the picture. <Subject 1> is ${talk.scene}. <Subject 1> (S1) looks into the camera and says: <d>[English] ${talk.line}</d> Then <Subject 1> smiles and settles, lips closed.
 
@@ -277,7 +277,9 @@ export class Trainings {
     return this.write(t)
   }
 
-  // The picked face's seed and description across every scene: two candidates each.
+  // The picked face's seed and description across every scene: four candidates each. Z-Image keeps only a
+  // family resemblance from seed to seed (0.4-0.6 face similarity), so the person picks the closest; two
+  // candidates left Theo's set with three scenes under 0.4.
   async designScenes(id, { scenes = SCENES } = {}) {
     const t = this.get(id)
     if (!t.face) throw new Error('Pick a face first.')
@@ -285,7 +287,7 @@ export class Trainings {
     for (const [k, scene] of scenes.entries()) {
       const prompt = `${t.who}, ${t.faceText}, ${scene}, candid phone photo`
       const candidates = []
-      for (const s of [t.face.seed, t.face.seed + 7]) candidates.push({ jobId: await this.renderStill(t, models, { prompt, seed: s, tag: `scene${k + 1}` }), seed: s })
+      for (const s of [0, 7, 14, 21].map((d) => t.face.seed + d)) candidates.push({ jobId: await this.renderStill(t, models, { prompt, seed: s, tag: `scene${k + 1}` }), seed: s })
       t.stills.push({ id: randomUUID().slice(0, 6), source: 'generated', scene, caption: `${t.trigger}, ${t.who}, ${scene}`, candidates, pick: null, file: null })
     }
     return this.write(t)
@@ -336,34 +338,58 @@ export class Trainings {
 
   // ---------- 2 clips: talking H3 clips, or the user's own ----------
   keptStills = (t) => t.stills.filter((s) => s.file && (s.pick != null || s.source === 'upload'))
+  // The face references for clip k: the picked face close-up (or the first kept still) carries identity in
+  // every clip; one kept still adds the person in other clothes and light. Rotating through scene stills alone
+  // let a weak still make a weak clip (Theo, 2026-10-28: an office still at 0.29 likeness gave a clip at 0.12).
+  async clipRefs(t) {
+    const stills = this.keptStills(t)
+    if (!t.face?.file && stills.length < 2) throw new Error('Pick a face, or keep at least two stills, first: the clips use them as the face.')
+    if (!stills.length) throw new Error('Keep at least one still first.')
+    const dir = path.join(this.folder(t.id), 'stills')
+    const face = t.face?.file ? await this.studio.localCopy(t.face.file, dir) : await this.studio.localCopy(stills[0].file, dir)
+    const others = await Promise.all(stills.map((s) => this.studio.localCopy(s.file, dir)))
+    return (k) => [face, others[k % others.length]]
+  }
+  async renderClip(t, refs, talk, k, seed) {
+    const [face, still] = refs(k)
+    return this.studio.generatePreviews({
+      projectId: t.projectId,
+      mode: 'reference',
+      character: 'none',
+      prompt: talkPrompt({ who: t.who, talk, voice: !!t.voice?.path }),
+      media: [{ kind: 'picture', file: face }, { kind: 'picture', file: still }, ...(t.voice?.path ? [{ kind: 'audio', file: t.voice.path }] : [])],
+      aspect: k % 3 === 2 ? '9:16' : '16:9',
+      megapixels: 0.3,
+      seconds: 5,
+      previews: 1,
+      steps: 8,
+      seed
+    })
+  }
   async makeClips(id, { talks = TALKS, seed = 7100 } = {}) {
     const t = this.get(id)
-    const stills = this.keptStills(t)
-    if (stills.length < 2) throw new Error('Keep at least two stills first: the clips use them as the face.')
-    const local = await Promise.all(stills.map((s) => this.studio.localCopy(s.file, path.join(this.folder(id), 'stills'))))
+    const refs = await this.clipRefs(t)
     // The design stills leave Z-Image (about 20 GB) in ComfyUI's memory. With H3's 40 GB on top, a 64 GB PC
     // pages the offloaded part of H3 to disk and a 1-minute clip takes 20 (seen 2026-10-28), so drop it first.
     await this.studio.comfy.freeMemory().catch(() => {})
     for (const [k, talk] of talks.entries()) {
-      const media = [
-        { kind: 'picture', file: local[k % local.length] },
-        { kind: 'picture', file: local[(k + 1) % local.length] },
-        ...(t.voice?.path ? [{ kind: 'audio', file: t.voice.path }] : [])
-      ]
-      const job = await this.studio.generatePreviews({
-        projectId: t.projectId,
-        mode: 'reference',
-        character: 'none',
-        prompt: talkPrompt({ who: t.who, talk, voice: !!t.voice?.path }),
-        media,
-        aspect: k % 3 === 2 ? '9:16' : '16:9',
-        megapixels: 0.3,
-        seconds: 5,
-        previews: 1,
-        steps: 8,
-        seed: seed + k
-      })
-      t.clips.push({ id: randomUUID().slice(0, 6), source: 'generated', talk, caption: `${t.trigger}, ${t.who}, ${talk.scene}, talking to the camera, handheld phone video. (S1) says: <d>[English] ${talk.line}</d>`, jobId: job.id, keep: true, file: null })
+      const job = await this.renderClip(t, refs, talk, k, seed + k)
+      t.clips.push({ id: randomUUID().slice(0, 6), source: 'generated', talk, index: k, seed: seed + k, caption: `${t.trigger}, ${t.who}, ${talk.scene}, talking to the camera, handheld phone video. (S1) says: <d>[English] ${talk.line}</d>`, jobId: job.id, keep: true, file: null })
+    }
+    return this.write(t)
+  }
+  // Renders a generated clip again (same scene and line, new seed, current references); the old take is dropped.
+  async remakeClips(id, clipIds) {
+    const t = this.get(id)
+    const refs = await this.clipRefs(t)
+    await this.studio.comfy.freeMemory().catch(() => {})
+    for (const clipId of clipIds) {
+      const c = t.clips.find((x) => x.id === clipId)
+      if (!c || c.source !== 'generated') throw new Error('Only generated clips can be rendered again.')
+      const k = c.index ?? TALKS.findIndex((x) => x.line === c.talk.line)
+      c.seed = (c.seed ?? 7100 + k) + 1000
+      c.jobId = (await this.renderClip(t, refs, c.talk, Math.max(0, k), c.seed)).id
+      Object.assign(c, { file: null, keep: true })
     }
     return this.write(t)
   }
