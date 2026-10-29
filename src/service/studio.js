@@ -16,6 +16,11 @@ const DEFAULT_CHARACTERS = [
   { id: 'tess', name: 'Tess Marlow', lora: 'MiniMax H3\\tess\\tess_mmh3-000040.safetensors', strength: 0.8, trigger: 't3ss4', voiceRefmod: 'characters/tess_audio', visualRefmod: 'characters/tess_visual' }
 ]
 const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
+// The model family a job loads. Before a job, ComfyUI drops what a job of another family left loaded, so two
+// big models never share the GPU (Z-Image or MiniMax Music next to H3 overflows a 24 GB card and 64 GB of RAM).
+// Jobs of the same family keep their models: a finish reuses its preview's cached latent.
+const FAMILIES = { music: 'music', still: 'image' }
+const familyOf = (kind) => FAMILIES[kind] || 'h3'
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
 export const MODEL_NODES = { text: '101', frames: '201', reference: '301', continue: '601' }
 
@@ -175,11 +180,30 @@ export class Studio {
     return this.submitGraph({ kind, graph: prompt, projectId: project.id, plan, name, parent, previewPlan })
   }
 
+  // Before a render on this PC: IV Studio's own GPU users stop (beforeRender, set by the app and the MCP
+  // server: the voice engine), and ComfyUI unloads if the job before this one, IV Studio's or anyone's, was
+  // another model family. ComfyUI applies the unload between prompts, never inside one.
+  async makeRoom(kind) {
+    if (this.comfy.remote) return
+    await this.beforeRender?.()
+    if ((await this.lastFamily().catch(() => null)) !== familyOf(kind)) await this.comfy.freeMemory().catch(() => {})
+  }
+  // The family of the last job queued on ComfyUI, or of the last one it ran; 'other' for work that isn't IV Studio's.
+  async lastFamily() {
+    const q = await this.comfy.queue()
+    const queued = [...q.queue_running, ...q.queue_pending].sort((a, b) => a[0] - b[0]).at(-1)
+    const last = queued || Object.values(await this.comfy.req('/history?max_items=1'))[0]?.prompt
+    if (!last) return null
+    const kind = last[3]?.iv_studio?.kind
+    return kind ? familyOf(kind) : 'other'
+  }
+
   // Queues any graph and records it as a job. Sequence graphs carry plan.saves so their outputs can be read.
   async submitGraph({ kind, graph: built, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
     const graph = adaptGraph(built, await this.capabilities())
     const problems = checkPrompt(graph)
     if (problems.length) throw new Error(`Internal graph error: ${problems.join('; ')}`)
+    await this.makeRoom(kind)
     const promptId = await this.comfy.submit(graph, { iv_studio: { kind, project: projectId, sequence: sequenceId } })
     const job = {
       id: randomUUID().slice(0, 12),

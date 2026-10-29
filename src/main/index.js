@@ -85,6 +85,8 @@ function makeStudio() {
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
   if (music) music.studio = studio
+  // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
+  studio.beforeRender = () => voices?.release()
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()

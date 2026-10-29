@@ -153,8 +153,6 @@ export class Music {
       engine === 'minimax'
         ? minimaxGraph({ dit: eng.files.music3_dit, te: eng.files.music3_te, vae: eng.files.music3_vae, caption: style, lyrics: words, seconds: secs, seed: s, tiled: (st.vramGb || 24) < TILED_BELOW_GB, prefix })
         : aceGraph({ ckpt: eng.files.ace15, tags: style, lyrics: words, seconds: secs, seed: s, bpm: Math.round(bpm), key, timesignature: String(timesignature), language, prefix })
-    // MiniMax's 8B text encoder plus whatever a video render left loaded can overflow this PC's memory
-    if (engine === 'minimax') await this.studio.comfy.freeMemory().catch(() => {})
     const project = this.studio.createProject(`Music · ${title}`, null, null, 'music')
     const job = await this.studio.submitGraph({ kind: 'music', graph, projectId: project.id, name: title, plan: { music: { songId: id }, request: { prompt: style } } })
     const song = { id, name: title, engine, caption: style, lyrics: words === INSTRUMENTAL ? '' : words, instrumental: words === INSTRUMENTAL, seconds: secs, seed: s, ...(engine === 'ace' && { bpm: Math.round(bpm), key, timesignature: String(timesignature), language }), projectId: project.id, jobId: job.id, status: job.status, file: null, duration: null, createdAt: now() }

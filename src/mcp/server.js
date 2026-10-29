@@ -551,6 +551,7 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
 // ---------- Audio: voices and spoken lines (IV Studio's own engine: VoxCPM2 and Whisper) ----------
 const voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpeg: edits.ffmpeg, comfy: studio.comfy })
 process.on('exit', () => voices.release())
+studio.beforeRender = () => voices.release()
 tool('voice_status', `Whether IV Studio's voice engine is set up (${VOICE_ENGINES.map((e) => `${e.label}: ${e.note}`).join(' ')} Whisper large-v3 turbo, MIT, reads the words in recordings). installed false: ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.`, {}, () => voices.status())
 tool('setup_voices', "Set up IV Studio's voice engine once: a Python environment with PyTorch and VoxCPM, plus the VoxCPM2 and Whisper models, about 12 GB of free downloads into IV Studio's data folder (roughly 5-15 minutes). Ask the person first. Returns when done.", {}, () => voices.setup())
 tool('list_voices', 'Every saved voice: id, name, kind (designed, clone, ready), engine, seed, reference recording and its words, and which characters use it.', {}, async () => {
