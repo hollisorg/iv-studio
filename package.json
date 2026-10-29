@@ -1,7 +1,7 @@
 {
   "name": "iv-studio",
   "productName": "IV Studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Infinite Variance studio for MiniMax H3: hunt previews, pick one, finish at 2 MP with DLSS. Built on ComfyUI, with an MCP server for agents.",
   "author": "Infinite Variance",
   "license": "MIT",
@@ -38,7 +38,7 @@
   "build": {
     "appId": "ai.infinitevariance.studio",
     "productName": "IV Studio",
-    "copyright": "\u00c2\u00a9 2026 Infinite Variance",
+    "copyright": "Â© 2026 Infinite Variance",
     "directories": {
       "output": "dist",
       "buildResources": "build"
