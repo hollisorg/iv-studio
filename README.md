@@ -116,6 +116,12 @@ cloud.
 Your projects, voices and songs are kept in `%APPDATA%\IV Studio`; renders are saved in ComfyUI's
 output folder under `H3\`.
 
+**Updates.** From 0.2.1 on, IV Studio checks for a new version when it starts and every six hours, and
+downloads it in the background. Click **↻ Update to …** at the bottom of the sidebar (or **Restart to
+update** in Settings → Updates) to install it and reopen; otherwise it installs the next time you quit.
+It waits while an edit is exporting or models are downloading. Coming from 0.2.0 or older, install 0.2.1
+by hand once.
+
 <p align="center">
   <img src="docs/images/setup.png" alt="The Setup page" width="100%">
 </p>

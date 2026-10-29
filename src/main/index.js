@@ -7,6 +7,7 @@ import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
 import { DEFAULT_TRACKS } from '../service/timeline'
+import { initUpdater, updateState } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
@@ -618,6 +619,24 @@ app.whenReady().then(() => {
   handle('links:open', (url) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)
     return true
+  })
+
+  // ---------- updates ----------
+  // Restarting stops work this process is doing itself, so the update waits for it. Renders keep going in
+  // ComfyUI either way.
+  const busy = () =>
+    [
+      edits.exports.size && 'an edit is exporting',
+      installer?.running && 'models are downloading',
+      Object.values(civitai.downloadState()).some((d) => d.status === 'downloading') && 'a LoRA is downloading'
+    ].filter(Boolean)
+  const updater = initUpdater((state) => send('update:changed', state))
+  handle('update:state', () => updateState())
+  handle('update:check', () => updater.check())
+  handle('update:install', () => {
+    const waits = busy()
+    if (waits.length) throw new Error(`Restart when it's done: ${waits.join(' and ')}.`)
+    return updater.install()
   })
   createWindow()
 })

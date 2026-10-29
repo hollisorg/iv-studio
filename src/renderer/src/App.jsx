@@ -17,6 +17,7 @@ import MediaLibrary from './components/MediaLibrary'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
+import { UpdateButton } from './components/Update'
 
 // The sidebar's two halves, switched at its foot. Characters and Settings are in both; the Library (everything
 // made, page 'media') sits above the switch and belongs to neither.
@@ -185,7 +186,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <span>v{info?.version}</span>
+          <UpdateButton notify={notify} />
           <button className="link-btn mono nav-site" onClick={() => window.ivstudio.links.open(info?.links?.website || 'https://infinitevariance.ai')}>
             infinitevariance.ai ↗
           </button>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { UpdateSettings } from './Update'
 import Hero from './Hero'
 import { ask } from './Confirm'
 
@@ -417,6 +418,8 @@ export default function Settings({ info, recheck, notify, go }) {
       </section>
 
       <AgentSettings mcp={info?.mcp} notify={notify} />
+
+      <UpdateSettings notify={notify} />
 
       <section className="group">
         <div className="group-head">
