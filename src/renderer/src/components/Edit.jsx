@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
+import TileDelete from './TileDelete'
 import Preview from './edit/Preview'
 import Timeline from './edit/Timeline'
 import { FRAME, clipEnd, clipFor, clipKind, clipLength, editLength, remove, split, timecode, titleClip } from './edit/model'
@@ -28,7 +29,8 @@ export function EditList({ openEdit, notify }) {
       </button>
       <div className="tiles seq-tiles">
         {list?.map((e) => (
-          <button key={e.id} className="tile" onClick={() => openEdit(e.id)}>
+          <div key={e.id} className="tile-wrap">
+          <button className="tile" onClick={() => openEdit(e.id)}>
             <div className="tile-body">
               <span className="tile-name">{e.name}</span>
               <span className="mono dim">
@@ -37,6 +39,8 @@ export function EditList({ openEdit, notify }) {
               <span className="mono dim">{new Date(e.updatedAt).toLocaleString()}</span>
             </div>
           </button>
+          <TileDelete name={e.name} keeps="Its media files and exported videos stay on disk." notify={notify} onDelete={async () => (await window.ivstudio.edits.delete(e.id), setList(await window.ivstudio.edits.list()))} />
+          </div>
         ))}
       </div>
     </div>

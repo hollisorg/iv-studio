@@ -73,10 +73,10 @@ export class Studio {
     if (!p) throw new Error(`No project ${id}`)
     return p
   }
-  // sequenceId / trainingId: the project holds a sequence's shots or a character training's renders,
-  // and stays out of Shots.
-  createProject(name, sequenceId = null, trainingId = null) {
-    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [], sequenceId, ...(trainingId && { trainingId }) }
+  // sequenceId / trainingId / tool: the project holds a sequence's shots, a character training's renders or a
+  // workflow's runs (tool 'replace'), and stays out of Shots.
+  createProject(name, sequenceId = null, trainingId = null, tool = null) {
+    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [], sequenceId, ...(trainingId && { trainingId }), ...(tool && { tool }) }
     writeJson(this.projectFile(p.id), p)
     return p
   }
@@ -86,6 +86,13 @@ export class Studio {
     p.updatedAt = now()
     writeJson(this.projectFile(id), p)
     return p
+  }
+  // A shot and its run history. The rendered videos stay in ComfyUI's output folder.
+  deleteProject(id) {
+    const p = this.getProject(id)
+    for (const j of p.jobs) fs.rmSync(this.jobFile(j), { force: true })
+    fs.rmSync(this.projectFile(id), { force: true })
+    return true
   }
   renameProject(id, name) {
     const p = this.getProject(id)
@@ -220,7 +227,7 @@ export class Studio {
       for (const j of this.listJobs(p.id)) {
         for (const o of j.outputs || []) {
           if (!['final', 'preview'].includes(o.kind)) continue
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
         }
       }
     }
@@ -517,6 +524,16 @@ export class Studio {
     const list = []
     const file = (f, kind, extra = {}) => ({ kind, path: f.fullpath || null, url: this.comfy.viewUrl(f), filename: f.filename, subfolder: f.subfolder, ...extra })
     const videoOf = (o) => (o?.gifs || []).filter((f) => /\.mp4$/i.test(f.filename)).sort((a, b) => /-audio/.test(b.filename) - /-audio/.test(a.filename))[0]
+    if (job.plan?.replace) {
+      // OpenJutsu's workflows: the final video (Context Loop assembly or VHS), plus mask and "who is who" previews
+      const fin = job.plan.replace.finalNode
+      for (const [nid, out] of Object.entries(outputs)) {
+        for (const f of [...(out.gifs || []), ...(out.videos || []), ...(out.video || [])]) if (/\.(mp4|webm|mov)$/i.test(f.filename)) list.push(file(f, nid === fin ? 'final' : 'video'))
+        for (const t of out.text || []) if (typeof t === 'string' && /\.(mp4|webm|mov)$/i.test(t)) list.push(this.fileFromPath(t, nid === fin ? 'final' : 'video'))
+        for (const img of out.images || []) if (/\.(png|jpe?g|webp)$/i.test(img.filename)) list.push(file(img, 'image'))
+      }
+      return list
+    }
     if (job.plan?.images) {
       // a picture graph (character design stills): every SaveImage output, in node order
       for (const nid of Object.keys(outputs).sort()) for (const img of outputs[nid].images || []) list.push(file(img, 'image'))

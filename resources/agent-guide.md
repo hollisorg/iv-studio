@@ -89,6 +89,17 @@ typography, masks and effects, captions from speech, sound cues, even 3D scenes,
    cuts and titles. `start_render` with a new request id, then poll `get_render`.
 6. Tell the person; the render shows on the Shinobi page, where it can go into Edit.
 
+## Replace: swap who or what is in a video
+
+Replace (OpenJutsu's workflows) redraws only the person or thing you choose, clip by clip with H3, and keeps
+the camera, cuts, motion and soundtrack. `replace_check` says what the ComfyUI still needs.
+1. Trim the source first if needed (`prepare_media`); it needs a soundtrack.
+2. Run `replace_video` mode mask with the same target to see what will be redrawn (about a minute).
+3. Then person (one picture, optional characterId so the character's LoRA joins), people (1-4 pictures with
+   a role each), or object (change, remove, background). Finish with faces (small faces redrawn from a
+   picture) or colours. Poll `get_job`; the result is the output with kind final.
+Only put invented characters, or people who agreed, into a video.
+
 ## Train a new character
 
 The Characters page (and these tools) turn an invented person into a character preset:

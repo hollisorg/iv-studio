@@ -92,6 +92,27 @@ suits realism or animation can be used where it fits. Text, First / last frame a
 fl2va-type model; References and Sequences need a ref2va-type model, and Settings warns when they
 don't match.
 
+## Workflows
+
+The **Workflows** page holds tools that take a video further: **Shinobi** and **Replace**, with room for more.
+
+## Replace
+
+**Replace** swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
+
+- **Person:** a picture (or one of your trained characters, optionally with their LoRA) replaces the main person.
+- **Several people:** 1-4 characters, each replacing someone you describe; one pass per person for two.
+- **Object:** change something (hair, a jacket, a car), remove it, or put a new background behind the person.
+- **Finish:** redraw small faces at close-up size, or soften H3's look.
+- **Check the mask** first shows what will be redrawn, in about a minute.
+
+It runs [OpenJutsu](https://github.com/D3voz/openjutsu)'s ComfyUI workflows (MIT, commit `47c3724`):
+SAM 3.1 tracks the people, Qwen3-VL describes the shots, MiniMax H3 redraws the masked area through the
+H3 Context Loop. OpenJutsu's mode code is vendored unchanged in `src/service/replace/`; its workflows are in
+`resources/workflows/replace/`. It needs OpenJutsu's node packs (the page links any that are missing) and
+two models, offered on Setup: SAM 3.1 and the Qwen3-VL 8B describer. Agents use `replace_check`,
+`replace_video` and `replace_history`.
+
 ## Shinobi
 
 **Shinobi** is IV Studio's agent-driven editor. Where **Edit** is a timeline you cut by hand, Shinobi
@@ -182,7 +203,7 @@ Tools:
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
 - **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
 - **References:** `prepare_media` (crop a picture, trim and crop a video or sound).
-- **Library:** `list_renders` (every render, with keys for the editor), `rename_project`, `delete_sequence`.
+- **Library:** `list_renders` (every render, with keys for the editor), `rename_project`, `delete_project`, `delete_sequence`.
 - **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`
   (files or renders, optionally appended end to end), `edit_timeline` (add, move, trim, split, ripple
   delete, fades, volume, titles, all checked before anything changes), `grab_frame` (a picture of any
@@ -219,6 +240,7 @@ Tests are in `test/`:
 - `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
 - `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
+- `replace.mjs`: checks every Replace mode against the live ComfyUI, then renders a mask check and a person replace.
 - `shinobi.mjs`: installs the pinned engine, builds a beat-cut from a recipe, renders it with Edge, and scores
   likeness against InsightFace's own numbers.
 - `training-local.mjs`: designs faces and scenes, renders talking clips and builds a dataset that fits Fizgig's rules

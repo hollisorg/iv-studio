@@ -13,6 +13,7 @@ import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
+import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -51,6 +52,7 @@ let studio = null
 let stopWatch = null
 let installer = null
 let trainings = null
+let replace = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -74,6 +76,7 @@ function makeStudio() {
   const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
   if (trainings) trainings.studio = studio
+  if (replace) replace.studio = studio
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -203,6 +206,7 @@ app.whenReady().then(() => {
   handle('shinobi:install', () => shinobi.install())
   handle('shinobi:faceModels', () => shinobi.installFaceModels((p) => send('shinobi:faceProgress', p)))
   handle('shinobi:projects', () => shinobi.projects())
+  handle('shinobi:delete', (id) => shinobi.deleteProject(id))
   handle('shinobi:project', (id) => ({ ...shinobi.project(id), brief: fs.existsSync(briefFile(id)) ? fs.readFileSync(briefFile(id), 'utf8') : '' }))
   handle('shinobi:create', (name) => shinobi.call('create_project', { name: name || 'Untitled film' }))
   handle('shinobi:saveBrief', (id, text) => fs.writeFileSync(briefFile(id), String(text)))
@@ -223,10 +227,31 @@ app.whenReady().then(() => {
   handle('shinobi:presets', async () => (await shinobi.call('get_capabilities')).presets)
   handle('shinobi:call', (tool, args) => shinobi.call(tool, args))
   handle('shinobi:tools', () => shinobi.tools())
-  handle('shinobi:addToEdit', async (video, name) => {
-    const e = edits.create(name || 'Shinobi cut')
-    const m = await edits.addMedia(video, { type: 'shinobi', label: name })
+  // A new edit holding one video on V1 (a Shinobi or Replace result).
+  const editWith = async (video, name, type) => {
+    const e = edits.create(name || 'Untitled edit')
+    const m = await edits.addMedia(video, { type, label: name })
     return edits.save(e.id, { media: { [m.id]: m }, clips: [{ id: 'c1', track: 'V1', media: m.id, start: 0, in: 0, out: m.duration || 4, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }] })
+  }
+  handle('shinobi:addToEdit', (video, name) => editWith(video, name || 'Shinobi cut', 'shinobi'))
+
+  // ---------- Replace: swap people or objects in a video (OpenJutsu's workflows) ----------
+  replace = new Replace({ studio, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+  handle('replace:meta', () => ({ resolutions: RESOLUTIONS, maxCharacters: MAX_CHARACTERS, tone: DEFAULT_TONE, openjutsu: OPENJUTSU }))
+  handle('replace:check', (mode) => replace.check(mode))
+  handle('replace:run', (input) => replace.run({ ...input, character: input.characterId ? studio.characters().find((c) => c.id === input.characterId) : null }))
+  handle('replace:history', () => replace.history())
+  handle('replace:toEdit', async (file, name) => editWith(await localCopy(file), name, 'replace'))
+  // Trained characters' picked faces, as pictures for Replace.
+  handle('replace:characterFaces', async () => {
+    const out = []
+    for (const t of trainings.list()) {
+      if (!t.cover) continue
+      try {
+        out.push({ id: t.id, name: t.name, characterId: t.characterId, picture: await studio.localCopy(t.cover, path.join(DATA, 'trainings', t.id, 'stills')) })
+      } catch {}
+    }
+    return out
   })
 
   trainings = new Trainings({
@@ -428,7 +453,7 @@ app.whenReady().then(() => {
   handle('characters:list', () => studio.characters())
   handle('characters:save', (list) => studio.saveCharacters(list))
   handle('projects:list', () =>
-    studio.listProjects().filter((p) => !p.sequenceId && !p.trainingId).map((p) => {
+    studio.listProjects().filter((p) => !p.sequenceId && !p.trainingId && !p.tool).map((p) => {
       const jobs = studio.listJobs(p.id)
       const finals = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'final'))
       const previews = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'preview'))
@@ -452,6 +477,7 @@ app.whenReady().then(() => {
   handle('sequences:finishShot', (id, index, opts) => track(studio.finishShot(id, index, opts)))
   handle('projects:get', (id) => ({ project: studio.getProject(id), jobs: studio.listJobs(id) }))
   handle('projects:rename', (id, name) => studio.renameProject(id, name))
+  handle('projects:delete', (id) => studio.deleteProject(id))
   handle('render:plan', (request, finish) => studio.planRender(request, finish))
   handle('render:planFinish', (jobId, finish) => studio.planFinishJob(jobId, finish))
   handle('render:previews', async (request) => {

@@ -52,7 +52,7 @@ export async function checkSetup({ comfy, template, manifest, characters }) {
     // optional: only for designing characters, so missing is a warning; alt: other names that count as present
     const names = [m.match, ...(m.alt || [])]
     const found = opts.find((o) => names.includes(o.replace(/\\/g, '/').split('/').pop()))
-    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for designing characters` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []

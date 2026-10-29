@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
+import TileDelete from './TileDelete'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
 import { media } from '../media'
@@ -71,7 +72,8 @@ export function CharacterList({ openCharacter, notify, characters }) {
       {list?.length > 0 && (
         <div className="tiles seq-tiles">
           {list.map((t) => (
-            <button key={t.id} className="tile char-tile" onClick={() => openCharacter(t.id)}>
+            <div key={t.id} className="tile-wrap">
+            <button className="tile char-tile" onClick={() => openCharacter(t.id)}>
               {t.cover ? <img src={src(t.cover)} alt="" /> : <span className="char-cover-empty mono dim">No face yet</span>}
               <div className="tile-body">
                 <span className="tile-name">{t.name}</span>
@@ -80,6 +82,8 @@ export function CharacterList({ openCharacter, notify, characters }) {
                 </span>
               </div>
             </button>
+            <TileDelete name={t.name} keeps={t.characterId ? 'The character preset and its LoRA stay; this removes the design stills, clips and dataset.' : 'This removes its design stills, clips and dataset.'} notify={notify} onDelete={async () => (await window.ivstudio.training.delete(t.id), setList(await window.ivstudio.training.list()))} />
+            </div>
           ))}
         </div>
       )}

@@ -182,6 +182,11 @@ export class Shinobi {
       renders: this.renders(id)
     }
   }
+  // A film, with its imported media copies and renders (they live in the film's folder).
+  deleteProject(id) {
+    fs.rmSync(this.projectDir(id), { recursive: true, force: true })
+    return true
+  }
   renders(id) {
     const jobs = path.join(this.projectDir(id), '.openkatana', 'jobs')
     if (!fs.existsSync(jobs)) return []

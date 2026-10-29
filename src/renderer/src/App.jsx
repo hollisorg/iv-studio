@@ -7,6 +7,8 @@ import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
 import { ShinobiList, ShinobiProject } from './components/Shinobi'
+import Replace from './components/Replace'
+import Workflows from './components/Workflows'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
@@ -15,7 +17,7 @@ const PAGES = [
   ['library', 'Shots'],
   ['sequences', 'Sequences'],
   ['edits', 'Edit'],
-  ['shinobi', 'Shinobi'],
+  ['workflows', 'Workflows'],
   ['characters', 'Characters'],
   ['setup', 'Setup'],
   ['cloud', 'Cloud'],
@@ -106,7 +108,7 @@ export default function App() {
       </header>
       <nav className="nav">
         {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') || (id === 'shinobi' && page === 'shinobi-film') ? 'on' : ''}`} onClick={() => setPage(id)}>
+          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') || (id === 'workflows' && ['shinobi', 'shinobi-film', 'replace'].includes(page)) ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
@@ -127,6 +129,8 @@ export default function App() {
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'edits' && <EditList {...ctx} />}
         {page === 'edit' && editId && <EditEditor key={editId} editId={editId} {...ctx} />}
+        {page === 'workflows' && <Workflows {...ctx} />}
+        {page === 'replace' && <Replace {...ctx} />}
         {page === 'shinobi' && <ShinobiList {...ctx} />}
         {page === 'shinobi-film' && shinobiId && <ShinobiProject key={shinobiId} projectId={shinobiId} {...ctx} />}
         {page === 'characters' && <CharacterList {...ctx} />}

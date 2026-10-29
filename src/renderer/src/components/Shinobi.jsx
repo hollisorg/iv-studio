@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
+import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
 
 const ASPECTS = [
@@ -90,7 +91,8 @@ export function ShinobiList({ openShinobi, notify }) {
           {list.length > 0 && (
             <div className="tiles seq-tiles">
               {list.map((p) => (
-                <button key={p.id} className="tile" onClick={() => openShinobi(p.id)}>
+                <div key={p.id} className="tile-wrap">
+                <button className="tile" onClick={() => openShinobi(p.id)}>
                   {p.cover ? <video className="shinobi-cover" src={`${fileUrl(p.cover)}#t=0.5`} muted preload="metadata" /> : <span className="shinobi-cover empty mono dim">No render yet</span>}
                   <div className="tile-body">
                     <span className="tile-name">{p.name}</span>
@@ -99,6 +101,8 @@ export function ShinobiList({ openShinobi, notify }) {
                     </span>
                   </div>
                 </button>
+                <TileDelete name={p.name} keeps="Its renders go too (copy any you want to keep, or send them to Edit first). Your original files stay." notify={notify} onDelete={async () => (await window.ivstudio.shinobi.delete(p.id), setList(await window.ivstudio.shinobi.projects()))} />
+                </div>
               ))}
             </div>
           )}

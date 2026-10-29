@@ -1611,3 +1611,79 @@ input.mini {
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
+
+/* ---------- workflows ---------- */
+.workflow-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.workflow-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 22px;
+  text-align: left;
+  color: var(--paper);
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.workflow-card:hover {
+  border-color: var(--red);
+}
+.workflow-name {
+  font: 700 44px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.replace .block > .btn,
+.replace .block > .segmented {
+  justify-self: start;
+}
+.replace-missing .group-body p {
+  margin: 0;
+}
+.replace-settings summary {
+  cursor: pointer;
+}
+.replace-settings[open] {
+  display: grid;
+  gap: 12px;
+}
+.replace-go {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0 20px;
+}
+.replace .media-tile input {
+  width: 100%;
+}
+
+/* delete on list tiles */
+.tile-wrap {
+  position: relative;
+  display: grid;
+}
+.tile-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line-strong);
+  background: rgba(16, 12, 14, 0.85);
+  color: var(--paper);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tile-wrap:hover .tile-delete,
+.tile-delete:focus-visible {
+  opacity: 1;
+}
+.tile-delete:hover {
+  border-color: var(--red);
+  color: var(--red);
+}

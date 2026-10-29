@@ -19,6 +19,7 @@ import { Studio } from '../service/studio'
 import { applyOps, clipEnd } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
+import { Replace, RESOLUTIONS } from '../service/replace'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -157,6 +158,7 @@ tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that ma
 
 // ---------- projects and sequences ----------
 tool('rename_project', 'Rename a project in the library.', { projectId: z.string(), name: z.string().min(1) }, ({ projectId, name }) => studio.renameProject(projectId, name))
+tool('delete_project', "Delete a shot (project) and its run history. Its videos stay in ComfyUI's output folder. Ask the person first.", { projectId: z.string() }, ({ projectId }) => studio.deleteProject(projectId))
 tool('delete_sequence', 'Delete a sequence and its record of versions. Rendered video files stay on disk. Ask the person first.', { sequenceId: z.string() }, ({ sequenceId }) => studio.deleteSequence(sequenceId))
 
 // ---------- renders library ----------
@@ -468,6 +470,36 @@ tool('rank_likeness', 'Score every scene candidate and clip against the picked f
   pick: z.boolean().default(false)
 }, ({ trainingId, pick }) => trainings.rank(trainingId, { pick }))
 tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, ({ trainingId, epoch }) => trainingView(trainings.adopt(trainingId, epoch).id))
+
+// ---------- Replace (OpenJutsu's workflows) ----------
+const replace = new Replace({ studio, resourcesDir: resourcesDir(), dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+const REPLACE_MODES = ['person', 'people', 'people_maxq', 'object', 'mask', 'faces', 'colours']
+tool('replace_check', 'What this ComfyUI still needs for a Replace mode (node packs with links, models to download on the Setup page).', { mode: z.enum(REPLACE_MODES).default('person') }, ({ mode }) => replace.check(mode))
+tool('replace_video', `Swap people or objects in a video; the camera, cuts, motion and soundtrack stay. Modes: person (one picture replaces the main person; settings.role says who, optional), people (1-4 pictures, settings.roles one per picture), people_maxq (exactly 2, one pass per person, better likeness), object (settings.mode change|remove|background, settings.target what SAM tracks such as "hair", settings.changeTo what it becomes, or a picture), mask (a quick preview of what would be redrawn; run it first), faces (redraw small faces from one picture, settings.style photo|mouth), colours (settings.detail -1..1). The video needs a soundtrack. Only use invented characters or people who agreed. Returns a job: poll get_job; the result is the output with kind final.`, {
+  mode: z.enum(REPLACE_MODES),
+  video: z.string().describe('Absolute path of the source video (prepare_media can trim it first)'),
+  pictures: z.array(z.string()).default([]).describe('Absolute paths of character or object pictures'),
+  characterId: z.string().optional().describe('person mode: a character preset whose LoRA joins the run'),
+  start: z.number().min(0).default(0).describe('Seconds into the video'),
+  length: z.number().min(0).default(0).describe('Seconds to use; 0 = to the end'),
+  settings: z.object({
+    resolution: z.enum(RESOLUTIONS).optional(),
+    motion: z.union([z.literal(512), z.literal(768), z.literal(1376)]).optional().describe('Motion reference size; 512 (default) fits a 24 GB card'),
+    clipSeconds: z.number().min(2.5).max(15).optional(),
+    seed: z.number().int().min(0).optional(),
+    margin: z.enum(['tight', 'normal', 'loose']).optional(),
+    hatFix: z.boolean().optional(),
+    noLipSync: z.boolean().optional(),
+    role: z.string().optional(),
+    roles: z.array(z.string()).optional(),
+    mode: z.enum(['change', 'remove', 'background']).optional(),
+    target: z.string().optional(),
+    changeTo: z.string().optional(),
+    style: z.enum(['photo', 'mouth']).optional(),
+    detail: z.number().min(-1).max(1).optional()
+  }).default({})
+}, ({ characterId, start, length, ...input }) => replace.run({ ...input, section: { start, length }, character: characterId ? studio.characters().find((c) => c.id === characterId) : null }))
+tool('replace_history', 'Past Replace runs, newest first, with their status and result videos.', {}, async () => (await replace.history()).map((j) => ({ job: j.id, name: j.projectName, status: j.status, mode: j.plan?.replace?.mode, error: j.error, outputs: j.outputs })))
 
 // ---------- models and characters ----------
 const WORKFLOWS = ['text', 'frames', 'reference', 'continue', 'take', 'retake']

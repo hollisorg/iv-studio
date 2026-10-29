@@ -102,7 +102,8 @@
       "needed_for": [
         "characters"
       ],
-      "optional": true
+      "optional": true,
+      "optionalFor": "designing characters"
     },
     {
       "id": "zimage_te",
@@ -118,7 +119,8 @@
       "needed_for": [
         "characters"
       ],
-      "optional": true
+      "optional": true,
+      "optionalFor": "designing characters"
     },
     {
       "id": "zimage_vae",
@@ -131,7 +133,39 @@
       "needed_for": [
         "characters"
       ],
-      "optional": true
+      "optional": true,
+      "optionalFor": "designing characters"
+    },
+    {
+      "id": "sam31",
+      "label": "SAM 3.1 (tracks people and objects)",
+      "loader": "CheckpointLoaderSimple.ckpt_name",
+      "match": "sam3.1_multiplex_fp16.safetensors",
+      "folder": "checkpoints",
+      "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors",
+      "size": 1745546848,
+      "needed_for": [
+        "replace"
+      ],
+      "optional": true,
+      "optionalFor": "Replace"
+    },
+    {
+      "id": "describer",
+      "label": "Qwen3-VL 8B describer (writes Replace's prompts)",
+      "loader": "CLIPLoader.clip_name",
+      "match": "qwen3vl_8b_int8_convrot.safetensors",
+      "alt": [
+        "qwen3vl_4b_fp8_scaled.safetensors"
+      ],
+      "folder": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/Qwen3-VL/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+      "size": 9350798360,
+      "needed_for": [
+        "replace"
+      ],
+      "optional": true,
+      "optionalFor": "Replace"
     }
   ],
   "node_packs": [

@@ -18,11 +18,20 @@ contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
   // pathFor: the path of a file dropped on the window.
+  replace: {
+    meta: call('replace:meta'),
+    check: call('replace:check'),
+    run: call('replace:run'),
+    history: call('replace:history'),
+    characterFaces: call('replace:characterFaces'),
+    toEdit: call('replace:toEdit')
+  },
   shinobi: {
     status: call('shinobi:status'),
     install: call('shinobi:install'),
     faceModels: call('shinobi:faceModels'),
     projects: call('shinobi:projects'),
+    delete: call('shinobi:delete'),
     project: call('shinobi:project'),
     create: call('shinobi:create'),
     saveBrief: call('shinobi:saveBrief'),
@@ -104,7 +113,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   h3Models: call('models:h3'),
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
   characters: { list: call('characters:list'), save: call('characters:save') },
-  projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename') },
+  projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
   sequences: {
     list: call('sequences:list'),
     get: call('sequences:get'),

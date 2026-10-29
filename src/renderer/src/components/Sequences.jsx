@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { Progress } from './Shot'
 import Hero from './Hero'
+import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter } from './PromptWriter'
 
 const DONE = ['success', 'error', 'cancelled']
@@ -45,7 +46,8 @@ export function SequenceList({ openSequence, notify }) {
       </button>
       <div className="tiles seq-tiles">
         {list?.map((s) => (
-          <button key={s.id} className="tile" onClick={() => openSequence(s.id)}>
+          <div key={s.id} className="tile-wrap">
+          <button className="tile" onClick={() => openSequence(s.id)}>
             <div className="tile-body">
               <span className="tile-name">{s.name}</span>
               <span className="mono dim">
@@ -54,6 +56,8 @@ export function SequenceList({ openSequence, notify }) {
               <span className="mono dim">{new Date(s.updatedAt).toLocaleString()}</span>
             </div>
           </button>
+          <TileDelete name={s.name} notify={notify} onDelete={async () => (await window.ivstudio.sequences.delete(s.id), setList(await window.ivstudio.sequences.list()))} />
+          </div>
         ))}
       </div>
     </div>
