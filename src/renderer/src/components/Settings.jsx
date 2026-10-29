@@ -296,7 +296,7 @@ function AgentSettings({ mcp, notify }) {
           </button>
         </div>
         {agents.skillInstalled && <p className="mono small dim">{agents.skillFile}</p>}
-        <p className="dim small">39 tools: setup, shots, sequences, prompt writing, renders, timeline editing, models and characters.</p>
+        <p className="dim small">Tools for setup, shots, sequences, prompt writing, references, renders, timeline editing, character training, models and characters.</p>
       </div>
     </section>
   )

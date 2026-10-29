@@ -97,6 +97,23 @@ don't match.
 A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
 the character goes. Add characters under **Settings**.
 
+**Train your own** on the **Characters** page, the method that made Tess:
+
+1. **Design:** describe the face; Z-Image Turbo renders four candidates on your PC. Pick one, and it is
+   rendered in eight scenes (different places, clothes and light) on the same seed. Keep the most alike.
+   Or add your own pictures (only of an invented person, or someone who agreed).
+2. **Clips:** H3 renders talking clips from two of the stills and an optional designed voice, or you add
+   your own clips. Everything is fitted to Fizgig's rules (24 fps, 17n+5 frames, sides multiple of 32,
+   32 kHz stereo). Captions never describe the face or voice, so they bind to the trigger word.
+3. **Train:** Fizgig on your own Modal account (`resources/cloud/train_app.py`, B200 or H200), with the
+   minutes and dollars shown first; Tess took 29 minutes and $3.80. It keeps training if IV Studio
+   closes. Or open the dataset folder and train in Fizgig yourself.
+4. **Pick:** chosen checkpoints are downloaded into ComfyUI's `loras\MiniMax H3\<name>\` and rendered on
+   one seed side by side; the one you choose becomes a character at strength 0.8.
+
+Designing needs Z-Image Turbo, its text encoder and VAE (optional downloads on Setup). AI_Characters'
+Smartphone Snapshot v8 LoRA (Civitai) is used for a candid phone-photo look when it's installed.
+
 ## Setup
 
 **Setup** checks ComfyUI, the GPU, every node pack and every model the workflow needs, using
@@ -148,6 +165,10 @@ Tools:
   (files or renders, optionally appended end to end), `edit_timeline` (add, move, trim, split, ripple
   delete, fades, volume, titles, all checked before anything changes), `grab_frame` (a picture of any
   moment, so an agent can check its cut), `export_edit`, `get_edit_export`, `cancel_edit_export`.
+- **Character training:** `list_character_trainings`, `get_character_training`, `create_character_training`,
+  `update_character_training`, `design_faces`, `pick_face`, `design_scenes`, `pick_still`, `make_training_clips`,
+  `set_training_item`, `add_training_files`, `estimate_training`, `start_training` (paid: needs the person's OK and
+  `confirm_cost`), `stop_training`, `test_checkpoints`, `adopt_checkpoint`.
 - **Models and characters:** `list_h3_models`, `set_workflow_model`, `list_choices` (LoRAs and RefMods),
   `save_character`, `delete_character`.
 
@@ -174,6 +195,8 @@ Tests are in `test/`:
 - `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
 - `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
+- `training-local.mjs`: designs faces and scenes, renders talking clips and builds a dataset that fits Fizgig's rules
+  (local GPU, nothing on Modal).
 - `media-prepare.mjs`: crops a picture, trims a video frame-exact and trims a sound.
 - `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
 - `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out (queues real GPU renders).

@@ -163,7 +163,8 @@ def models_present(models):
 def fetch_models():
     """Run by IV Studio: `modal run modal_app.py::fetch_models` with models.json next to this file."""
     manifest = json.loads((HERE / "models.json").read_text())
-    models = manifest["models"] + CLOUD.get("extraModels", [])
+    # optional models (character design stills) run on the local PC only
+    models = [m for m in manifest["models"] if not m.get("optional")] + CLOUD.get("extraModels", [])
     t0 = time.time()
     done = download_models.remote(models)
     print(f"models ready: {len(done)}/{len(models)} in {int(time.time() - t0)} s", flush=True)

@@ -79,6 +79,20 @@ cropped to the shot's aspect, because they're stretched to fit).
   others animation). `null` goes back to the default.
 - `list_choices` lists the LoRAs and RefMods ComfyUI has; `save_character` adds a preset.
 
+## Train a new character
+
+The Characters page (and these tools) turn an invented person into a character preset:
+1. `create_character_training` (name, who), then `design_faces` with a face description (age, face
+   shape, eyes, skin, hair). Look at the four candidates and `pick_face`.
+2. `design_scenes` renders that face in eight places and outfits; `pick_still` the most alike in each
+   (or leave one out). Captions never describe the face, so the face binds to the trigger word.
+3. Optionally set a voice sample (`update_character_training` voice), then `make_training_clips`:
+   H3 talking clips from the stills. Drop any where the face drifts (`set_training_item` keep false).
+4. `estimate_training`, tell the person the minutes and dollars, and `start_training` only after they
+   agree (it bills their Modal account; Tess took 29 minutes and $3.80 on a B200).
+5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the
+   renders, and `adopt_checkpoint` the best. It's then a character like any other.
+
 ## House rules
 
 - Renders take real GPU minutes, and the person may be using ComfyUI for other work too. Only

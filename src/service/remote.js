@@ -15,7 +15,8 @@ export function capabilities(objectInfo, systemStats) {
   const spec = objectInfo.UpscaleModelLoader?.input?.required?.model_name
   const upscalers = (Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options) || [] // old and new combo formats
   return {
-    posix: systemStats?.system?.os !== 'nt',
+    // ComfyUI reports Python's os.name ('nt') on some versions and sys.platform ('win32') on others
+    posix: !['nt', 'win32'].includes(systemStats?.system?.os),
     dlss: !!objectInfo.DLSS5_Enhance_Video,
     rife: !!objectInfo['RIFE VFI'],
     upscale2x: !!objectInfo.DLSS5_Enhance_Video || upscalers.includes(CLOUD_UPSCALER),

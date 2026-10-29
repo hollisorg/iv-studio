@@ -1,26 +1,229 @@
 {
-  "_note": "Models IV Studio's workflow loads. 'name' is how ComfyUI lists the file; 'folder' is the ComfyUI models subfolder; downloads come from the upstream host (url). Sizes in bytes as listed on Hugging Face where known. License notes are for the person installing: check the upstream page.",
+  "_note": "Models IV Studio's workflow loads. 'name' is how ComfyUI lists the file; 'folder' is the ComfyUI models subfolder; downloads come from the upstream host (url). Sizes in bytes as listed on Hugging Face where known. License notes are for the person installing: check the upstream page. optional: only for designing characters (Characters page); missing ones are a warning, not a blocker. alt: other file names that count as present.",
   "models": [
-    {"id": "fl2va", "label": "MiniMax H3 fl2va (int8)", "loader": "UNETLoader.unet_name", "match": "minimax_h3_fl2va_pruned_int8_convrot.safetensors", "folder": "diffusion_models/Minimax H3", "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors", "size": 20970379616, "needed_for": ["text", "frames", "continue"]},
-    {"id": "ref2va", "label": "MiniMax H3 ref2va (int8)", "loader": "UNETLoader.unet_name", "match": "minimax_h3_ref2va_pruned_int8_convrot.safetensors", "folder": "diffusion_models/Minimax H3", "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors", "size": 20970379616, "needed_for": ["reference"]},
-    {"id": "text_encoder", "label": "Qwen3-VL 32B text encoder (int4)", "loader": "CLIPLoader.clip_name", "match": "qwen3vl_32b_minimax_h3_int4_convrot.safetensors", "folder": "text_encoders", "url": "https://huggingface.co/Merserk/MiniMax-H3-INT4-ConvRot/resolve/main/qwen3vl_32b_minimax_h3_int4_convrot.safetensors", "size": 14952506624, "needed_for": ["all"]},
-    {"id": "video_vae", "label": "Video VAE (int8)", "loader": "VAELoader.vae_name", "match": "minimax_h3_video_vae_int8_convrot.safetensors", "folder": "vae", "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_int8_convrot.safetensors", "size": 2811065184, "needed_for": ["all"]},
-    {"id": "audio_vae", "label": "Audio VAE", "loader": "VAELoader.vae_name", "match": "minimax_h3_audio_vae_fp32.safetensors", "folder": "vae", "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors", "size": 605254808, "needed_for": ["all"]},
-    {"id": "dmad", "label": "DMAD 4-step turbo LoRA", "loader": "LoraLoaderModelOnly.lora_name", "match": "minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors", "folder": "loras/MiniMax H3/Turbo", "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/main/loras/minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors", "size": 366647000, "needed_for": ["all"]},
-    {"id": "upscaler", "label": "3D latent upscaler", "loader": "MinimaxH3LatentUpscaler3D.model_name", "match": "minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors", "folder": "latent_upscale_models", "url": "https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler/resolve/main/minimax_h3_latent_upscaler_3d_conv_v1/minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors", "size": 690592672, "needed_for": ["finish"]}
+    {
+      "id": "fl2va",
+      "label": "MiniMax H3 fl2va (int8)",
+      "loader": "UNETLoader.unet_name",
+      "match": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models/Minimax H3",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "size": 20970379616,
+      "needed_for": [
+        "text",
+        "frames",
+        "continue"
+      ]
+    },
+    {
+      "id": "ref2va",
+      "label": "MiniMax H3 ref2va (int8)",
+      "loader": "UNETLoader.unet_name",
+      "match": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models/Minimax H3",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "size": 20970379616,
+      "needed_for": [
+        "reference"
+      ]
+    },
+    {
+      "id": "text_encoder",
+      "label": "Qwen3-VL 32B text encoder (int4)",
+      "loader": "CLIPLoader.clip_name",
+      "match": "qwen3vl_32b_minimax_h3_int4_convrot.safetensors",
+      "folder": "text_encoders",
+      "url": "https://huggingface.co/Merserk/MiniMax-H3-INT4-ConvRot/resolve/main/qwen3vl_32b_minimax_h3_int4_convrot.safetensors",
+      "size": 14952506624,
+      "needed_for": [
+        "all"
+      ]
+    },
+    {
+      "id": "video_vae",
+      "label": "Video VAE (int8)",
+      "loader": "VAELoader.vae_name",
+      "match": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "folder": "vae",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_int8_convrot.safetensors",
+      "size": 2811065184,
+      "needed_for": [
+        "all"
+      ]
+    },
+    {
+      "id": "audio_vae",
+      "label": "Audio VAE",
+      "loader": "VAELoader.vae_name",
+      "match": "minimax_h3_audio_vae_fp32.safetensors",
+      "folder": "vae",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "size": 605254808,
+      "needed_for": [
+        "all"
+      ]
+    },
+    {
+      "id": "dmad",
+      "label": "DMAD 4-step turbo LoRA",
+      "loader": "LoraLoaderModelOnly.lora_name",
+      "match": "minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors",
+      "folder": "loras/MiniMax H3/Turbo",
+      "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/main/loras/minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors",
+      "size": 366647000,
+      "needed_for": [
+        "all"
+      ]
+    },
+    {
+      "id": "upscaler",
+      "label": "3D latent upscaler",
+      "loader": "MinimaxH3LatentUpscaler3D.model_name",
+      "match": "minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors",
+      "folder": "latent_upscale_models",
+      "url": "https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler/resolve/main/minimax_h3_latent_upscaler_3d_conv_v1/minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors",
+      "size": 690592672,
+      "needed_for": [
+        "finish"
+      ]
+    },
+    {
+      "id": "zimage",
+      "label": "Z-Image Turbo (int8)",
+      "loader": "UNETLoader.unet_name",
+      "match": "z_image_turbo_int8_convrot.safetensors",
+      "alt": [
+        "z_image_turbo_bf16.safetensors",
+        "Z Image Turbo_Turbo.safetensors"
+      ],
+      "folder": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors",
+      "size": 6201001296,
+      "needed_for": [
+        "characters"
+      ],
+      "optional": true
+    },
+    {
+      "id": "zimage_te",
+      "label": "Z-Image text encoder (Qwen3 4B fp8)",
+      "loader": "CLIPLoader.clip_name",
+      "match": "qwen_3_4b_fp8_mixed.safetensors",
+      "alt": [
+        "qwen_3_4b.safetensors"
+      ],
+      "folder": "text_encoders",
+      "url": "https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors",
+      "size": 5631994051,
+      "needed_for": [
+        "characters"
+      ],
+      "optional": true
+    },
+    {
+      "id": "zimage_vae",
+      "label": "Z-Image VAE",
+      "loader": "VAELoader.vae_name",
+      "match": "ae.safetensors",
+      "folder": "vae",
+      "url": "https://huggingface.co/Comfy-Org/Z-Image-Turbo/resolve/main/split_files/vae/ae.safetensors",
+      "size": 335304388,
+      "needed_for": [
+        "characters"
+      ],
+      "optional": true
+    }
   ],
   "node_packs": [
-    {"label": "ComfyUI-MiniMaxH3Mod (RefMods)", "classes": ["MiniMaxH3RefModsLoader", "MiniMaxH3RefModApply"], "url": "https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod"},
-    {"label": "Fantastic MiniMaxH3 PromptBuilder (media loader)", "classes": ["MiniMaxH3MediaLoader", "MiniMaxH3ReferenceSplitter"], "url": "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder"},
-    {"label": "MiniMax H3 latent upscaler", "classes": ["MinimaxH3LatentUpscaler3D"], "url": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler"},
-    {"label": "VideoHelperSuite", "classes": ["VHS_VideoCombine", "VHS_SelectFilename"], "url": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"},
-    {"label": "DLSS5 Enhancer v15 (Strix-3D)", "classes": ["DLSS5_Enhance_Video"], "url": "https://github.com/Strix-3D/ComfyUI-DLSS5-Enhancer-v15"},
-    {"label": "rgthree-comfy", "classes": ["Any Switch (rgthree)"], "url": "https://github.com/rgthree/rgthree-comfy"},
-    {"label": "Impact Pack", "classes": ["ImpactSwitch"], "url": "https://github.com/ltdrdata/ComfyUI-Impact-Pack"},
-    {"label": "Pixaroma (LoRA loader)", "classes": ["PixaromaLoraLoader"], "url": "https://github.com/pixaroma/ComfyUI-Pixaroma"},
-    {"label": "Easy-Use (seed)", "classes": ["easy seed"], "url": "https://github.com/yolain/ComfyUI-Easy-Use"},
-    {"label": "comfyui_essentials (math)", "classes": ["SimpleMath+"], "url": "https://github.com/cubiq/ComfyUI_essentials"},
-    {"label": "KJNodes", "classes": ["INTConstant", "GetImageSizeAndCount", "GetImageRangeFromBatch"], "url": "https://github.com/kijai/ComfyUI-KJNodes"},
-    {"label": "IV Studio nodes (latent cache, shot list)", "classes": ["IVLatentCache", "IVShotList"], "url": "bundled with IV Studio (resources/comfy-nodes/ComfyUI-IV-Studio)"}
+    {
+      "label": "ComfyUI-MiniMaxH3Mod (RefMods)",
+      "classes": [
+        "MiniMaxH3RefModsLoader",
+        "MiniMaxH3RefModApply"
+      ],
+      "url": "https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod"
+    },
+    {
+      "label": "Fantastic MiniMaxH3 PromptBuilder (media loader)",
+      "classes": [
+        "MiniMaxH3MediaLoader",
+        "MiniMaxH3ReferenceSplitter"
+      ],
+      "url": "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder"
+    },
+    {
+      "label": "MiniMax H3 latent upscaler",
+      "classes": [
+        "MinimaxH3LatentUpscaler3D"
+      ],
+      "url": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler"
+    },
+    {
+      "label": "VideoHelperSuite",
+      "classes": [
+        "VHS_VideoCombine",
+        "VHS_SelectFilename"
+      ],
+      "url": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    },
+    {
+      "label": "DLSS5 Enhancer v15 (Strix-3D)",
+      "classes": [
+        "DLSS5_Enhance_Video"
+      ],
+      "url": "https://github.com/Strix-3D/ComfyUI-DLSS5-Enhancer-v15"
+    },
+    {
+      "label": "rgthree-comfy",
+      "classes": [
+        "Any Switch (rgthree)"
+      ],
+      "url": "https://github.com/rgthree/rgthree-comfy"
+    },
+    {
+      "label": "Impact Pack",
+      "classes": [
+        "ImpactSwitch"
+      ],
+      "url": "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
+    },
+    {
+      "label": "Pixaroma (LoRA loader)",
+      "classes": [
+        "PixaromaLoraLoader"
+      ],
+      "url": "https://github.com/pixaroma/ComfyUI-Pixaroma"
+    },
+    {
+      "label": "Easy-Use (seed)",
+      "classes": [
+        "easy seed"
+      ],
+      "url": "https://github.com/yolain/ComfyUI-Easy-Use"
+    },
+    {
+      "label": "comfyui_essentials (math)",
+      "classes": [
+        "SimpleMath+"
+      ],
+      "url": "https://github.com/cubiq/ComfyUI_essentials"
+    },
+    {
+      "label": "KJNodes",
+      "classes": [
+        "INTConstant",
+        "GetImageSizeAndCount",
+        "GetImageRangeFromBatch"
+      ],
+      "url": "https://github.com/kijai/ComfyUI-KJNodes"
+    },
+    {
+      "label": "IV Studio nodes (latent cache, shot list)",
+      "classes": [
+        "IVLatentCache",
+        "IVShotList"
+      ],
+      "url": "bundled with IV Studio (resources/comfy-nodes/ComfyUI-IV-Studio)"
+    }
   ]
 }

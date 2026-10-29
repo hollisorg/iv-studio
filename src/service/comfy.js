@@ -74,6 +74,12 @@ export class Comfy {
     return 'not queued'
   }
 
+  // Asks ComfyUI to unload its models and free memory. ComfyUI does it between prompts, never inside one,
+  // so nothing running is disturbed; the next prompt just loads what it needs.
+  async freeMemory() {
+    await this.req('/free', { method: 'POST', json: { unload_models: true, free_memory: true } })
+  }
+
   // Copies a local file into ComfyUI's input folder (any type) and returns its name relative to input.
   async upload(filePath, subfolder = 'iv_studio') {
     const form = new FormData()

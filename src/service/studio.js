@@ -73,8 +73,10 @@ export class Studio {
     if (!p) throw new Error(`No project ${id}`)
     return p
   }
-  createProject(name, sequenceId = null) {
-    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [], sequenceId }
+  // sequenceId / trainingId: the project holds a sequence's shots or a character training's renders,
+  // and stays out of Shots.
+  createProject(name, sequenceId = null, trainingId = null) {
+    const p = { id: randomUUID().slice(0, 8), name: name || 'Untitled shot', createdAt: now(), updatedAt: now(), jobs: [], sequenceId, ...(trainingId && { trainingId }) }
     writeJson(this.projectFile(p.id), p)
     return p
   }
@@ -126,13 +128,15 @@ export class Studio {
     return file
   }
 
+  // characterOverride: a character that isn't a saved preset (a training's checkpoint under test).
   async generatePreviews(input) {
-    const { projectId, projectName, ...request } = input
+    const { projectId, projectName, characterOverride, ...request } = input
     const project = projectId ? this.getProject(projectId) : this.createProject(projectName || request.prompt?.slice(0, 40))
     const media = []
     for (const m of request.media || []) media.push({ ...m, file: await this.stage(m.file || m.path, 'minimax_h3') })
     const voiceLine = request.voiceLine ? await this.stage(request.voiceLine, 'iv_studio') : null
-    const plan = planPreviews({ ...request, media, voiceLine }, this.characters())
+    const characters = characterOverride ? [...this.characters(), characterOverride] : this.characters()
+    const plan = planPreviews({ ...request, media, voiceLine, ...(characterOverride && { character: characterOverride.id }) }, characters)
     const unet = this.models[plan.request.mode]
     if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
     const run = project.jobs.length + 1
@@ -212,6 +216,7 @@ export class Studio {
   library() {
     const items = []
     for (const p of this.listProjects()) {
+      if (p.trainingId) continue // a character training's test renders
       for (const j of this.listJobs(p.id)) {
         for (const o of j.outputs || []) {
           if (!['final', 'preview'].includes(o.kind)) continue
@@ -512,6 +517,11 @@ export class Studio {
     const list = []
     const file = (f, kind, extra = {}) => ({ kind, path: f.fullpath || null, url: this.comfy.viewUrl(f), filename: f.filename, subfolder: f.subfolder, ...extra })
     const videoOf = (o) => (o?.gifs || []).filter((f) => /\.mp4$/i.test(f.filename)).sort((a, b) => /-audio/.test(b.filename) - /-audio/.test(a.filename))[0]
+    if (job.plan?.images) {
+      // a picture graph (character design stills): every SaveImage output, in node order
+      for (const nid of Object.keys(outputs).sort()) for (const img of outputs[nid].images || []) list.push(file(img, 'image'))
+      return list
+    }
     if (job.plan?.saves) {
       const master = videoOf(outputs[SAVES.master])
       if (master) list.push(file(master, 'master'))

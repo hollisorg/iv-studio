@@ -17,6 +17,7 @@ import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 import { applyOps, clipEnd } from '../service/timeline'
+import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -296,6 +297,131 @@ tool('get_edit_export', 'Progress of an export started with export_edit (state r
   return st
 })
 tool('cancel_edit_export', 'Stop an export started with export_edit.', { editId: z.string() }, ({ editId }) => ({ cancelled: edits.cancelExport(editId) }))
+
+// ---------- character training ----------
+const trainings = new Trainings({ dataDir: DATA, resourcesDir: resourcesDir(), studio, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+// A training with each render's state; pictures and clips as file paths/URLs rather than the raw jobs.
+async function trainingView(id) {
+  const t = await trainings.refresh(id)
+  const out = (jobId, kind) => {
+    const j = t.jobs[jobId]
+    const o = j?.outputs?.find((x) => x.kind === kind)
+    return { jobId, status: j?.status, ...(o && { path: o.path, url: o.url }), ...(j?.error && { error: j.error }) }
+  }
+  return {
+    id: t.id,
+    name: t.name,
+    trigger: t.trigger,
+    who: t.who,
+    faceText: t.faceText,
+    consent: t.consent,
+    face: t.face,
+    faceCandidates: t.faceCandidates.map((c, i) => ({ index: i, seed: c.seed, ...out(c.jobId, 'image') })),
+    stills: t.stills.map((s) => ({ id: s.id, source: s.source, caption: s.caption, pick: s.pick, inSet: !!s.file, candidates: s.candidates.map((c, i) => ({ index: i, ...out(c.jobId, 'image') })) })),
+    clips: t.clips.map((c) => ({ id: c.id, source: c.source, caption: c.caption, keep: c.keep, file: c.file?.path || null, ...(c.jobId && { render: out(c.jobId, 'preview') }) })),
+    voice: t.voice?.path || null,
+    estimate: t.estimate,
+    train: t.train,
+    checkpoints: t.checkpoints,
+    tests: t.tests.map((x) => ({ epoch: x.epoch, ...out(x.jobId, 'preview') })),
+    characterId: t.characterId
+  }
+}
+const firstOutput = async (id, jobId, kind) => {
+  const t = await trainings.refresh(id)
+  const o = t.jobs[jobId]?.outputs?.find((x) => x.kind === kind)
+  if (!o) throw new Error('That render has not finished yet; check get_character_training.')
+  return { path: o.path, url: o.url, filename: o.filename }
+}
+const TRAIN_HOW = 'Steps: create_character_training -> design_faces -> pick_face -> design_scenes -> pick_still (each scene) -> make_training_clips -> estimate_training -> start_training (paid, ask first) -> get_character_training until done -> test_checkpoints -> adopt_checkpoint. Look at the pictures by reading their files, and clips with grab_frame.'
+tool('list_character_trainings', `Characters being designed or trained (the Characters page). ${TRAIN_HOW}`, {}, () => trainings.list())
+tool('get_character_training', 'A character training: face candidates, scene stills, clips (with render status and files), the cost estimate, training progress, checkpoints and tests.', { trainingId: z.string() }, ({ trainingId }) => trainingView(trainingId))
+tool('create_character_training', `Start designing a new invented character. ${TRAIN_HOW}`, {
+  name: z.string().min(1),
+  who: z.string().default('a woman in her thirties').describe('Kind of person, e.g. "a man in his fifties" (no face details here)')
+}, (args) => trainingView(trainings.create(args).id))
+tool('update_character_training', 'Change the name, trigger word (3-12 letters/numbers, made up), who, face description, consent (true only if the person confirmed their pictures/clips are of an invented person or someone who agreed), or the voice sample path.', {
+  trainingId: z.string(),
+  name: z.string().optional(),
+  trigger: z.string().optional(),
+  who: z.string().optional(),
+  faceText: z.string().optional(),
+  consent: z.boolean().optional(),
+  voice: z.string().nullable().optional().describe('Absolute path to a clean recording of the designed voice, or null')
+}, ({ trainingId, voice, ...patch }) => trainingView(trainings.save(trainingId, { ...patch, ...(voice !== undefined && { voice: voice ? { path: voice } : null }) }).id))
+tool('design_faces', 'Render four face candidates on this PC (Z-Image Turbo, a few seconds each) from the face description: age, face shape, eyes, skin, hair.', { trainingId: z.string(), faceText: z.string().optional() }, ({ trainingId, faceText }) => trainings.designFaces(trainingId, { faceText }).then(() => trainingView(trainingId)))
+tool('pick_face', 'Choose one face candidate (by index from get_character_training) once it has rendered.', { trainingId: z.string(), index: z.number().int().min(0) }, async ({ trainingId, index }) => {
+  const c = trainings.get(trainingId).faceCandidates[index]
+  if (!c) throw new Error('No face candidate with that index.')
+  trainings.pickFace(trainingId, { jobId: c.jobId, file: await firstOutput(trainingId, c.jobId, 'image') })
+  return trainingView(trainingId)
+})
+tool('design_scenes', 'Render the picked face in eight scenes (two candidates each), for the training stills.', { trainingId: z.string() }, ({ trainingId }) => trainings.designScenes(trainingId).then(() => trainingView(trainingId)))
+tool('pick_still', 'Keep one candidate of a scene in the training set (index), or leave the scene out (null). reroll: two more candidates instead.', {
+  trainingId: z.string(),
+  stillId: z.string(),
+  index: z.number().int().min(0).nullable().optional(),
+  reroll: z.boolean().optional()
+}, async ({ trainingId, stillId, index, reroll }) => {
+  if (reroll) await trainings.rerollStill(trainingId, stillId)
+  else {
+    const s = trainings.get(trainingId).stills.find((x) => x.id === stillId)
+    if (!s) throw new Error('No still with that id.')
+    trainings.pickStill(trainingId, stillId, index == null ? { pick: null } : { pick: index, file: await firstOutput(trainingId, s.candidates[index]?.jobId, 'image') })
+  }
+  return trainingView(trainingId)
+})
+tool('make_training_clips', 'Render talking clips (H3 reference-to-video from two kept stills and the voice sample, about a minute each on this PC). lines: replace the default lines, one per clip.', {
+  trainingId: z.string(),
+  lines: z.array(z.string()).max(TALKS.length).optional()
+}, ({ trainingId, lines }) => trainings.makeClips(trainingId, { talks: lines ? lines.map((line, k) => ({ ...TALKS[k], line })) : TALKS }).then(() => trainingView(trainingId)))
+tool('set_training_item', 'Edit a still or clip caption (trigger first, then clothes, place, action, framing, any line; never the face or voice), keep or drop a clip, or remove an uploaded item.', {
+  trainingId: z.string(),
+  kind: z.enum(['still', 'clip']),
+  itemId: z.string(),
+  caption: z.string().optional(),
+  keep: z.boolean().optional(),
+  remove: z.boolean().optional()
+}, ({ trainingId, kind, itemId, caption, keep, remove }) => {
+  if (remove) trainings.removeItem(trainingId, kind, itemId)
+  if (caption !== undefined) trainings.setCaption(trainingId, kind, itemId, caption)
+  if (keep !== undefined && kind === 'clip') trainings.keepClip(trainingId, itemId, keep)
+  return trainingView(trainingId)
+})
+tool('add_training_files', "Add the person's own pictures or clips (needs consent: true first). Long clips are cut into 5 s pieces on the H3 frame grid when the set is built.", {
+  trainingId: z.string(),
+  kind: z.enum(['still', 'clip']),
+  files: z.array(z.string()).min(1),
+  caption: z.string().default('').describe('Clothes, place, framing; never the face')
+}, ({ trainingId, kind, files, caption }) => trainingView((kind === 'still' ? trainings.addStills(trainingId, files, caption) : trainings.addClips(trainingId, files, caption)).id))
+tool('estimate_training', 'Steps, minutes and dollars of a training run on Modal, before starting it.', {
+  trainingId: z.string(),
+  gpu: z.enum(TRAIN_GPUS.map((g) => g.id)).default('B200'),
+  epochs: z.number().int().min(10).max(200).optional()
+}, ({ trainingId, ...opts }) => trainings.estimateFor(trainings.get(trainingId), opts))
+tool('start_training', "Train the character LoRA on the person's own Modal account (signed in on the Cloud page). This costs real money: run estimate_training, tell the person the minutes and dollars, and only call this after they say yes, passing confirm_cost with that dollar figure. Runs in the background; poll get_character_training (train.state, train.progress).", {
+  trainingId: z.string(),
+  gpu: z.enum(TRAIN_GPUS.map((g) => g.id)).default('B200'),
+  epochs: z.number().int().min(10).max(200).optional(),
+  confirm_cost: z.number().describe('The estimated dollars the person agreed to')
+}, async ({ trainingId, gpu, epochs, confirm_cost }) => {
+  const est = trainings.estimateFor(trainings.get(trainingId), { gpu, epochs })
+  if (confirm_cost < est.dollars - 0.01) throw new Error(`The estimate is $${est.dollars}; ask the person to agree to that first.`)
+  await trainings.startTraining(trainingId, { gpu, epochs })
+  return trainingView(trainingId)
+})
+tool('stop_training', 'Stop a training run on Modal (billing stops; saved epochs stay). Ask the person first.', { trainingId: z.string() }, ({ trainingId }) => trainings.stopTraining(trainingId).then(() => trainingView(trainingId)))
+tool('test_checkpoints', "After training: download the chosen epochs into ComfyUI's loras folder and render the same talking shot and seed with each, to compare by eye. Late epochs often look best.", {
+  trainingId: z.string(),
+  epochs: z.array(z.number().int()).min(1).max(6),
+  prompt: z.string().optional().describe('Text-mode H3 prompt with {char}; default a talking close-up')
+}, async ({ trainingId, epochs, prompt }) => {
+  if (!trainings.get(trainingId).checkpoints.length) await trainings.listCheckpoints(trainingId)
+  await trainings.fetchCheckpoints(trainingId, epochs)
+  await trainings.testCheckpoints(trainingId, { epochs, prompt })
+  return trainingView(trainingId)
+})
+tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, ({ trainingId, epoch }) => trainingView(trainings.adopt(trainingId, epoch).id))
 
 // ---------- models and characters ----------
 const WORKFLOWS = ['text', 'frames', 'reference', 'continue', 'take', 'retake']

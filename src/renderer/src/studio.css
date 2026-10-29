@@ -1404,3 +1404,122 @@ input.mini {
   background: var(--pink);
   border-color: var(--pink);
 }
+
+/* ---------- characters ---------- */
+.char-steps {
+  margin: 0 0 8px;
+}
+.char-tile img,
+.char-cover-empty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--ink-3);
+}
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.char-img {
+  display: block;
+  padding: 0;
+  border: 2px solid transparent;
+  background: #000;
+  cursor: pointer;
+}
+.char-img img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 832 / 1216;
+  object-fit: cover;
+}
+.char-img:hover {
+  border-color: var(--pink);
+}
+.char-img.picked {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red);
+}
+.char-pending {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  padding: 10px;
+  text-align: center;
+  background: var(--ink-2);
+  border: 1px dashed var(--line);
+}
+.char-still {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.char-still-side {
+  display: grid;
+  gap: 10px;
+}
+.char-lines .row {
+  grid-template-columns: 150px 1fr;
+}
+.char-clips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.char-clip {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.char-clip.left-out {
+  opacity: 0.45;
+}
+.char-clip.chosen {
+  border-color: var(--red);
+}
+.char-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.char-progress {
+  height: 8px;
+  background: var(--ink-3);
+}
+.char-progress span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.4s;
+}
+.char-epochs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.char-epochs button {
+  min-width: 42px;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--paper);
+  cursor: pointer;
+}
+.char-epochs button.on {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.characters .block > .btn,
+.characters .group-body > .btn,
+.characters > .btn {
+  justify-self: start;
+}

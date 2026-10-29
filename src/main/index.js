@@ -11,6 +11,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
+import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -48,6 +49,7 @@ let win = null
 let studio = null
 let stopWatch = null
 let installer = null
+let trainings = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -70,6 +72,7 @@ function makeStudio() {
   const s = readSettings(DATA)
   const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
+  if (trainings) trainings.studio = studio
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -191,6 +194,50 @@ app.whenReady().then(() => {
   })
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+  // ---------- characters: design, clips, training on Modal, pick ----------
+  trainings = new Trainings({
+    dataDir: DATA,
+    resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')),
+    studio,
+    ffmpeg: edits.ffmpeg,
+    ffprobe: edits.ffprobe,
+    onLog: (line, id) => send('training:log', { id, line }),
+    onChange: (id) => send('training:changed', { id })
+  })
+  handle('training:meta', () => ({ gpus: TRAIN_GPUS, scenes: SCENES, talks: TALKS }))
+  handle('training:list', () => trainings.list())
+  handle('training:create', (init) => trainings.create(init))
+  handle('training:get', (id) => trainings.refresh(id))
+  handle('training:save', (id, patch) => trainings.save(id, patch))
+  handle('training:delete', (id) => trainings.remove(id))
+  handle('training:designFaces', (id, opts) => trainings.designFaces(id, opts))
+  handle('training:pickFace', (id, pick) => trainings.pickFace(id, pick))
+  handle('training:designScenes', (id) => trainings.designScenes(id))
+  handle('training:rerollStill', (id, stillId) => trainings.rerollStill(id, stillId))
+  handle('training:pickStill', (id, stillId, pick) => trainings.pickStill(id, stillId, pick))
+  handle('training:addStills', async (id, caption) => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] })
+    return r.canceled ? trainings.get(id) : trainings.addStills(id, r.filePaths, caption)
+  })
+  handle('training:addClips', async (id, caption) => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Videos', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v'] }] })
+    return r.canceled ? trainings.get(id) : trainings.addClips(id, r.filePaths, caption)
+  })
+  handle('training:setCaption', (id, kind, itemId, text) => trainings.setCaption(id, kind, itemId, text))
+  handle('training:removeItem', (id, kind, itemId) => trainings.removeItem(id, kind, itemId))
+  handle('training:makeClips', (id, opts) => trainings.makeClips(id, opts))
+  handle('training:keepClip', (id, clipId, keep) => trainings.keepClip(id, clipId, keep))
+  handle('training:estimate', (id, opts) => trainings.estimateFor(trainings.get(id), opts))
+  handle('training:buildDataset', (id) => trainings.buildDataset(id))
+  handle('training:openDataset', async (id) => shell.openPath((await trainings.buildDataset(id)).dir))
+  handle('training:start', (id, opts) => trainings.startTraining(id, opts))
+  handle('training:check', (id) => trainings.checkTraining(id))
+  handle('training:stop', (id) => trainings.stopTraining(id))
+  handle('training:checkpoints', (id) => trainings.listCheckpoints(id))
+  handle('training:fetch', (id, epochs) => trainings.fetchCheckpoints(id, epochs))
+  handle('training:test', (id, opts) => trainings.testCheckpoints(id, opts))
+  handle('training:adopt', (id, epoch) => trainings.adopt(id, epoch))
+
   handle('media:probe', (file) => mediaTools.probe(file))
   handle('media:prepare', (opts) => mediaTools.prepare(opts))
   handle('edits:meta', () => ({ tracks: TRACKS, formats: FORMATS }))
@@ -344,7 +391,7 @@ app.whenReady().then(() => {
   handle('characters:list', () => studio.characters())
   handle('characters:save', (list) => studio.saveCharacters(list))
   handle('projects:list', () =>
-    studio.listProjects().filter((p) => !p.sequenceId).map((p) => {
+    studio.listProjects().filter((p) => !p.sequenceId && !p.trainingId).map((p) => {
       const jobs = studio.listJobs(p.id)
       const finals = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'final'))
       const previews = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'preview'))

@@ -51,7 +51,7 @@ export default function Setup({ setup, recheck, checking, remote }) {
     })
   }, [recheck])
 
-  const missingModels = remote ? [] : items.filter((i) => i.kind === 'model' && i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
+  const missingModels = remote ? [] : items.filter((i) => i.kind === 'model' && i.status !== 'ok' && !i.optional && !ACTIVE.includes(dl[i.model]?.status))
   const missingBytes = missingModels.reduce((n, i) => n + (i.size || 0), 0)
   const errors = Object.entries(dl).filter(([, s]) => s.status === 'error')
 

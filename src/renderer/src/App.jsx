@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import Library from './components/Library'
 import Cloud from './components/Cloud'
@@ -13,6 +14,7 @@ const PAGES = [
   ['library', 'Shots'],
   ['sequences', 'Sequences'],
   ['edits', 'Edit'],
+  ['characters', 'Characters'],
   ['setup', 'Setup'],
   ['cloud', 'Cloud'],
   ['settings', 'Settings']
@@ -23,6 +25,7 @@ export default function App() {
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
+  const [trainingId, setTrainingId] = useState(null)
   const [setup, setSetup] = useState(null)
   const [checking, setChecking] = useState(false)
   const [characters, setCharacters] = useState([])
@@ -65,13 +68,18 @@ export default function App() {
     setPage('sequence')
   }
 
+  const openCharacter = (id) => {
+    setTrainingId(id)
+    setPage('character')
+  }
+
   const openEdit = (id) => {
     setEditId(id)
     setPage('edit')
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, jobs, setJobs, info, go: setPage }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -90,7 +98,7 @@ export default function App() {
       </header>
       <nav className="nav">
         {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') ? 'on' : ''}`} onClick={() => setPage(id)}>
+          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
@@ -111,6 +119,8 @@ export default function App() {
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'edits' && <EditList {...ctx} />}
         {page === 'edit' && editId && <EditEditor key={editId} editId={editId} {...ctx} />}
+        {page === 'characters' && <CharacterList {...ctx} />}
+        {page === 'character' && trainingId && <CharacterTrainer key={trainingId} trainingId={trainingId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}
         {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}

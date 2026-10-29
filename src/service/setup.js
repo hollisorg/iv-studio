@@ -33,7 +33,7 @@ export async function checkSetup({ comfy, template, manifest, characters }) {
   const info = await comfy.objectInfo()
   const needed = [...new Set(Object.values(template).map((n) => n.class_type))].filter((c) => !TEMPLATE_SKIP.has(c))
   const missingClasses = needed.filter((c) => !info[c])
-  const linux = stats.system?.os !== 'nt'
+  const linux = !['nt', 'win32'].includes(stats.system?.os)
   for (const pack of manifest.node_packs) {
     const miss = pack.classes.filter((c) => missingClasses.includes(c))
     // DLSS is Windows-only; on Linux (the cloud) IV Studio finishes with its own upscale + RIFE instead.
@@ -49,8 +49,10 @@ export async function checkSetup({ comfy, template, manifest, characters }) {
   for (const m of manifest.models) {
     const [cls, input] = m.loader.split('.')
     const opts = comboOptions(info, cls, input) || []
-    const found = opts.find((o) => o.replace(/\\/g, '/').split('/').pop() === m.match)
-    items.push({ id: `model:${m.id}`, label: m.label, status: found ? 'ok' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+    // optional: only for designing characters, so missing is a warning; alt: other names that count as present
+    const names = [m.match, ...(m.alt || [])]
+    const found = opts.find((o) => names.includes(o.replace(/\\/g, '/').split('/').pop()))
+    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for designing characters` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []
