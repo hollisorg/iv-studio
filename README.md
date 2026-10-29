@@ -44,8 +44,9 @@ cloud.
   character sing it.
 - **Sequences.** Several shots that play as one continuous video, rendered as one take or shot by shot,
   with retakes of any stretch.
-- **Edit.** A multi-track timeline: two video tracks, titles and two audio tracks, with fades, volume,
-  snapping, undo and MP4 export at 1080p, 4K, vertical or square.
+- **Edit.** A Premiere-style editor with a full-screen workspace: project bin, source and program
+  monitors, as many video and audio tracks as you need, filmstrips and waveforms, markers, J/K/L,
+  insert and overwrite, razor, ripple and rolling trims, and MP4 export at 1080p, 4K, vertical or square.
 - **Workflows.** **Replace** swaps a person or an object in a video while the camera, motion and sound
   stay. **Shinobi** lets an agent cut a whole edit in code.
 - **Library.** Every shot, sequence, export, song and spoken line in one place, ready to drop onto an
@@ -79,11 +80,11 @@ cloud.
     <td align="center"><sub>Say it in their voice</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/edit.png" alt="Edit: a finished shot on V1 and its song on A1"></td>
+    <td width="50%"><img src="docs/images/edit.png" alt="Edit in full screen: project bin, source and program monitors, effect controls, and a timeline with filmstrips, waveforms and markers"></td>
     <td width="50%"><img src="docs/images/library.png" alt="Library: every shot, song and line in one place"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Cut it together and export</sub></td>
+    <td align="center"><sub>A Premiere-style editor, full screen, with your agent cutting alongside</sub></td>
     <td align="center"><sub>Everything you've made, in one place</sub></td>
   </tr>
 </table>
@@ -238,14 +239,31 @@ Shots are 10 or 15 seconds, the lengths H3 Multishot is tested at.
 
 ## Edit
 
-A multi-track timeline for cutting shots, sequences, songs and lines together: two video tracks (V2 plays
-over V1), a titles track and two audio tracks. Drag clips between tracks, trim their edges, split, delete or
-ripple delete, and undo anything. Each clip has fades and volume; titles have their own text, size, colour,
-position and box. **Export MP4** renders the timeline at 1080p, 4K, vertical or square, 24/30/60 fps, into
-`Videos\IV Studio\Edits`.
+An editor laid out like Adobe Premiere for cutting shots, sequences, songs and lines together. **Full
+screen** (or F11) hides IV Studio's sidebar and gives the whole screen to the edit; Esc brings it back.
 
-Shortcuts: Space play · S split · Delete · Shift+Delete ripple delete · Ctrl+Z / Ctrl+Shift+Z ·
-← → one frame (Shift: one second) · Home / End.
+- **Panels.** Project bin, Source monitor, Program monitor and Effect controls on top, the timeline below.
+  Drag any border to resize; the layout is remembered.
+- **Project bin.** Thumbnails, search, and Video, Pictures and Sound bins. Its Library tab holds every IV
+  Studio render, song and line, one click from the edit.
+- **Source monitor.** Click a bin item to open it, mark In (I) and Out (O), then press , to insert it at the
+  playhead (everything after moves right) or . to overwrite. Or drag the picture onto a track.
+- **Timeline.** As many video and audio tracks as you need (a higher V track plays over a lower one), plus
+  titles. Each track can be targeted (click its name), hidden, locked, muted or soloed. Video clips show a
+  filmstrip and their sound's waveform; sound clips show a waveform. Markers sit on the ruler.
+- **Tools.** Select (V), Razor (C, click to cut), Ripple trim (B, the rest of the track follows) and Rolling
+  edit (N, moves a cut between two clips). Each clip has fades and volume; titles have their own text,
+  size, colour, position and box.
+- **Export MP4** renders the timeline at 1080p, 4K, vertical or square, 24/30/60 fps, into
+  `Videos\IV Studio\Edits`. Hidden tracks stay out of the picture and muted ones out of the sound.
+
+Keys, as in Premiere: Space play · J K L shuttle (press again to go faster) · ← → one frame (Shift: one
+second) · ↑ ↓ previous / next edit · I O mark · , insert · . overwrite · S split · Ctrl+K split every track ·
+Q W ripple trim to the playhead · Delete, Shift+Delete ripple delete · M marker, Shift+M next marker ·
+\ fit · = − zoom · Ctrl+Z / Ctrl+Y · F11 full screen, Esc back.
+
+**With an agent.** Your agent edits the same timeline through IV Studio's MCP server. Its changes appear
+at once with a strip saying what it did and a one-click Undo, and tracks you lock are off limits to it.
 
 ## Library
 
@@ -320,8 +338,9 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 - **References:** `prepare_media` (crop a picture, trim and crop a video or sound).
 - **Library:** `list_renders`, `rename_project`, `delete_project`, `delete_sequence`.
 - **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`,
-  `edit_timeline` (add, move, trim, split, ripple delete, fades, volume, titles, all checked before anything
-  changes), `grab_frame`, `export_edit`, `get_edit_export`, `cancel_edit_export`.
+  `edit_timeline` (add, insert, overwrite, move, trim, split, ripple delete, fades, volume, titles, tracks
+  and their hide/lock/mute/solo, markers, all checked before anything changes), `grab_frame`, `export_edit`,
+  `get_edit_export`, `cancel_edit_export`.
 - **Voices:** `voice_status`, `setup_voices`, `list_voices`, `design_voice`, `create_voice`, `update_voice`,
   `delete_voice`, `speak_line`, `list_lines`, `delete_line`, `release_voice_engine`.
 - **Music:** `music_status`, `make_music`, `list_music`, `get_music`, `cancel_music`, `rename_music`,
@@ -339,7 +358,8 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 - **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi`, `shinobi_project`.
 - **Models:** `list_h3_models`, `set_workflow_model`.
 
-An edit open in the window reloads when an agent changes it, and Ctrl+Z puts the person's version back.
+An edit open in the window reloads when an agent changes it; a strip says what changed, with a one-click
+Undo, and tracks the person locks refuse the agent.
 The MCP server always renders on the local ComfyUI.
 
 </details>

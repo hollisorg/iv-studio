@@ -69,6 +69,14 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [jobs, setJobs] = useState({})
   const toastTimer = useRef(null)
+  // The editor's full-screen workspace hides the title bar and sidebar; leaving the editor ends it.
+  const [focus, setFocus] = useState(false)
+  useEffect(() => {
+    if (page !== 'edit' && focus) {
+      setFocus(false)
+      window.ivstudio.edits.fullScreen(false).catch(() => {})
+    }
+  }, [page])
 
   const notify = useCallback((text, kind = 'error') => {
     setToast({ text, kind })
@@ -141,11 +149,11 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, focus, setFocus }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
-    <div className="app">
+    <div className={`app ${focus && page === 'edit' ? 'app-focus' : ''}`}>
       <header className="titlebar">
         <img className="brand-logo" src={ivMark} alt="Infinite Variance" />
         <span className="mono">Infinite Variance</span>

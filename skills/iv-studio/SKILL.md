@@ -63,14 +63,22 @@ cropped to the shot's aspect, because they're stretched to fit).
 - `create_edit`, then `add_media` with `renders` keys from `list_renders` (or file paths).
   `append: true` lays them end to end on V1 (pictures and video) or A1 (sound).
 - `edit_timeline` takes a list of operations, applied in order and all checked first, so a bad one
-  changes nothing: `add_clip`, `add_title`, `update_clip` (move, trim with in/out, change track,
-  fades, volume, mute, title text), `split_clip`, `remove_clip` (with `ripple` to close the gap),
-  `remove_media`, `clear`. `get_edit` shows the clip ids and times.
-- Tracks: V2 is drawn over V1, T1 holds titles, A1 and A2 are sound. Video clips play their own
-  sound too unless muted.
+  changes nothing: `add_clip`, `insert_clip` (everything after moves right) and `overwrite_clip`
+  (replaces what's there), both with the media's `in`/`out` points, `add_title`, `update_clip` (move,
+  trim with in/out, change track, fades, volume, mute, title text), `split_clip`, `remove_clip` (with
+  `ripple` to close the gap), `remove_media`, `clear`, `add_track` / `update_track` / `remove_track`,
+  and `add_marker` / `update_marker` / `remove_marker`. `get_edit` shows the clip ids and times, each
+  track's state (`trackList`) and the markers.
+- Tracks: a higher V track is drawn over a lower one (V2 over V1), T1 holds titles, A tracks are sound;
+  add as many V and A tracks as the cut needs. Hidden tracks are left out of the picture, muted ones
+  out of the sound, and when any track is soloed only soloed tracks are heard. Video clips play their
+  own sound too unless muted.
+- A track the person has locked refuses your changes: work on another track, or ask them. Markers
+  are a good way to leave notes ("cut here", "music swells") for the person.
 - Check the cut with `grab_frame` (edit + timeline time), then `export_edit` and poll
   `get_edit_export`. Exports go to `Videos\IV Studio\Edits`.
-- If the edit is open in the app, it reloads there; the person can undo your change with Ctrl+Z.
+- If the edit is open in the app, it reloads there and an activity strip tells the person what you
+  changed, with a one-click Undo.
 
 ## Models and characters
 

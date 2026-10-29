@@ -94,6 +94,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
     addOutput: call('edits:addOutput'),
     export: call('edits:export'),
     cancelExport: call('edits:cancelExport'),
+    filmstrip: call('edits:filmstrip'),
+    peaks: call('edits:peaks'),
+    fullScreen: call('window:fullScreen'),
     onProgress: on('edits:progress'),
     onChanged: on('edits:changed')
   },

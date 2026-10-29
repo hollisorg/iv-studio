@@ -10,13 +10,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
-import { Edits, editLength, FORMATS, TRACKS } from '../service/edits'
+import { Edits, editLength, FORMATS } from '../service/edits'
 import { MediaTools } from '../service/media'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
-import { applyOps, clipEnd } from '../service/timeline'
+import { applyOps, clipEnd, TRACK_ID, tracksOf, videoLayers } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
@@ -187,10 +187,12 @@ tool('prepare_media', 'Crop a picture, or trim (and optionally crop) a video or 
 }, (args) => mediaTools.prepare(args))
 const exporting = new Map() // edit id -> { state, progress, file, error, startedAt }
 
-// An edit as an agent reads it: media by id, then each track's clips in time order with the media name.
+// An edit as an agent reads it: media by id, each track's clips in time order with the media name, the
+// tracks' states (top to bottom, as the timeline shows them) and the markers.
 function describe(e) {
+  const list = tracksOf(e)
   const tracks = Object.fromEntries(
-    TRACKS.map((t) => [
+    list.map((t) => [
       t.id,
       e.clips
         .filter((c) => c.track === t.id)
@@ -198,12 +200,12 @@ function describe(e) {
         .map((c) => ({ clip: c.id, ...(c.text ? { title: c.text } : { media: c.media, name: e.media[c.media]?.name }), start: c.start, end: +clipEnd(c).toFixed(3), in: c.in, out: c.out, fadeIn: c.fadeIn, fadeOut: c.fadeOut, ...(c.text ? {} : { volume: c.volume ?? 1, muted: !!c.muted }) }))
     ])
   )
-  return { id: e.id, name: e.name, settings: e.settings, seconds: +editLength(e).toFixed(3), media: Object.values(e.media).map(({ id, name, kind, duration, width, height, hasAudio, path: p }) => ({ id, name, kind, duration, width, height, hasAudio, path: p })), tracks, exports: e.exports || [] }
+  return { id: e.id, name: e.name, settings: e.settings, seconds: +editLength(e).toFixed(3), media: Object.values(e.media).map(({ id, name, kind, duration, width, height, hasAudio, path: p }) => ({ id, name, kind, duration, width, height, hasAudio, path: p })), tracks, trackList: list.map(({ id, kind, label, hidden, locked, muted, solo }) => ({ id, kind, label, hidden: !!hidden, locked: !!locked, muted: !!muted, solo: !!solo })), markers: e.markers || [], exports: e.exports || [] }
 }
 
 const LIVE = 'If the edit is open in the IV Studio window, it reloads there and the person can undo your change with Ctrl+Z.'
 tool('list_edits', 'Edits (timelines in the Edit page), newest first.', {}, () => edits.list())
-tool('get_edit', 'An edit: its media (with ids), each track\'s clips in order (clip ids, start/end on the timeline, in/out in the media, fades, volume), settings and past exports. Tracks: V2 is drawn over V1; T1 holds titles; A1/A2 are sound. Video clips play their own sound too unless muted.', { editId: z.string() }, ({ editId }) => describe(edits.get(editId)))
+tool('get_edit', 'An edit: its media (with ids), each track\'s clips in order (clip ids, start/end on the timeline, in/out in the media, fades, volume), settings, markers and past exports. Tracks: a higher V track is drawn over a lower one (V2 over V1); T1 holds titles; A tracks are sound; add_track adds more. trackList gives each track\'s state: hidden tracks are left out of the picture, muted ones out of the sound (and when any track is soloed, only soloed tracks are heard), and locked tracks can\'t be changed. Video clips play their own sound too unless muted.', { editId: z.string() }, ({ editId }) => describe(edits.get(editId)))
 tool('create_edit', 'Create an empty edit.', { name: z.string().default('Untitled edit'), format: z.enum(Object.keys(FORMATS)).default('1080p'), fps: z.number().int().min(12).max(60).default(24) }, ({ name, format, fps }) => {
   const e = edits.create(name)
   return describe(edits.save(e.id, { settings: { format, fps } }))
@@ -240,22 +242,31 @@ tool('add_media', `Add files to an edit's media bin: local video, picture or aud
   return { media: added.map(({ id, name, kind, duration, width, height, hasAudio }) => ({ id, name, kind, duration, width, height, hasAudio })), placed: results }
 })
 
+const trackId = z.string().regex(TRACK_ID, 'Tracks are T1, V1, V2, ... or A1, A2, ...')
 const op = {
-  add_clip: z.object({ op: z.literal('add_clip'), media: z.string().describe('Media id'), track: z.enum(['V1', 'V2', 'A1', 'A2']).optional().describe('Default V1, or A1 for sound'), start: z.number().min(0).optional().describe('Timeline seconds; default = the end of that track'), in: z.number().min(0).optional().describe('Where in the media to start (default 0)'), out: z.number().optional().describe('Where in the media to stop (default its end; pictures 4 s)'), duration: z.number().optional().describe('Instead of out: how long the clip plays'), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional() }),
+  add_clip: z.object({ op: z.literal('add_clip'), media: z.string().describe('Media id'), track: trackId.optional().describe('Default V1, or A1 for sound'), start: z.number().min(0).optional().describe('Timeline seconds; default = the end of that track'), in: z.number().min(0).optional().describe('Where in the media to start (default 0)'), out: z.number().optional().describe('Where in the media to stop (default its end; pictures 4 s)'), duration: z.number().optional().describe('Instead of out: how long the clip plays'), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional() }),
   add_title: z.object({ op: z.literal('add_title'), content: z.string(), start: z.number().min(0).default(0), duration: z.number().min(0.1).default(3), size: z.number().min(2).max(30).optional().describe('Text height as % of the frame (default 8)'), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional().describe('#rrggbb'), box: z.boolean().optional().describe('Dark box behind the text'), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional() }),
-  update_clip: z.object({ op: z.literal('update_clip'), clip: z.string(), track: z.enum(['V1', 'V2', 'T1', 'A1', 'A2']).optional(), start: z.number().min(0).optional().describe('Move it on the timeline'), in: z.number().min(0).optional().describe('Trim the head (media seconds)'), out: z.number().optional().describe('Trim the tail (media seconds)'), duration: z.number().optional(), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional(), content: z.string().optional().describe('Titles only, as are size, position, color, box'), size: z.number().optional(), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional(), box: z.boolean().optional() }),
+  insert_clip: z.object({ op: z.literal('insert_clip'), media: z.string().describe('Media id'), track: trackId.optional().describe('Default V1, or A1 for sound'), at: z.number().min(0).describe('Timeline seconds. Everything on that track from here on moves right to make room; a clip it lands in is cut in two'), in: z.number().min(0).optional().describe('Media in point (default 0)'), out: z.number().optional().describe('Media out point (default its end; pictures 4 s)'), duration: z.number().optional(), volume: z.number().min(0).max(4).optional() }),
+  overwrite_clip: z.object({ op: z.literal('overwrite_clip'), media: z.string().describe('Media id'), track: trackId.optional().describe('Default V1, or A1 for sound'), at: z.number().min(0).describe('Timeline seconds. Replaces whatever is on that track for the clip\'s length; nothing moves'), in: z.number().min(0).optional(), out: z.number().optional(), duration: z.number().optional(), volume: z.number().min(0).max(4).optional() }),
+  add_track: z.object({ op: z.literal('add_track'), kind: z.enum(['video', 'audio']), label: z.string().optional().describe('Default its id, e.g. V3') }),
+  update_track: z.object({ op: z.literal('update_track'), track: trackId, label: z.string().optional(), hidden: z.boolean().optional().describe('Video and titles: leave it out of the picture'), muted: z.boolean().optional().describe('Leave its sound out'), solo: z.boolean().optional().describe('Hear only soloed tracks'), locked: z.boolean().optional().describe('Usually the person\'s call: a locked track refuses changes') }),
+  remove_track: z.object({ op: z.literal('remove_track'), track: trackId.describe('An empty track (not V1, A1 or T1)') }),
+  add_marker: z.object({ op: z.literal('add_marker'), at: z.number().min(0).describe('Timeline seconds'), label: z.string().optional(), color: z.string().optional().describe('#rrggbb') }),
+  update_marker: z.object({ op: z.literal('update_marker'), marker: z.string(), at: z.number().min(0).optional(), label: z.string().optional(), color: z.string().optional() }),
+  remove_marker: z.object({ op: z.literal('remove_marker'), marker: z.string() }),
+  update_clip: z.object({ op: z.literal('update_clip'), clip: z.string(), track: trackId.optional(), start: z.number().min(0).optional().describe('Move it on the timeline'), in: z.number().min(0).optional().describe('Trim the head (media seconds)'), out: z.number().optional().describe('Trim the tail (media seconds)'), duration: z.number().optional(), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional(), content: z.string().optional().describe('Titles only, as are size, position, color, box'), size: z.number().optional(), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional(), box: z.boolean().optional() }),
   split_clip: z.object({ op: z.literal('split_clip'), clip: z.string(), at: z.number().describe('Timeline seconds, inside the clip') }),
   remove_clip: z.object({ op: z.literal('remove_clip'), clip: z.string(), ripple: z.boolean().default(false).describe('Close the gap: later clips on the same track move left') }),
   remove_media: z.object({ op: z.literal('remove_media'), media: z.string().describe('Takes it out of the bin with all its clips (the file stays)') }),
-  clear: z.object({ op: z.literal('clear'), track: z.enum(['V1', 'V2', 'T1', 'A1', 'A2']).optional().describe('One track, or every clip when left out') })
+  clear: z.object({ op: z.literal('clear'), track: trackId.optional().describe('One track, or every clip on unlocked tracks when left out') })
 }
-tool('edit_timeline', `Change an edit's timeline with a list of operations, applied in order: add_clip, add_title, update_clip (move, trim, change track, fades, volume, mute, title text), split_clip, remove_clip (optionally ripple), remove_media, clear. All are checked against the media first; if one fails, nothing changes. Returns what each did and the edit afterwards. ${LIVE}`, {
+tool('edit_timeline', `Change an edit's timeline with a list of operations, applied in order: add_clip, insert_clip and overwrite_clip (Premiere's insert and overwrite edits), add_title, update_clip (move, trim, change track, fades, volume, mute, title text), split_clip, remove_clip (optionally ripple), remove_media, clear, add_track / update_track (label, hide, mute, solo, lock) / remove_track, and add_marker / update_marker / remove_marker. Locked tracks refuse changes. All are checked first; if one fails, nothing changes. Returns what each did and the edit afterwards. ${LIVE}`, {
   editId: z.string(),
   ops: z.array(z.discriminatedUnion('op', Object.values(op))).min(1)
 }, ({ editId, ops }) => {
   const e = edits.get(editId)
-  const { clips, media, results } = applyOps(e, ops)
-  return { results, edit: describe(edits.save(editId, { clips, media })) }
+  const { clips, media, tracks, markers, results } = applyOps(e, ops)
+  return { results, edit: describe(edits.save(editId, { clips, media, tracks, markers })) }
 })
 
 tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye: either an edit at a timeline time (the top visible video clip, without titles) or any video file at a time.', {
@@ -268,8 +279,9 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
   let t = at
   if (editId) {
     const e = edits.get(editId)
-    const c = ['V2', 'V1'].flatMap((tr) => e.clips.filter((x) => x.track === tr && at >= x.start && at < clipEnd(x)))[0]
-    if (!c) throw new Error(`Nothing on V1 or V2 at ${at} s.`)
+    const layers = videoLayers(tracksOf(e)).filter((t) => !t.hidden).reverse()
+    const c = layers.flatMap((tr) => e.clips.filter((x) => x.track === tr.id && at >= x.start && at < clipEnd(x)))[0]
+    if (!c) throw new Error(`Nothing on a visible video track at ${at} s.`)
     src = e.media[c.media].path
     t = e.media[c.media].kind === 'image' ? 0 : c.in + (at - c.start)
   }

@@ -101,6 +101,21 @@ if (st.file) {
   expect('export matches the edit', probe.includes('1920,1080,30/1') && Math.abs(parseFloat(probe.trim().split(/\r?\n/).pop()) - e.seconds) < 0.1)
 }
 
+// ---------- tracks: hidden V2 drops out of the picture, a muted A1 out of the sound ----------
+const top = await call(c, 'grab_frame', { editId: id, at: 1.6 })
+const hid = await call(c, 'edit_timeline', { editId: id, ops: [{ op: 'add_track', kind: 'video' }, { op: 'update_track', track: 'V2', hidden: true }, { op: 'update_track', track: 'A1', muted: true }, { op: 'add_marker', at: 1, label: 'agent' }] })
+const under = await call(c, 'grab_frame', { editId: id, at: 1.6 })
+const cap = (r) => r.content?.find((x) => x.type === 'text')?.text || r.value?.caption || ''
+expect('hidden V2: grab_frame shows V1 instead', !hid.error && cap(top).includes(path.basename(vb)) && cap(under).includes(path.basename(va)), `${cap(top)} -> ${cap(under)}`)
+expect('get_edit lists V3, the states and the marker', hid.value?.edit.trackList.map((t) => t.id).join(' ') === 'T1 V3 V2 V1 A1 A2' && hid.value.edit.trackList.find((t) => t.id === 'A1').muted && hid.value.edit.markers[0].label === 'agent', hid.error)
+await call(c, 'export_edit', { editId: id, outDir: temp })
+for (let i = 0; i < 120; i++) {
+  st = (await call(c, 'get_edit_export', { editId: id })).value
+  if (st.state !== 'running') break
+  await new Promise((r) => setTimeout(r, 1000))
+}
+expect('export with a hidden and a muted track', st.state === 'done', st.error || st.file)
+
 // ---------- characters and models (temporary settings) ----------
 const badLora = await call(c, 'save_character', { id: 'robo', name: 'Robo', lora: 'nope.safetensors', trigger: 'r0b0' })
 expect('save_character unknown LoRA -> error', !!badLora.error, badLora.error)
@@ -123,7 +138,7 @@ const reset = await call(c, 'set_workflow_model', { workflow: 'reference', model
 expect('set_workflow_model reset', !reset.error && !reset.value.chosen.reference)
 
 const listedEdits = await call(c, 'list_edits')
-expect('list_edits', listedEdits.value.items.length === 1 && listedEdits.value.items[0].exports === 1)
+expect('list_edits', listedEdits.value.items.length === 1 && listedEdits.value.items[0].exports === 2)
 const del = await call(c, 'delete_edit', { editId: id })
 expect('delete_edit', !del.error && (await call(c, 'list_edits')).value.items.length === 0)
 await c.close()

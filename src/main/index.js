@@ -5,7 +5,8 @@ import { Readable } from 'node:stream'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
-import { Edits, FORMATS, TRACKS } from '../service/edits'
+import { Edits, FORMATS } from '../service/edits'
+import { DEFAULT_TRACKS } from '../service/timeline'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
@@ -388,7 +389,7 @@ app.whenReady().then(() => {
 
   handle('media:probe', (file) => mediaTools.probe(file))
   handle('media:prepare', (opts) => mediaTools.prepare(opts))
-  handle('edits:meta', () => ({ tracks: TRACKS, formats: FORMATS }))
+  handle('edits:meta', () => ({ tracks: DEFAULT_TRACKS, formats: FORMATS }))
   handle('edits:list', () => edits.list())
   handle('edits:get', (id) => edits.get(id))
   handle('edits:create', (name) => edits.create(name))
@@ -431,6 +432,13 @@ app.whenReady().then(() => {
   handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
   handle('edits:export', (id) => edits.export(id, path.join(app.getPath('videos'), 'IV Studio', 'Edits'), (p) => send('edits:progress', { id, progress: p })))
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
+  handle('edits:filmstrip', (file, duration) => edits.filmstrip(file, duration))
+  handle('edits:peaks', (file) => edits.peaks(file))
+  // The editor's full-screen workspace: the window itself goes full screen too.
+  handle('window:fullScreen', (on) => {
+    win.setFullScreen(!!on)
+    return win.isFullScreen()
+  })
 
   // ---------- cloud (Modal, the user's own account) ----------
   const cloud = new Cloud({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), onLog: (line) => send('cloud:log', line) })

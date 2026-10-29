@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react'
-import { active, clipEnd, fadeGain, fileUrl } from './model'
+import { active, audible, clipEnd, fadeGain, fileUrl, shown, videoLayers } from './model'
 
 // The live preview: one hidden <video>/<audio>/<img> per clip, kept in step with the playhead, and a
-// canvas that draws V1, then V2 over it, then titles, each with its fade. Sound comes from the media
-// elements themselves (volume x fade). Playing drives the playhead; when paused it shows the frame.
-export default function Preview({ clips, media, format, time, playing, length, onTime, onEnd }) {
+// canvas that draws the visible video tracks bottom up (V1, then V2 over it, ...), then titles, each with its
+// fade. Sound comes from the media elements themselves (volume x fade), for tracks that are heard. Playing
+// drives the playhead at `rate` (J/K/L: 1, 2, 4, 8 forward; negative runs backward by seeking, silently);
+// when paused it shows the frame.
+export default function Preview({ clips, media, tracks, format, time, playing, rate = 1, length, onTime, onEnd }) {
   const canvas = useRef(null)
   const els = useRef(new Map()) // clip id -> element
   const clock = useRef({ base: 0, t0: 0 })
-  const state = useRef({ clips, media, time, playing })
-  state.current = { clips, media, time, playing }
+  const state = useRef({ clips, media, tracks, time, playing, rate })
+  state.current = { clips, media, tracks, time, playing, rate }
 
   const W = 960
   const H = Math.round((W * format.height) / format.width)
@@ -46,8 +48,9 @@ export default function Preview({ clips, media, format, time, playing, length, o
     g.globalAlpha = 1
     g.fillStyle = '#000'
     g.fillRect(0, 0, W, H)
-    for (const track of ['V1', 'V2']) {
-      for (const c of active(state.current.clips, track, t)) {
+    const tr = state.current.tracks
+    for (const track of videoLayers(tr).filter((x) => !x.hidden)) {
+      for (const c of active(state.current.clips, track.id, t)) {
         const el = els.current.get(c.id)
         const ready = el && (el instanceof HTMLImageElement ? el.complete && el.naturalWidth : el.readyState >= 2)
         if (!ready) continue
@@ -58,7 +61,7 @@ export default function Preview({ clips, media, format, time, playing, length, o
         g.drawImage(el, (W - sw * s) / 2, (H - sh * s) / 2, sw * s, sh * s)
       }
     }
-    for (const c of active(state.current.clips, 'T1', t)) {
+    for (const c of shown(tr, 'T1') ? active(state.current.clips, 'T1', t) : []) {
       const tx = c.text || {}
       if (!tx.content) continue
       const size = ((tx.size || 8) * H) / 100
@@ -83,6 +86,7 @@ export default function Preview({ clips, media, format, time, playing, length, o
 
   // Puts every media element where it should be at time t (playing or not).
   function sync(t, play) {
+    const { tracks: tr, rate: r } = state.current
     for (const c of state.current.clips) {
       const el = els.current.get(c.id)
       if (!el || el instanceof HTMLImageElement) continue
@@ -92,14 +96,15 @@ export default function Preview({ clips, media, format, time, playing, length, o
         continue
       }
       const want = c.in + (t - c.start)
-      el.muted = !!c.muted
+      el.muted = !!c.muted || !audible(tr, c.track) || (play && r < 0)
       el.volume = Math.max(0, Math.min(1, (c.volume ?? 1) * fadeGain(c, t)))
-      if (play) {
-        if (Math.abs(el.currentTime - want) > 0.25) el.currentTime = want
+      if (play && r > 0) {
+        if (el.playbackRate !== r) el.playbackRate = r
+        if (Math.abs(el.currentTime - want) > 0.25 * r) el.currentTime = want
         if (el.paused) el.play().catch(() => {})
       } else {
         if (!el.paused) el.pause()
-        if (Math.abs(el.currentTime - want) > 0.02) el.currentTime = want
+        if (Math.abs(el.currentTime - want) > (play ? 0.08 : 0.02)) el.currentTime = want
       }
     }
   }
@@ -115,10 +120,11 @@ export default function Preview({ clips, media, format, time, playing, length, o
     let raf
     let lastReport = 0
     const tick = (now) => {
-      const t = clock.current.base + (now - clock.current.t0) / 1000
-      if (t >= length) {
-        sync(length, false)
-        onTime(length)
+      const t = clock.current.base + ((now - clock.current.t0) / 1000) * rate
+      if (t >= length || (rate < 0 && t <= 0)) {
+        const stop = t <= 0 ? 0 : length
+        sync(stop, false)
+        onTime(stop)
         onEnd()
         return
       }
@@ -135,7 +141,7 @@ export default function Preview({ clips, media, format, time, playing, length, o
       cancelAnimationFrame(raf)
       for (const el of els.current.values()) el.pause?.()
     }
-  }, [playing])
+  }, [playing, rate])
 
   // Paused: redraw whenever the time or the edit changes.
   useEffect(() => {
@@ -143,7 +149,7 @@ export default function Preview({ clips, media, format, time, playing, length, o
       sync(time, false)
       draw(time)
     }
-  }, [time, clips, media, format])
+  }, [time, clips, media, format, tracks])
 
   useEffect(
     () => () => {
