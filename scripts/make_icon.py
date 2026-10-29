@@ -1,4 +1,4 @@
-"""Build the IV Studio icons from build/icon-source.png.
+"""(Superseded by scripts/make_icon_eye.py, which builds the eye icon.) Build the IV Studio icons from build/icon-source.png.
 
     python scripts/make_icon.py
 
