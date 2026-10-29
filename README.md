@@ -133,7 +133,15 @@ affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
 ## Characters
 
 A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
-the character goes. Add characters under **Settings**.
+the character goes. Everything about characters is on the **Characters** page:
+
+- **Your characters:** each with its picture, trigger, strength and LoRA (with a check that ComfyUI has it);
+  add one from a LoRA you already have, or delete one.
+- **Ready-made:** IV Studio's own invented characters, Tess Marlow and Theo Lindqvist, each shown with one
+  face picture (`resources/characters/`). Download one and its LoRA (about 150 MB, from the
+  `characters-v1` release of this repo, checked against its SHA-256) goes into ComfyUI's loras folder and
+  they join your characters. Agents use `list_ready_characters` and `install_ready_character`.
+- **Train your own:** below.
 
 **Train your own** on the **Characters** page, the method that made Tess:
 

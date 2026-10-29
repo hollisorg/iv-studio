@@ -618,9 +618,7 @@ export class Trainings {
   }
   // The LoRA folder of the local ComfyUI, where checkpoints are saved under MiniMax H3\<name>\.
   async loraDir(t) {
-    const folders = await fetch(`${this.studio.comfy.url}/experiment/models`, { headers: this.studio.comfy.headers() }).then((r) => r.json())
-    const root = folders.find((f) => f.name === 'loras')?.folders?.[0]
-    if (!root || !fs.existsSync(root)) throw new Error("Couldn't find this ComfyUI's loras folder.")
+    const root = await this.studio.loraRoot()
     return { dir: path.join(root, 'MiniMax H3', slug(t.name)), rel: `MiniMax H3\\${slug(t.name)}` }
   }
   // Downloads the chosen epochs (about 150 MB each) next to the other character LoRAs.
@@ -646,14 +644,15 @@ export class Trainings {
     }
     return this.write(t)
   }
-  // The chosen checkpoint becomes a character preset (Create, Sequences, MCP).
-  adopt(id, epoch) {
+  // The chosen checkpoint becomes a character preset (Create, Sequences, MCP), with the picked face as its picture.
+  async adopt(id, epoch) {
     const t = this.get(id)
     const c = t.checkpoints.find((x) => x.epoch === epoch && x.lora)
     if (!c) throw new Error('Download that checkpoint first.')
     const charId = slug(t.name).replace(/_/g, '-')
+    const picture = t.face?.file ? await this.studio.localCopy(t.face.file, path.join(this.folder(id), 'stills')).catch(() => null) : null
     const list = this.studio.characters().filter((x) => x.id !== charId)
-    this.studio.saveCharacters([...list, { id: charId, name: t.name, lora: c.lora, strength: 0.8, trigger: t.trigger }])
+    this.studio.saveCharacters([...list, { id: charId, name: t.name, lora: c.lora, strength: 0.8, trigger: t.trigger, ...(picture && { picture }) }])
     t.characterId = charId
     t.chosenEpoch = epoch
     return this.write(t)

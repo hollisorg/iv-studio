@@ -10,7 +10,8 @@ there for the person, and the other way round.
 1. `check_setup`: is ComfyUI up, which GPU, are the node packs and models there? If something is
    missing, tell the person what the result says to do rather than working around it.
 2. `list_characters`: the character presets (LoRA, trigger word). Prompts write `{char}` where the
-   character goes; IV Studio swaps in the trigger word.
+   character goes; IV Studio swaps in the trigger word. `list_ready_characters` shows IV Studio's
+   ready-made ones (Tess, Theo); `install_ready_character` downloads one.
 3. `list_projects`, `list_sequences`, `list_edits`, `list_renders`: what already exists.
 
 ## Render a shot

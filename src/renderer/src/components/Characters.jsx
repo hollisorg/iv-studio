@@ -25,13 +25,22 @@ const STATE_TEXT = {
 }
 const src = (file) => (file?.url ? media(file.url) : file?.path ? fileUrl(file.path) : null)
 
-// Characters you're training, and a way to start one.
-export function CharacterList({ openCharacter, notify, characters }) {
+// Every character in one place: the ones you can use now (presets), ready-made ones to download, and
+// characters you're designing or training.
+export function CharacterList({ openCharacter, notify, characters, setCharacters }) {
   const [list, setList] = useState(null)
+  const [ready, setReady] = useState([])
+  const [loras, setLoras] = useState([])
+  const [progress, setProgress] = useState({})
   const [name, setName] = useState('')
   const [who, setWho] = useState('a woman in her thirties')
+  const C = window.ivstudio.characters
+  const loadReady = () => C.catalog().then(setReady, () => {})
   useEffect(() => {
     window.ivstudio.training.list().then(setList)
+    loadReady()
+    C.loras().then(setLoras, () => {})
+    return C.onProgress(({ id, progress: p }) => setProgress((x) => ({ ...x, [id]: p })))
   }, [])
   async function create() {
     try {
@@ -40,20 +49,124 @@ export function CharacterList({ openCharacter, notify, characters }) {
       notify(err.message)
     }
   }
+  async function saveCharacter(id, patch) {
+    setCharacters(await C.save(characters.map((c) => (c.id === id ? { ...c, ...patch } : c))))
+  }
+  async function install(id) {
+    setProgress((x) => ({ ...x, [id]: 0 }))
+    try {
+      await C.install(id)
+      setCharacters(await C.list())
+      notify(`${ready.find((r) => r.id === id)?.name} is ready: pick them in Create and write {char} in the prompt.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setProgress((x) => ({ ...x, [id]: undefined }))
+      loadReady()
+    }
+  }
+  const has = (lora) => loras.some((l) => l.replace(/\\/g, '/').toLowerCase() === String(lora).replace(/\\/g, '/').toLowerCase())
+  const offered = ready.filter((r) => !characters.some((c) => c.id === r.id))
+  const face = (c) => c.picture || ready.find((r) => r.id === c.id)?.picture
+
   return (
     <div className="characters">
-      <Hero title="Characters" kicker="Your own recurring actor" />
+      <Hero title="Characters" kicker="Your recurring actors" />
       <p className="lede">
-        Invent a person and train H3 to play them in every shot.
+        The people H3 plays, the same in every shot.
         <span className="lede-small dim">
-          Design their face, give them talking clips and a voice, then train a character LoRA on your own Modal account (about 30 minutes and $3–4; new accounts get $30 a month free). The best checkpoint becomes a character you can pick in Create and Sequences.
+          A character is a trained H3 LoRA plus its trigger word: pick one in Create or Sequences and write {'{char}'} in the prompt where they go. Download a ready-made one, add a LoRA you already have, or design and train your own.
         </span>
       </p>
 
       <section className="group">
         <div className="group-head">
-          <h2>New character</h2>
-          <p className="dim small">Only invented people, or real people who agreed to it.</p>
+          <h2>Your characters</h2>
+          <p className="dim small">Ready to use in Create, Sequences and Replace.</p>
+        </div>
+        <div className="group-body">
+          <datalist id="iv-loras">
+            {loras.filter((l) => /h3|minimax/i.test(l)).map((l) => (
+              <option key={l} value={l} />
+            ))}
+          </datalist>
+          <div className="preset-cards">
+            {characters.map((c) => {
+              const found = has(c.lora)
+              const offer = ready.find((r) => r.id === c.id && r.available)
+              return (
+                <div key={c.id} className="preset-card">
+                  <div className="preset-face">{face(c) ? <img src={fileUrl(face(c))} alt="" /> : <span>{c.name.slice(0, 1)}</span>}</div>
+                  <div className="preset-fields">
+                    <input className="preset-name" value={c.name} onChange={(e) => saveCharacter(c.id, { name: e.target.value })} />
+                    <div className="row tight">
+                      <span className="row-label">Trigger</span>
+                      <input className="mono" value={c.trigger} onChange={(e) => saveCharacter(c.id, { trigger: e.target.value })} />
+                    </div>
+                    <div className="row tight">
+                      <span className="row-label">Strength</span>
+                      <input className="mini" type="number" step={0.05} min={0} max={1.5} value={c.strength} onChange={(e) => saveCharacter(c.id, { strength: Number(e.target.value) })} />
+                    </div>
+                    <div className="row tight">
+                      <span className="row-label">LoRA</span>
+                      <input list="iv-loras" value={c.lora} onChange={(e) => saveCharacter(c.id, { lora: e.target.value })} />
+                    </div>
+                    <div className="row-actions">
+                      <span className={`mono small ${found ? 'cloud-ok' : 'pink'}`}>{found ? '● LoRA found' : '● LoRA not in ComfyUI'}</span>
+                      {!found && offer && (
+                        <button className="btn btn-small btn-primary" disabled={progress[c.id] != null} onClick={() => install(c.id)}>
+                          {progress[c.id] != null ? `Downloading ${Math.round(progress[c.id] * 100)}%` : `Download (${Math.round(offer.lora.size / 1e6)} MB)`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <TileDelete name={c.name} keeps="Only the preset goes; its LoRA file stays in ComfyUI, and shots already made with it keep working." notify={notify} onDelete={async () => setCharacters(await C.save(characters.filter((x) => x.id !== c.id)))} />
+                </div>
+              )
+            })}
+          </div>
+          <button className="btn btn-small" onClick={async () => setCharacters(await C.save([...characters, { id: `char${Date.now().toString(36)}`, name: 'New character', lora: '', strength: 0.8, trigger: 'n4m3' }]))}>
+            + Add one from a LoRA you have
+          </button>
+        </div>
+      </section>
+
+      {offered.length > 0 && (
+        <section className="group">
+          <div className="group-head">
+            <h2>Ready-made</h2>
+            <p className="dim small">IV Studio's own invented characters. Download one (about 150 MB) and they join your characters.</p>
+          </div>
+          <div className="group-body">
+            <div className="ready-cards">
+              {offered.map((r) => (
+                <div key={r.id} className="ready-card">
+                  <img src={fileUrl(r.picture)} alt={`${r.name}'s face`} />
+                  <div className="ready-body">
+                    <span className="ready-name">{r.name}</span>
+                    <span className="small dim">{r.about}</span>
+                    <span className="mono small">
+                      trigger {r.trigger} · strength {r.strength}
+                    </span>
+                    {r.available ? (
+                      <button className="btn btn-small btn-primary" disabled={progress[r.id] != null} onClick={() => install(r.id)}>
+                        {progress[r.id] != null ? `Downloading ${Math.round(progress[r.id] * 100)}%` : `Download (${Math.round(r.lora.size / 1e6)} MB)`}
+                      </button>
+                    ) : (
+                      <span className="mono small dim">Coming soon</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="group">
+        <div className="group-head">
+          <h2>Train your own</h2>
+          <p className="dim small">Design an invented person, give them talking clips and a voice, and train their LoRA on your Modal account (about 30 minutes and $3–4; new accounts get $30 a month free). Only invented people, or real people who agreed to it.</p>
         </div>
         <div className="group-body">
           <div className="row">
@@ -67,32 +180,26 @@ export function CharacterList({ openCharacter, notify, characters }) {
           <button className="btn btn-primary" disabled={!name.trim()} onClick={create}>
             Start designing
           </button>
+          {list?.length > 0 && (
+            <div className="tiles seq-tiles">
+              {list.map((t) => (
+                <div key={t.id} className="tile-wrap">
+                  <button className="tile char-tile" onClick={() => openCharacter(t.id)}>
+                    {t.cover ? <img src={src(t.cover)} alt="" /> : <span className="char-cover-empty mono dim">No face yet</span>}
+                    <div className="tile-body">
+                      <span className="tile-name">{t.name}</span>
+                      <span className="mono dim">
+                        {t.trigger} · {t.characterId ? 'ready to use' : t.state ? STATE_TEXT[t.state] || t.state : `step: ${t.step}`}
+                      </span>
+                    </div>
+                  </button>
+                  <TileDelete name={t.name} keeps={t.characterId ? 'The character preset and its LoRA stay; this removes the design stills, clips and dataset.' : 'This removes its design stills, clips and dataset.'} notify={notify} onDelete={async () => (await window.ivstudio.training.delete(t.id), setList(await window.ivstudio.training.list()))} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
-
-      {list?.length > 0 && (
-        <div className="tiles seq-tiles">
-          {list.map((t) => (
-            <div key={t.id} className="tile-wrap">
-            <button className="tile char-tile" onClick={() => openCharacter(t.id)}>
-              {t.cover ? <img src={src(t.cover)} alt="" /> : <span className="char-cover-empty mono dim">No face yet</span>}
-              <div className="tile-body">
-                <span className="tile-name">{t.name}</span>
-                <span className="mono dim">
-                  {t.trigger} · {t.characterId ? 'ready to use' : t.state ? STATE_TEXT[t.state] || t.state : `step: ${t.step}`}
-                </span>
-              </div>
-            </button>
-            <TileDelete name={t.name} keeps={t.characterId ? 'The character preset and its LoRA stay; this removes the design stills, clips and dataset.' : 'This removes its design stills, clips and dataset.'} notify={notify} onDelete={async () => (await window.ivstudio.training.delete(t.id), setList(await window.ivstudio.training.list()))} />
-            </div>
-          ))}
-        </div>
-      )}
-      {characters.length > 0 && (
-        <p className="small dim">
-          Characters you can use now: {characters.map((c) => c.name).join(', ')}. Manage them in Settings.
-        </p>
-      )}
     </div>
   )
 }

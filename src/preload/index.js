@@ -112,7 +112,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   setup: { check: call('setup:check') },
   h3Models: call('models:h3'),
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
-  characters: { list: call('characters:list'), save: call('characters:save') },
+  characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
   sequences: {
     list: call('sequences:list'),

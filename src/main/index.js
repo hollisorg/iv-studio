@@ -13,6 +13,7 @@ import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
+import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
@@ -53,6 +54,7 @@ let stopWatch = null
 let installer = null
 let trainings = null
 let replace = null
+let catalog = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -77,6 +79,7 @@ function makeStudio() {
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
+  if (catalog) catalog.studio = studio
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -451,6 +454,11 @@ app.whenReady().then(() => {
   handle('models:download', (ids) => installer.enqueue(ids))
   handle('models:cancel', (id) => installer.cancel(id))
   handle('characters:list', () => studio.characters())
+  // Ready-made characters: bundled picture, LoRA downloaded on request (resources/characters/catalog.json).
+  catalog = new CharacterCatalog({ studio, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
+  handle('characters:catalog', () => catalog.list())
+  handle('characters:install', (id) => catalog.install(id, (cid, p) => send('characters:progress', { id: cid, progress: p })))
+  handle('characters:loras', () => studio.loraNames())
   handle('characters:save', (list) => studio.saveCharacters(list))
   handle('projects:list', () =>
     studio.listProjects().filter((p) => !p.sequenceId && !p.trainingId && !p.tool).map((p) => {

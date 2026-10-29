@@ -250,6 +250,19 @@ export class Studio {
     }
   }
 
+  // LoRA names ComfyUI lists, and the loras folder new character LoRAs go in: the one already holding
+  // "MiniMax H3" (ComfyUI may list its install's own folder first, ahead of a shared one).
+  async loraNames() {
+    return comboOptions(await this.comfy.objectInfo('LoraLoaderModelOnly'), 'LoraLoaderModelOnly', 'lora_name') || []
+  }
+  async loraRoot() {
+    const folders = (await fetch(`${this.comfy.url}/experiment/models`, { headers: this.comfy.headers() }).then((r) => r.json())).find((f) => f.name === 'loras')?.folders || []
+    const real = folders.filter((f) => fs.existsSync(f))
+    const root = real.find((f) => fs.existsSync(path.join(f, 'MiniMax H3'))) || real[0]
+    if (!root) throw new Error("Couldn't find this ComfyUI's loras folder (character downloads need a ComfyUI on this PC).")
+    return root
+  }
+
   // Character LoRAs and RefMods the ComfyUI can load (for new characters and refmods in a request).
   async choices() {
     const refmod = this.template['1101'].class_type

@@ -19,6 +19,7 @@ import { Studio } from '../service/studio'
 import { applyOps, clipEnd } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
+import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
 
 const DATA = dataDir()
@@ -469,7 +470,7 @@ tool('rank_likeness', 'Score every scene candidate and clip against the picked f
   trainingId: z.string(),
   pick: z.boolean().default(false)
 }, ({ trainingId, pick }) => trainings.rank(trainingId, { pick }))
-tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, ({ trainingId, epoch }) => trainingView(trainings.adopt(trainingId, epoch).id))
+tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, async ({ trainingId, epoch }) => trainingView((await trainings.adopt(trainingId, epoch)).id))
 
 // ---------- Replace (OpenJutsu's workflows) ----------
 const replace = new Replace({ studio, resourcesDir: resourcesDir(), dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
@@ -542,6 +543,9 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   studio.saveCharacters(old ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return next
 })
+const catalog = new CharacterCatalog({ studio, resourcesDir: resourcesDir() })
+tool('list_ready_characters', "IV Studio's ready-made characters (Tess, Theo…): who they are, their face picture's path, and whether they're downloaded and usable.", {}, () => catalog.list())
+tool('install_ready_character', 'Download a ready-made character (its LoRA, about 150 MB, into ComfyUI) and add it as a character preset.', { id: z.string() }, async ({ id }) => (await catalog.install(id)).find((c) => c.id === id))
 tool('delete_character', 'Remove a character preset (the LoRA file stays). Ask the person first.', { id: z.string() }, ({ id }) => {
   const list = studio.characters()
   if (!list.some((c) => c.id === id)) throw new Error(`No character ${id}.`)

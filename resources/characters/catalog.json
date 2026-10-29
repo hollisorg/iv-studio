@@ -1,0 +1,31 @@
+{
+  "_note": "Ready-made characters on the Characters page: one face picture each (bundled), and a LoRA downloaded on request from the characters release of hollisorg/iv-studio, checked against sha256. lora null = not published yet.",
+  "characters": [
+    {
+      "id": "tess",
+      "name": "Tess Marlow",
+      "who": "a woman in her thirties",
+      "about": "Warm, wry and a little tired; good in kitchens, cars and close-ups. IV Studio's first character, trained 2026-10-25.",
+      "trigger": "t3ss4",
+      "strength": 0.8,
+      "picture": "tess.jpg",
+      "lora": {
+        "file": "tess_mmh3-000040.safetensors",
+        "folder": "MiniMax H3/tess",
+        "url": "https://github.com/hollisorg/iv-studio/releases/download/characters-v1/tess_mmh3-000040.safetensors",
+        "sha256": "76b7ed8c75d82fb66c5601ffb29f7feebd637f9310a3e92d110d2442488d9d68",
+        "size": 149162056
+      }
+    },
+    {
+      "id": "theo",
+      "name": "Theo Lindqvist",
+      "who": "a man in his early thirties",
+      "about": "Calm, dry humour, a light Scandinavian accent; the scar through his left eyebrow is his own. Designed and trained in IV Studio, 2026-10-28.",
+      "trigger": "th30l16",
+      "strength": 0.8,
+      "picture": "theo.jpg",
+      "lora": null
+    }
+  ]
+}

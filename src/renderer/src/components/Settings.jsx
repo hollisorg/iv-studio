@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { ask } from './Confirm'
 import Hero from './Hero'
 
 const WRITER_MODEL = 'qwen3-vl:8b-instruct'
@@ -303,7 +302,7 @@ function AgentSettings({ mcp, notify }) {
   )
 }
 
-export default function Settings({ info, recheck, notify, characters, setCharacters }) {
+export default function Settings({ info, recheck, notify, go }) {
   const [settings, setSettings] = useState(null)
   const [url, setUrl] = useState('')
 
@@ -321,17 +320,6 @@ export default function Settings({ info, recheck, notify, characters, setCharact
     } catch (err) {
       notify(err.message)
     }
-  }
-
-  async function saveCharacter(i, patch) {
-    const list = characters.map((c, j) => (j === i ? { ...c, ...patch } : c))
-    setCharacters(await window.ivstudio.characters.save(list))
-  }
-
-  // Shots already made with a character keep working: their finish uses the saved plan, not this list.
-  async function deleteCharacter(i) {
-    if (!(await ask({ title: `Delete ${characters[i].name}?`, message: 'Only the preset goes; its LoRA file stays in ComfyUI.', confirm: 'Delete', danger: true }))) return
-    setCharacters(await window.ivstudio.characters.save(characters.filter((_, j) => j !== i)))
   }
 
   if (!settings) return null
@@ -361,36 +349,11 @@ export default function Settings({ info, recheck, notify, characters, setCharact
       <section className="group">
         <div className="group-head">
           <h2>Characters</h2>
-          <p className="dim small">A character is a trained LoRA plus its trigger word.</p>
+          <p className="dim small">Your characters, ready-made ones and training now live on their own page.</p>
         </div>
         <div className="group-body">
-          {characters.map((c, i) => (
-            <div key={c.id} className="character-card">
-              <div className="character-head">
-                <input value={c.name} onChange={(e) => saveCharacter(i, { name: e.target.value })} />
-                <button className="link-btn mono" onClick={() => deleteCharacter(i)}>
-                  Delete
-                </button>
-              </div>
-              <div className="row tight">
-                <span className="row-label">LoRA</span>
-                <input value={c.lora} onChange={(e) => saveCharacter(i, { lora: e.target.value })} />
-              </div>
-              <div className="row tight">
-                <span className="row-label">Strength</span>
-                <input type="number" step={0.05} min={0} max={1.5} value={c.strength} onChange={(e) => saveCharacter(i, { strength: Number(e.target.value) })} />
-              </div>
-              <div className="row tight">
-                <span className="row-label">Trigger</span>
-                <input value={c.trigger} onChange={(e) => saveCharacter(i, { trigger: e.target.value })} />
-              </div>
-            </div>
-          ))}
-          <button
-            className="btn btn-small"
-            onClick={async () => setCharacters(await window.ivstudio.characters.save([...characters, { id: `char${Date.now().toString(36)}`, name: 'New character', lora: 'MiniMax H3\\name\\name.safetensors', strength: 0.8, trigger: 'n4m3' }]))}
-          >
-            + Add character
+          <button className="btn btn-small" onClick={() => go('characters')}>
+            Open Characters
           </button>
         </div>
       </section>
