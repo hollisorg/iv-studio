@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
+import ivMark from './assets/iv-mark.png'
 import { ConfirmHost } from './components/Confirm'
 import Library from './components/Library'
 import Cloud from './components/Cloud'
@@ -96,7 +97,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="titlebar">
-        <span className="brand-mark">IV</span>
+        <img className="brand-logo" src={ivMark} alt="Infinite Variance" />
         <span className="mono">Infinite Variance</span>
         <span className="mono dim">/ Studio</span>
         {info?.testCopy && <span className="mono test-copy">Test copy · separate data</span>}

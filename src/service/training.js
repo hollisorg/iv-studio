@@ -18,8 +18,12 @@ import { comboOptions } from './setup.js'
 // (B200 0.45 s); the H200 figure scales Fizgig's own speed table.
 export const TRAIN_GPUS = [
   { id: 'B200', label: 'B200 · 180 GB', perHour: 6.25, secPerStep: 0.45, note: 'Fastest. Tess trained in 29 minutes for $3.80.' },
-  { id: 'H200', label: 'H200 · 141 GB', perHour: 4.54, secPerStep: 0.66, note: 'The fallback when B200s are busy.' }
+  { id: 'H200', label: 'H200 · 141 GB', perHour: 4.54, secPerStep: 0.66, note: 'The fallback when B200s are busy.' },
+  { id: 'H100', label: 'H100 · 80 GB', perHour: 3.95, secPerStep: 0.9, note: 'Slower; a run peaks at about 26 GB, so it fits.' }
 ]
+// Modal can accept a run and then never schedule it (a GPU the account's plan doesn't include). Its CLI
+// says nothing; the app log does: "waiting to be scheduled on a GPU_B200 worker ... unavailable on starter plan".
+const UNSCHEDULABLE = /waiting to be scheduled on a GPU_(\w+) worker.*?(unavailable on (\w+) plan|concurrency limits)/i
 const GRID = Array.from({ length: 8 }, (_, n) => 17 * n + 5) // 5 .. 124 frames
 const VOLUME = 'iv-studio-train'
 
@@ -526,7 +530,7 @@ export class Trainings {
     const t = this.get(id)
     const est = this.estimateFor(t, { gpu, epochs })
     const runName = `${slug(t.name)}_${t.id}_${(t.train?.run || 0) + 1}`
-    this.setTrain(id, { state: 'preparing', gpu, epochs: est.epochs, run: (t.train?.run || 0) + 1, name: runName, startedAt: now(), progress: null, error: null, estimate: est })
+    this.setTrain(id, { unschedulable: null, appId: null, state: 'preparing', gpu, epochs: est.epochs, run: (t.train?.run || 0) + 1, name: runName, startedAt: now(), progress: null, error: null, estimate: est })
     const work = (async () => {
       this.active = id
       try {
@@ -543,14 +547,20 @@ export class Trainings {
         await this.modal(['volume', 'put', VOLUME, ds.dir, `/datasets/${runName}`, '--force'])
         for (const f of ['train.sh', 'dataset.toml']) await this.modal(['volume', 'put', VOLUME, path.join(root, f), `/train/${runName}/${f}`, '--force'])
         this.setTrain(id, { state: 'training', trainingAt: now() })
-        await this.modal(['run', '--detach', 'train_app.py::train', '--name', runName], { IV_TRAIN_GPU: gpu })
+        const watch = setInterval(() => this.checkScheduled(id).catch(() => {}), 3 * 60 * 1000)
+        try {
+          await this.modal(['run', '--detach', 'train_app.py::train', '--name', runName], { IV_TRAIN_GPU: gpu })
+        } finally {
+          clearInterval(watch)
+        }
         this.setTrain(id, { state: 'done', finishedAt: now() })
         await this.listCheckpoints(id).catch(() => {})
       } catch (err) {
         const cur = this.get(id).train
         // the local client can drop (sleep, network) while Modal carries on: check the log before calling it failed
         if (cur?.state === 'training') await this.checkTraining(id).catch(() => {})
-        if (this.get(id).train?.state !== 'done') this.setTrain(id, { state: 'failed', error: err.message.split('\n').slice(-4).join(' ') })
+        const t = this.get(id).train
+        if (t?.state !== 'done') this.setTrain(id, { state: 'failed', error: t?.unschedulable || err.message.split('\n').slice(-4).join(' ') })
       } finally {
         this.active = null
         this.runs.delete(id)
@@ -559,11 +569,31 @@ export class Trainings {
     this.runs.set(id, work)
     return this.get(id)
   }
+  // While a run shows no progress, Modal's app log says whether it is still waiting for a GPU it can't get.
+  async checkScheduled(id) {
+    const t = this.get(id).train
+    if (t?.state !== 'training' || t.progress?.stage || !t.appId) return
+    const logs = await new Promise((resolve) => {
+      const p = spawn(this.cloud.modalExe, ['app', 'logs', t.appId], { cwd: this.trainDir, env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }, windowsHide: true })
+      let out = ''
+      p.stdout.on('data', (d) => (out += d))
+      p.stderr.on('data', (d) => (out += d))
+      setTimeout(() => p.kill(), 20000)
+      p.on('close', () => resolve(out))
+    })
+    const m = UNSCHEDULABLE.exec(logs.replace(/\s+/g, ' '))
+    if (!m) return
+    const why = m[3] ? `Modal doesn't offer a ${m[1]} on your ${m[3]} plan` : `Your Modal workspace can't get a ${m[1]} right now`
+    this.setTrain(id, { unschedulable: `${why}, so the run never started and cost nothing. Choose another GPU (H200 or H100) and train again.` })
+    await this.modal(['app', 'stop', t.appId, '--yes']).catch(() => {})
+  }
   // Modal's output, line by line: progress for the running training, and the log for the window.
   line(text, onLog) {
     const id = this.active
     onLog?.(text, id)
     if (!id) return
+    const app = /modal\.com\/apps\/[^/\s]+\/[^/\s]+\/(ap-\w+)/.exec(text)
+    if (app && this.get(id).train?.state === 'training' && !this.get(id).train.appId) this.setTrain(id, { appId: app[1] })
     const m = /epoch (\d+)\/(\d+).*?step=(\d+)/.exec(text)
     const steps = /\|\s*(\d+)\/(\d+) \[/.exec(text)
     const stage = /Encoding dataset|latent cache/i.test(text) ? 'caching' : /stage text/i.test(text) ? 'captions' : null
@@ -601,7 +631,7 @@ export class Trainings {
   }
   // Stops the training app on Modal (the GPU stops billing at once). Saved epochs stay in storage.
   async stopTraining(id) {
-    await this.modal(['app', 'stop', 'iv-studio-train'])
+    await this.modal(['app', 'stop', 'iv-studio-train', '--yes'])
     this.setTrain(id, { state: 'stopped' })
     return this.get(id)
   }

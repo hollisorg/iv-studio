@@ -1843,3 +1843,11 @@ input.mini {
   text-transform: uppercase;
   color: var(--cream);
 }
+
+/* the Infinite Variance eye in the title bar's corner (white, from IV's own logo) */
+.brand-logo {
+  height: 20px;
+  width: auto;
+  display: block;
+  -webkit-user-drag: none;
+}
