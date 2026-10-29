@@ -47,11 +47,13 @@ cloud.
 - **Edit.** A Premiere-style editor with a full-screen workspace: project bin, source and program
   monitors, as many video and audio tracks as you need, filmstrips and waveforms, markers, J/K/L,
   insert and overwrite, razor, ripple and rolling trims, and MP4 export at 1080p, 4K, vertical or square.
-- **Workflows.** **Replace** swaps a person or an object in a video while the camera, motion and sound
-  stay. **Shinobi** lets an agent cut a whole edit in code.
+- **Workflows.** **Sizzle** turns a website into a promo film: your agent storyboards it from the real
+  site, then H3 shots, pictures, music and the site's own screens are cut together. **Replace** swaps a
+  person or an object in a video while the camera, motion and sound stay. **Shinobi** lets an agent cut a
+  whole edit in code.
 - **Library.** Every shot, sequence, export, song and spoken line in one place, ready to drop onto an
   edit or into a shot.
-- **Agents.** A local MCP server with 91 tools gives Claude Code or any MCP client nearly everything a
+- **Agents.** A local MCP server with 100 tools gives Claude Code or any MCP client nearly everything a
   person can do in the window.
 
 <table>
@@ -279,6 +281,24 @@ search, then add any of them to an edit or use a sound as a shot's voice line.
 
 ## Workflows
 
+### Sizzle
+
+Put in a web address and get a short promo film for it.
+
+1. **Capture.** IV Studio opens the site in your PC's Edge or Chrome (hidden) and saves what people see: a
+   screenshot of every screen down the page, the phone layout and the logo, plus the site's words, colours,
+   fonts and pictures. Cookie banners are hidden, never accepted.
+2. **Storyboard.** Your agent writes the scenes from the capture: the site's own screens, H3 shots,
+   Z-Image pictures, titles from the site's copy, music and an optional voice-over. Nothing renders until you
+   approve it.
+3. **Pieces.** H3 shots (previewed, then finished at 1 MP), pictures, music and the voice-over are made on
+   your PC: about 3-5 minutes per H3 shot.
+4. **The film.** Everything goes into a Shinobi project with a brief, and your agent cuts it on the beat in
+   the site's colours and fonts, renders it and checks it.
+
+The Sizzle page shows the capture, the storyboard with each scene's piece, and the finished film, with a
+message to paste into your agent. Agents use the `sizzle_*` tools.
+
 ### Replace
 
 Swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
@@ -318,7 +338,7 @@ your PC.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 91 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 100 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, speak lines, make
 music, cut them together and export. **Settings → Agents (MCP)** has the command for your install, a
 message to paste into any agent, and a button that adds the IV Studio skill to Claude Code. For a
@@ -362,6 +382,8 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
   `test_checkpoints`, `adopt_checkpoint`.
 - **Replace:** `replace_check`, `replace_video`, `replace_history`.
 - **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi`, `shinobi_project`.
+- **Sizzle:** `sizzle_capture`, `view_sizzle_capture`, `list_sizzles`, `get_sizzle`, `save_sizzle_plan`,
+  `approve_sizzle_plan`, `make_sizzle_assets`, `sizzle_to_shinobi`, `delete_sizzle`.
 - **Models:** `list_h3_models`, `set_workflow_model`.
 
 An edit open in the window reloads when an agent changes it; a strip says what changed, with a one-click

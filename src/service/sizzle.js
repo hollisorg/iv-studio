@@ -263,7 +263,8 @@ export class Sizzles {
       ...files.map((m) => `- ${path.basename(m.file)}: ${m.what}`),
       '',
       '## How to cut it',
-      '- Follow the storyboard order and lengths; cut on the beat of the music (analyze_audio, plan_music_edit).',
+      "- Follow the storyboard order and lengths; cut on the beat of the music (analyze_audio takes the music file's path: the project directory plus the asset's path).",
+      '- End where the music ends: if it falls silent before the storyboard does, shorten the end card so the logo lands on the last hit.',
       "- Screens: slow push-ins and pans, or slide from one screen to the next like a scroll. Keep them sharp, never stretched.",
       "- Titles: kinetic typography in the site's colours and, where the fonts are installed (list_fonts), its fonts; render_page for anything custom. Keep each line on screen at least 1.2 s.",
       '- End on the logo, the main button\'s words and the web address.',
@@ -278,7 +279,8 @@ export class Sizzles {
   finalOf(s) {
     if (!s.shinobi) return null
     try {
-      return this.shinobi.renders(s.shinobi.projectId).find((r) => r.video)?.video || null
+      // the newest finished render
+      return this.shinobi.renders(s.shinobi.projectId).filter((r) => r.video).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0]?.video || null
     } catch {
       return null
     }
