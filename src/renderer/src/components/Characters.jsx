@@ -32,11 +32,13 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
   const [ready, setReady] = useState([])
   const [loras, setLoras] = useState([])
   const [progress, setProgress] = useState({})
+  const [voices, setVoices] = useState([])
   const [name, setName] = useState('')
   const [who, setWho] = useState('a woman in her thirties')
   const C = window.ivstudio.characters
   const loadReady = () => C.catalog().then(setReady, () => {})
   useEffect(() => {
+    window.ivstudio.voices.list().then(setVoices, () => {})
     window.ivstudio.training.list().then(setList)
     loadReady()
     C.loras().then(setLoras, () => {})
@@ -57,6 +59,7 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
     try {
       await C.install(id)
       setCharacters(await C.list())
+      window.ivstudio.voices.list().then(setVoices, () => {})
       notify(`${ready.find((r) => r.id === id)?.name} is ready: pick them in Create and write {char} in the prompt.`, 'info')
     } catch (err) {
       notify(err.message)
@@ -110,6 +113,17 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
                     <div className="row tight">
                       <span className="row-label">LoRA</span>
                       <input list="iv-loras" value={c.lora} onChange={(e) => saveCharacter(c.id, { lora: e.target.value })} />
+                    </div>
+                    <div className="row tight">
+                      <span className="row-label">Voice</span>
+                      <select value={c.voiceId || ''} onChange={(e) => saveCharacter(c.id, { voiceId: e.target.value || null, voiceDeclined: !e.target.value })}>
+                        <option value="">No voice</option>
+                        {voices.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="row-actions">
                       <span className={`mono small ${found ? 'cloud-ok' : 'pink'}`}>{found ? '● LoRA found' : '● LoRA not in ComfyUI'}</span>
@@ -452,6 +466,10 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
   const T = window.ivstudio.training
   const kept = t.stills.filter((s) => s.file).length
   const voice = t.voice?.path ? { kind: 'audio', path: t.voice.path, source: t.voice.source, edit: t.voice.edit, info: t.voice.info } : null
+  const [voices, setVoices] = useState([])
+  useEffect(() => {
+    window.ivstudio.voices.list().then(setVoices, () => {})
+  }, [])
   async function pickVoice() {
     const [file] = await window.ivstudio.files.pick('audio')
     if (file) save({ voice: { path: file, info: await window.ivstudio.media.probe(file).catch(() => null) } })
@@ -460,15 +478,30 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
     <>
       <section className="block">
         <p className="mono label">01 · Voice (optional)</p>
-        <p className="small dim">A clean recording of the voice you designed (VoiceStudio or ElevenLabs Voice Design; never a real person's voice without their consent). The clips speak with it, so the LoRA learns it too. 10–30 seconds is plenty.</p>
+        <p className="small dim">One of your voices (design one under Audio › Voices) or a clean recording; never a real person's voice without their consent. The clips speak with it, so the LoRA learns it too. 10–30 seconds is plenty.</p>
         {voice ? (
           <div className="voice-control">
             <MediaTile item={voice} label="Voice" onEdit={() => setEditing(true)} onRemove={() => save({ voice: null })} />
           </div>
         ) : (
-          <button className="btn btn-small" onClick={pickVoice}>
-            + Voice recording
-          </button>
+          <div className="row-actions">
+            <button className="btn btn-small" onClick={pickVoice}>
+              + Voice recording
+            </button>
+            {voices.length > 0 && (
+              <select value="" onChange={async (e) => {
+                const v = voices.find((x) => x.id === e.target.value)
+                if (v) save({ voice: { path: v.reference, info: await window.ivstudio.media.probe(v.reference).catch(() => null) } })
+              }}>
+                <option value="">or one of your voices…</option>
+                {voices.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
         {editing && voice && (
           <MediaEditor

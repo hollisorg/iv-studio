@@ -78,7 +78,22 @@ cropped to the shot's aspect, because they're stretched to fit).
 
 - `list_h3_models` and `set_workflow_model` choose the H3 model per workflow (some suit realism,
   others animation). `null` goes back to the default.
-- `list_choices` lists the LoRAs and RefMods ComfyUI has; `save_character` adds a preset.
+- `list_choices` lists the LoRAs and RefMods ComfyUI has; `save_character` adds a preset (with `voiceId`,
+  its voice for spoken lines).
+
+## Voices and spoken lines (Audio)
+
+IV Studio keeps a voice per character and speaks lines in it through VoiceStudio, a free app on this PC
+(VoxCPM2 and CosyVoice 3, both Apache-2.0). A spoken line is the shot's voice line: H3 lip-syncs to it.
+1. `voice_status`; if VoiceStudio isn't running, ask the person to start it.
+2. `list_voices` shows the voices and which characters use them. Make one with `design_voice` (a
+   description; three candidates) and `create_voice` kind designed with the chosen file, seed and
+   description, or `create_voice` kind clone from a recording (only with the person's confirmation that it
+   is their voice, an invented one, or someone who agreed: `consent` true). `save_character` voiceId gives
+   a character the voice.
+3. `speak_line` with character (or voiceId) and the words returns a WAV. Pass it as `voiceLine` to
+   `generate_previews` and write the same words in the prompt's `<d>[English] …</d>`.
+4. A different `seed` gives another read of the same words; `list_lines` shows what was said before.
 
 ## Shinobi: edits you cut as an agent
 
@@ -116,7 +131,8 @@ The Characters page (and these tools) turn an invented person into a character p
 2. `design_scenes` renders that face in eight places and outfits (four candidates each); `pick_still` the
    most alike in each (or leave one out), or let `rank_likeness` with pick do it by face score. Captions never
    describe the face, so the face binds to the trigger word.
-3. Optionally set a voice sample (`update_character_training` voice), then `make_training_clips`:
+3. Optionally set a voice sample (`update_character_training` voice; a voice's reference file from
+   `list_voices` works), then `make_training_clips`:
    H3 talking clips from the face and the stills. `rank_likeness` scores them; render weak ones again
    (`make_training_clips` redo) or drop them (`set_training_item` keep false). Aim for 0.45+.
 4. `estimate_training`, tell the person the minutes and dollars, and `start_training` only after they
@@ -130,6 +146,8 @@ The Characters page (and these tools) turn an invented person into a character p
   cancel IV Studio jobs you started (`cancel_job`); never touch anything else in the queue.
 - Ask the person before deleting anything (`delete_edit`, `delete_sequence`, `delete_character`) and
   before anything that costs money (the Context IR writer).
+- Voices too: only invented voices, the person's own, or someone who agreed. Never clone a real person's
+  voice from a found recording.
 - Characters must be invented, or real people who agreed to it. Don't make a real person say or do
   things without their consent.
 - The MCP server renders on the local ComfyUI, even when the app window is set to the cloud.

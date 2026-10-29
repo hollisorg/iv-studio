@@ -136,8 +136,9 @@ non_diegetic_music: N/A`
 export class Trainings {
   // studio: the Studio service (renders, characters). onLog(line, trainingId) gets Modal's output.
   // shinobi (optional): Shinobi's engine, whose Python runs face likeness (rank).
-  constructor({ dataDir, resourcesDir, studio, ffmpeg, ffprobe, onLog, onChange, shinobi = null }) {
+  constructor({ dataDir, resourcesDir, studio, ffmpeg, ffprobe, onLog, onChange, shinobi = null, voices = null }) {
     this.shinobi = shinobi
+    this.voices = voices
     this.dir = path.join(dataDir, 'trainings')
     this.dataDir = dataDir
     this.resourcesDir = resourcesDir
@@ -681,8 +682,12 @@ export class Trainings {
     if (!c) throw new Error('Download that checkpoint first.')
     const charId = slug(t.name).replace(/_/g, '-')
     const picture = t.face?.file ? await this.studio.localCopy(t.face.file, path.join(this.folder(id), 'stills')).catch(() => null) : null
+    const old = this.studio.characters().find((x) => x.id === charId)
+    // the voice the clips were made with becomes the character's voice (Audio > Voices), once
+    let voiceId = old?.voiceId || null
+    if (!voiceId && this.voices && t.voice?.path && fs.existsSync(t.voice.path)) voiceId = (await this.voices.create({ name: t.name, file: t.voice.path, kind: 'designed', description: `The voice ${t.name}'s LoRA was trained with.` }).catch(() => null))?.id || null
     const list = this.studio.characters().filter((x) => x.id !== charId)
-    this.studio.saveCharacters([...list, { id: charId, name: t.name, lora: c.lora, strength: 0.8, trigger: t.trigger, ...(picture && { picture }) }])
+    this.studio.saveCharacters([...list, { ...old, id: charId, name: t.name, lora: c.lora, strength: 0.8, trigger: t.trigger, ...(picture && { picture }), ...(voiceId && { voiceId }) }])
     t.characterId = charId
     t.chosenEpoch = epoch
     return this.write(t)

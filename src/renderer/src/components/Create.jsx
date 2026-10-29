@@ -29,8 +29,14 @@ overall_soundscape: ___. Her voice is close and natural.
 non_diegetic_music: N/A`
 
 const base = (p) => p.split(/[\\/]/).pop()
+// The first <d>[Language] …</d> in a prompt takes the spoken words; a prompt without one is left alone.
+const DIALOGUE = /<d>\[([^\]]+)\][^<]*<\/d>/
+const withLine = (prompt, text) => {
+  const m = DIALOGUE.exec(prompt)
+  return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
+}
 
-export default function Create({ setup, characters, notify, openShot, go }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine }) {
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
@@ -89,6 +95,33 @@ export default function Create({ setup, characters, notify, openShot, go }) {
       return { ...f, media: [...(f.mode === 'continue' ? [] : f.media), ...added].slice(0, limit) }
     })
   }
+
+  // A line spoken in the character's voice (here, or from Audio > Lines) becomes the voice line, and its
+  // words go into the prompt's dialogue so H3 says what it lip-syncs.
+  const [say, setSay] = useState('')
+  const [speaking, setSpeaking] = useState(false)
+  async function takeLine(line) {
+    const info = await window.ivstudio.media.probe(line.file).catch(() => null)
+    const prompt = withLine(form.prompt.trim() ? form.prompt : form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE, line.text)
+    set({ voiceLine: line.file, voiceItem: { kind: 'audio', path: line.file, info }, prompt })
+    if (!DIALOGUE.test(prompt)) notify('The line is the voice line now. Put the same words in the prompt, inside <d>[English] …</d>.', 'info')
+  }
+  async function speakLine() {
+    setSpeaking(true)
+    try {
+      await takeLine(await window.ivstudio.voices.speak({ voiceId: char.voiceId, text: say }))
+      setSay('')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setSpeaking(false)
+    }
+  }
+  useEffect(() => {
+    if (!incomingLine) return
+    takeLine(incomingLine)
+    clearIncomingLine?.()
+  }, [incomingLine])
 
   async function pickVoice() {
     const [file] = await window.ivstudio.files.pick('audio')
@@ -254,11 +287,23 @@ export default function Create({ setup, characters, notify, openShot, go }) {
             {form.voiceLine ? (
               <MediaTile item={form.voiceItem || { kind: 'audio', path: form.voiceLine }} label="Lip-sync" onEdit={() => setEditing('voice')} onRemove={() => set({ voiceLine: null, voiceItem: null })} />
             ) : (
-              <button className="btn btn-small" onClick={pickVoice}>
-                + Recording to lip-sync
-              </button>
+              <>
+                {char?.voiceId && (
+                  <div className="speak-line">
+                    <input value={say} placeholder={`What ${char.name.split(' ')[0]} says`} onChange={(e) => setSay(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && say.trim() && !speaking && speakLine()} />
+                    <button className="btn btn-small btn-primary" disabled={!say.trim() || speaking} onClick={speakLine}>
+                      {speaking ? 'Speaking… (up to a minute the first time)' : 'Speak it'}
+                    </button>
+                  </div>
+                )}
+                <button className="btn btn-small" onClick={pickVoice}>
+                  + Recording to lip-sync
+                </button>
+              </>
             )}
-            <span className="dim small">Optional. Write the same words in the prompt.</span>
+            <span className="dim small">
+              {char?.voiceId ? `Optional. Speak a line in ${char.name.split(' ')[0]}'s voice, or add a recording; the words go into the prompt's dialogue.` : char ? `Optional. Write the same words in the prompt. Give ${char.name.split(' ')[0]} a voice under Audio › Voices to speak lines here.` : 'Optional. Write the same words in the prompt.'}
+            </span>
           </div>
         </div>
       </section>

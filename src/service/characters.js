@@ -6,8 +6,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 export class CharacterCatalog {
-  constructor({ studio, resourcesDir }) {
+  constructor({ studio, resourcesDir, voices = null }) {
     this.studio = studio
+    this.voices = voices
     this.dir = path.join(resourcesDir, 'characters')
     this.downloads = new Map() // id -> progress 0..1
   }
@@ -50,7 +51,29 @@ export class CharacterCatalog {
     const old = list.find((p) => p.id === c.id)
     // an existing preset keeps its own extras (RefMods, a tuned strength); the LoRA and picture are filled in
     this.studio.saveCharacters(old ? list.map((p) => (p.id === c.id ? { ...preset, ...p, lora: preset.lora, picture: p.picture || preset.picture } : p)) : [...list, preset])
+    await this.attachVoices()
     return this.list()
+  }
+
+  // A ready-made character that is a preset gets its bundled voice on the Voices page, once.
+  async attachVoices() {
+    if (!this.voices) return
+    const have = this.voices.list()
+    let list = this.studio.characters()
+    let changed = false
+    for (const c of this.entries()) {
+      const p = list.find((x) => x.id === c.id)
+      if (!c.voice || !p || p.voiceId || p.voiceDeclined) continue
+      let v = have.find((x) => x.catalogId === c.id)
+      if (!v) {
+        v = await this.voices.create({ name: c.name, file: path.join(this.dir, c.voice.file), text: c.voice.text, description: c.voice.description, seed: c.voice.seed, engine: c.voice.engine, kind: 'ready' }).catch(() => null)
+        if (!v) continue
+        v = this.voices.write({ ...v, catalogId: c.id })
+      }
+      list = list.map((x) => (x.id === c.id ? { ...x, voiceId: v.id } : x))
+      changed = true
+    }
+    if (changed) this.studio.saveCharacters(list)
   }
 
   async fetch(c, dest, onProgress) {

@@ -11,23 +11,44 @@ import Settings from './components/Settings'
 import { ShinobiList, ShinobiProject } from './components/Shinobi'
 import Replace from './components/Replace'
 import Workflows from './components/Workflows'
+import { LinesPage, VoicesPage } from './components/Voices'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
-const PAGES = [
-  ['create', 'Create'],
-  ['library', 'Shots'],
-  ['sequences', 'Sequences'],
-  ['edits', 'Edit'],
-  ['workflows', 'Workflows'],
-  ['characters', 'Characters'],
-  ['setup', 'Setup'],
-  ['cloud', 'Cloud'],
-  ['settings', 'Settings']
-]
+// The sidebar's two halves, switched at its foot. Characters and Settings are in both.
+const SECTIONS = {
+  video: [
+    ['create', 'Create'],
+    ['library', 'Shots'],
+    ['sequences', 'Sequences'],
+    ['edits', 'Edit'],
+    ['workflows', 'Workflows'],
+    ['characters', 'Characters'],
+    ['setup', 'Setup'],
+    ['cloud', 'Cloud'],
+    ['settings', 'Settings']
+  ],
+  audio: [
+    ['voices', 'Voices'],
+    ['lines', 'Lines'],
+    ['characters', 'Characters'],
+    ['settings', 'Settings']
+  ]
+}
+const SUBPAGES = { library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace'] }
+const savedSection = () => {
+  try {
+    return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
+  } catch {
+    return 'video'
+  }
+}
 
 export default function App() {
-  const [page, setPage] = useState('create')
+  const [section, setSection] = useState(savedSection)
+  const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'create'))
+  // a spoken line on its way to Create's voice line (Lines > Use in a shot)
+  const [lineForCreate, setLineForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
@@ -90,8 +111,22 @@ export default function App() {
     setPage('edit')
   }
 
+  const switchSection = (next) => {
+    if (next === section) return
+    setSection(next)
+    try {
+      localStorage.setItem('iv.section', next)
+    } catch {}
+    if (!SECTIONS[next].some(([id]) => id === page || SUBPAGES[id]?.includes(page))) setPage(SECTIONS[next][0][0])
+  }
+  const sendToCreate = (line) => {
+    setLineForCreate(line)
+    switchSection('video')
+    setPage('create')
+  }
+
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -109,14 +144,21 @@ export default function App() {
         </div>
       </header>
       <nav className="nav">
-        {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') || (id === 'workflows' && ['shinobi', 'shinobi-film', 'replace'].includes(page)) ? 'on' : ''}`} onClick={() => setPage(id)}>
+        {SECTIONS[section].map(([id, label], i) => (
+          <button key={id} className={`nav-item ${page === id || SUBPAGES[id]?.includes(page) ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
           </button>
         ))}
         <div className="nav-foot mono">
+          <div className="section-switch" role="tablist" aria-label="Video or audio">
+            {['video', 'audio'].map((id) => (
+              <button key={id} role="tab" aria-selected={section === id} className={section === id ? 'on' : ''} onClick={() => switchSection(id)}>
+                {id === 'video' ? 'Video' : 'Audio'}
+              </button>
+            ))}
+          </div>
           <span>v{info?.version}</span>
           <button className="link-btn mono nav-site" onClick={() => window.ivstudio.links.open(info?.links?.website || 'https://infinitevariance.ai')}>
             infinitevariance.ai ↗
@@ -124,7 +166,9 @@ export default function App() {
         </div>
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
-        {page === 'create' && <Create {...ctx} />}
+        {page === 'create' && <Create {...ctx} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} />}
+        {page === 'voices' && <VoicesPage {...ctx} />}
+        {page === 'lines' && <LinesPage {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}

@@ -15,6 +15,7 @@ import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
+import { Voices } from '../service/voices'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -55,6 +56,7 @@ let installer = null
 let trainings = null
 let replace = null
 let catalog = null
+let voices = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -201,6 +203,29 @@ app.whenReady().then(() => {
   })
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+  // ---------- Audio: voices (VoiceStudio does the speaking, IV Studio keeps the voices) ----------
+  voices = new Voices({ dataDir: DATA, url: readSettings(DATA).voiceUrl, ffmpeg: edits.ffmpeg })
+  const voiceStudioExe = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'VoiceStudio', 'VoiceStudio.exe')
+  handle('voices:status', async () => ({ ...(await voices.status()), installed: fs.existsSync(voiceStudioExe) }))
+  handle('voices:start', async () => {
+    if (!fs.existsSync(voiceStudioExe)) throw new Error("VoiceStudio isn't installed on this PC yet.")
+    const err = await shell.openPath(voiceStudioExe)
+    if (err) throw new Error(err)
+    return true
+  })
+  handle('voices:list', async () => (await catalog?.attachVoices().catch(() => {}), voices.list()))
+  handle('voices:design', (opts) => voices.design(opts))
+  handle('voices:create', (opts) => voices.create(opts))
+  handle('voices:update', (id, patch) => voices.update(id, patch))
+  handle('voices:delete', (id) => {
+    const r = voices.delete(id)
+    studio.saveCharacters(studio.characters().map((c) => (c.voiceId === id ? { ...c, voiceId: null } : c)))
+    return r
+  })
+  handle('voices:speak', (opts) => voices.speak(opts))
+  handle('voices:lines', (voiceId) => voices.lines(voiceId))
+  handle('voices:deleteLine', (id) => voices.deleteLine(id))
+  handle('voices:transcribe', (file) => voices.transcribe(file))
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
   const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })
@@ -265,7 +290,8 @@ app.whenReady().then(() => {
     ffmpeg: edits.ffmpeg,
     ffprobe: edits.ffprobe,
     onLog: (line, id) => send('training:log', { id, line }),
-    onChange: (id) => send('training:changed', { id })
+    onChange: (id) => send('training:changed', { id }),
+    voices
   })
   handle('training:meta', () => ({ gpus: TRAIN_GPUS, scenes: SCENES, talks: TALKS }))
   handle('training:list', () => trainings.list())
@@ -434,6 +460,7 @@ app.whenReady().then(() => {
     const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
+    if ('voiceUrl' in (patch || {})) voices.url = String(s.voiceUrl || '').replace(/\/$/, '')
     return s
   })
   handle('setup:check', () => studio.checkSetup())
@@ -453,9 +480,9 @@ app.whenReady().then(() => {
   handle('models:status', () => installer.status())
   handle('models:download', (ids) => installer.enqueue(ids))
   handle('models:cancel', (id) => installer.cancel(id))
-  handle('characters:list', () => studio.characters())
+  handle('characters:list', async () => (await catalog?.attachVoices().catch(() => {}), studio.characters()))
   // Ready-made characters: bundled picture, LoRA downloaded on request (resources/characters/catalog.json).
-  catalog = new CharacterCatalog({ studio, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
+  catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
   handle('characters:catalog', () => catalog.list())
   handle('characters:install', (id) => catalog.install(id, (cid, p) => send('characters:progress', { id: cid, progress: p })))
   handle('characters:loras', () => studio.loraNames())
@@ -488,12 +515,16 @@ app.whenReady().then(() => {
   handle('projects:delete', (id) => studio.deleteProject(id))
   handle('render:plan', (request, finish) => studio.planRender(request, finish))
   handle('render:planFinish', (jobId, finish) => studio.planFinishJob(jobId, finish))
+  // A voice engine still holding the GPU would slow H3 down: let it go before a render on this PC.
+  const freeVoices = () => (readSettings(DATA).target === 'cloud' ? null : voices.release())
   handle('render:previews', async (request) => {
+    await freeVoices()
     const job = await studio.generatePreviews(request)
     pending.add(job.id)
     return job
   })
   handle('render:finish', async (opts) => {
+    await freeVoices()
     const job = await studio.finishCandidate(opts)
     pending.add(job.id)
     return job

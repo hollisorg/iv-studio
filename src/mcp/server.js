@@ -21,6 +21,7 @@ import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
+import { VOICE_ENGINES, Voices } from '../service/voices'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -84,7 +85,7 @@ tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, wit
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))
-tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, (args) => studio.generatePreviews(args))
+tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, async (args) => (readSettings(DATA).target === 'cloud' || (await voices.release()), studio.generatePreviews(args)))
 tool('finish_candidate', "Finish one preview candidate (2 MP pass + DLSS, optional RTX 2x and frame generation) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
 const sequenceFields = {
   name: z.string().optional(),
@@ -530,8 +531,11 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   strength: z.number().min(0).max(1.5).optional(),
   trigger: z.string().min(2).optional().describe('The trigger word the LoRA was trained on; prompts write {char} for it'),
   voiceRefmod: z.string().nullable().optional(),
-  visualRefmod: z.string().nullable().optional()
+  visualRefmod: z.string().nullable().optional(),
+  voiceId: z.string().nullable().optional().describe('A voice from list_voices: the voice speak_line uses for this character; null for none')
 }, async ({ id, ...fields }) => {
+  if (fields.voiceId) voices.get(fields.voiceId)
+  if (fields.voiceId === null) fields.voiceDeclined = true
   const list = studio.characters()
   const old = list.find((c) => c.id === id)
   const next = { ...(old || { strength: 0.8 }), id, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) }
@@ -543,7 +547,53 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   studio.saveCharacters(old ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return next
 })
-const catalog = new CharacterCatalog({ studio, resourcesDir: resourcesDir() })
+// ---------- Audio: voices and spoken lines (VoiceStudio on this PC does the speaking) ----------
+const voices = new Voices({ dataDir: DATA, url: readSettings(DATA).voiceUrl, ffmpeg: edits.ffmpeg })
+const ENGINE = z.enum(VOICE_ENGINES.map((e) => e.id))
+tool('voice_status', 'Whether VoiceStudio (the free local app IV Studio speaks through) is running, and whether its VoxCPM2 and CosyVoice 3 engines are ready. If it is not running, ask the person to start it.', {}, () => voices.status())
+tool('list_voices', 'Every saved voice: id, name, kind (designed, clone, ready), engine, seed, reference recording and its words, and which characters use it.', {}, async () => {
+  await catalog.attachVoices().catch(() => {})
+  const chars = studio.characters()
+  return { items: voices.list().map((v) => ({ ...v, characters: chars.filter((c) => c.voiceId === v.id).map((c) => c.id) })) }
+})
+tool('design_voice', 'Make 1-4 candidate voices from a description (VoxCPM2 voice design, about 25 s each). Returns their files: listen or let the person listen, then save one with create_voice (kind designed, same seed and description). Only invented voices.', {
+  description: z.string().min(10).describe('Age, accent, pitch, manner, recording: e.g. "A man in his sixties from Cork, gravelly and slow, close and natural"'),
+  text: z.string().optional().describe('What the candidates say (optional)'),
+  seed: z.number().int().default(1),
+  count: z.number().int().min(1).max(4).default(3)
+}, async (a) => ({ items: await voices.design(a) }))
+tool('create_voice', 'Save a voice from a recording: a design_voice candidate (kind designed) or a recording of one person talking (kind clone; only their own voice, an invented one, or someone who agreed: set consent true only when the person has confirmed that). The first 20 s become the reference; text is its words (read by Whisper when left out).', {
+  name: z.string().min(1),
+  file: z.string().describe('A local wav, mp3, flac, m4a or ogg'),
+  kind: z.enum(['designed', 'clone']).default('designed'),
+  text: z.string().optional(),
+  description: z.string().optional(),
+  seed: z.number().int().nullable().optional(),
+  engine: ENGINE.default('voxcpm2'),
+  consent: z.boolean().default(false)
+}, (a) => voices.create(a))
+tool('update_voice', 'Rename a voice or change its default engine, seed, words or description.', { id: z.string(), name: z.string().optional(), engine: ENGINE.optional(), seed: z.number().int().nullable().optional(), text: z.string().optional(), description: z.string().optional() }, ({ id, ...patch }) => voices.update(id, patch))
+tool('delete_voice', 'Delete a voice and the lines spoken in it; characters using it lose their voice. Ask the person first.', { id: z.string() }, ({ id }) => {
+  const r = voices.delete(id)
+  studio.saveCharacters(studio.characters().map((c) => (c.voiceId === id ? { ...c, voiceId: null } : c)))
+  return r
+})
+tool('speak_line', `Say a line in a voice (or a character's voice) and get a WAV: use it as voiceLine in generate_previews so H3 lip-syncs to it, with the same words inside the prompt's <d>[English] …</d>. About 10 s a line; the same words, voice, engine and seed come back from the cache.`, {
+  text: z.string().min(1).max(600),
+  voiceId: z.string().optional(),
+  character: z.string().optional().describe('A character id with a voice (save_character voiceId); used when voiceId is left out'),
+  engine: ENGINE.optional(),
+  seed: z.number().int().optional()
+}, ({ text, voiceId, character, engine, seed }) => {
+  const id = voiceId || studio.characters().find((c) => c.id === character)?.voiceId
+  if (!id) throw new Error(character ? `${character} has no voice yet: give them one with save_character voiceId.` : 'Give voiceId or character.')
+  return voices.speak({ voiceId: id, text, engine, seed })
+})
+tool('list_lines', 'Lines spoken so far, newest first (optionally for one voice): text, file, duration, engine, seed.', { voiceId: z.string().optional() }, ({ voiceId }) => ({ items: voices.lines(voiceId) }))
+tool('delete_line', 'Delete a spoken line and its file.', { id: z.string() }, ({ id }) => voices.deleteLine(id))
+tool('release_voice_engine', 'Ask VoiceStudio to unload its voice models so the GPU memory goes back to ComfyUI (IV Studio also does this before a render, and ten minutes after the last line).', {}, async () => (await voices.release(), { released: true }))
+
+const catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir() })
 tool('list_ready_characters', "IV Studio's ready-made characters (Tess, Theo…): who they are, their face picture's path, and whether they're downloaded and usable.", {}, () => catalog.list())
 tool('install_ready_character', 'Download a ready-made character (its LoRA, about 150 MB, into ComfyUI) and add it as a character preset.', { id: z.string() }, async ({ id }) => (await catalog.install(id)).find((c) => c.id === id))
 tool('delete_character', 'Remove a character preset (the LoRA file stays). Ask the person first.', { id: z.string() }, ({ id }) => {

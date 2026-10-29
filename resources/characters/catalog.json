@@ -1,5 +1,5 @@
 {
-  "_note": "Ready-made characters on the Characters page: one face picture each (bundled), and a LoRA downloaded on request from the characters release of hollisorg/iv-studio, checked against sha256. lora null = not published yet.",
+  "_note": "Ready-made characters on the Characters page: one face picture and a short voice reference each (bundled), and a LoRA downloaded on request from the characters release of hollisorg/iv-studio, checked against sha256. lora null = not published yet. The voice joins the Voices page when the character is a preset.",
   "characters": [
     {
       "id": "tess",
@@ -15,6 +15,13 @@
         "url": "https://github.com/hollisorg/iv-studio/releases/download/characters-v1/tess_mmh3-000040.safetensors",
         "sha256": "76b7ed8c75d82fb66c5601ffb29f7feebd637f9310a3e92d110d2442488d9d68",
         "size": 149162056
+      },
+      "voice": {
+        "file": "tess-voice.wav",
+        "engine": "voxcpm2",
+        "seed": 41,
+        "text": "Hiya, so quick one. I'm Tess, I make slightly wonky pots and very good coffee and I live in a flat that is about 40% plants and 60% chaos. This week I finally finished the big bowl I've been moaning about and it survived the kiln which honestly nobody expected, least of all me.",
+        "description": "Bristol, soft West Country lilt; warm, low-to-mid, slightly husky, relaxed and dry."
       }
     },
     {
@@ -25,7 +32,14 @@
       "trigger": "th30l16",
       "strength": 0.8,
       "picture": "theo.jpg",
-      "lora": null
+      "lora": null,
+      "voice": {
+        "file": "theo-voice.wav",
+        "engine": "voxcpm2",
+        "seed": 41,
+        "text": "Honestly, I did not plan any of this. I was just gonna grab a coffee and head home, but then the rain started and, well, here we are. Anyway, I have a theory about Sundays and you are not going to like it. Give me two minutes and I will explain everything. No, really, two minutes.",
+        "description": "Early thirties, calm and dry, a light Scandinavian accent. Designed with VoxCPM2, seed 41."
+      }
     }
   ]
 }
