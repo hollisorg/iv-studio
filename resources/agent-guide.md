@@ -129,7 +129,7 @@ The Characters page (and these tools) turn an invented person into a character p
    H3 talking clips from the face and the stills. `rank_likeness` scores them; render weak ones again
    (`make_training_clips` redo) or drop them (`set_training_item` keep false). Aim for 0.45+.
 4. `estimate_training`, tell the person the minutes and dollars, and `start_training` only after they
-   agree (it bills their Modal account; Tess took 29 minutes and $3.80 on a B200).
+   agree (it bills their Modal account; Theo took 56 minutes and about $4.10 on an H200; Modal's Starter plan has no B200).
 5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the
    renders, and `adopt_checkpoint` the best. It's then a character like any other.
 

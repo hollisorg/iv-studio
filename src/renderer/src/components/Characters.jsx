@@ -583,7 +583,7 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
 }
 
 function Train({ t, act, meta, log, go, trainingId, next }) {
-  const [gpu, setGpu] = useState(t.train?.gpu || 'B200')
+  const [gpu, setGpu] = useState(t.train?.gpu || 'H200')
   const [epochs, setEpochs] = useState(t.train?.epochs || t.estimate.epochs)
   const [est, setEst] = useState(t.estimate)
   const [cloud, setCloud] = useState(null)

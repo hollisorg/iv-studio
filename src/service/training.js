@@ -14,12 +14,13 @@ import { Cloud } from './cloud.js'
 import { probe } from './media.js'
 import { comboOptions } from './setup.js'
 
-// Modal list prices (modal.com/pricing, 2026-10-28), billed by the second. secPerStep: measured on Tess's set
-// (B200 0.45 s); the H200 figure scales Fizgig's own speed table.
+// Modal list prices (modal.com/pricing, 2026-10-28), billed by the second. secPerStep is for an IV Studio
+// dataset (stills plus talking clips): measured 1.09 s on an H200 (Theo, 2026-10-28); the B200 and H100
+// figures are scaled from it. Tess's B200 run (0.47 s) had many cheap voice-only items.
 export const TRAIN_GPUS = [
-  { id: 'B200', label: 'B200 · 180 GB', perHour: 6.25, secPerStep: 0.45, note: 'Fastest. Tess trained in 29 minutes for $3.80.' },
-  { id: 'H200', label: 'H200 · 141 GB', perHour: 4.54, secPerStep: 0.66, note: 'The fallback when B200s are busy.' },
-  { id: 'H100', label: 'H100 · 80 GB', perHour: 3.95, secPerStep: 0.9, note: 'Slower; a run peaks at about 26 GB, so it fits.' }
+  { id: 'B200', label: 'B200 · 180 GB', perHour: 6.25, secPerStep: 0.7, note: "Fastest, but Modal's Starter plan doesn't offer it." },
+  { id: 'H200', label: 'H200 · 141 GB', perHour: 4.54, secPerStep: 1.1, note: 'Theo trained in 56 minutes for about $4.10.' },
+  { id: 'H100', label: 'H100 · 80 GB', perHour: 3.95, secPerStep: 1.5, note: 'Slower; a run peaks at about 26 GB, so it fits.' }
 ]
 // Modal can accept a run and then never schedule it (a GPU the account's plan doesn't include). Its CLI
 // says nothing; the app log does: "waiting to be scheduled on a GPU_B200 worker ... unavailable on starter plan".
@@ -503,9 +504,10 @@ export class Trainings {
   }
 
   estimateFor(t, { gpu, epochs } = {}) {
-    const items = this.keptStills(t).length + t.clips.filter((x) => x.keep && x.file).length * 1.3
+    // Fizgig trains each clip twice an epoch (Theo: 8 stills + 8 clips = 24 steps an epoch)
+    const items = this.keptStills(t).length + t.clips.filter((x) => x.keep && x.file).length * 2
     const e = epochs || t.train?.epochs || defaultEpochs(items)
-    return { ...estimate({ items: Math.round(items), epochs: e, gpu: gpu || t.train?.gpu || 'B200' }), epochs: e }
+    return { ...estimate({ items: Math.round(items), epochs: e, gpu: gpu || t.train?.gpu || 'H200' }), epochs: e }
   }
 
   // ---------- 3 train on Modal ----------
