@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { probe } from './media.js'
 import { clipEnd, clipLength } from './timeline.js'
 
 export const TRACKS = [
@@ -23,8 +24,6 @@ export const FORMATS = {
   vertical: { width: 1080, height: 1920, label: 'Vertical 9:16' },
   square: { width: 1080, height: 1080, label: 'Square 1:1' }
 }
-const IMAGE = /\.(png|jpe?g|webp|bmp)$/i
-const AUDIO = /\.(wav|mp3|m4a|flac|ogg|aac)$/i
 
 const readJson = (file, fallback) => {
   try {
@@ -83,28 +82,7 @@ export class Edits {
     return true
   }
 
-  // What a file is: kind, duration, size and whether it has sound, from ffprobe.
-  probe(file) {
-    return new Promise((resolve, reject) => {
-      const p = spawn(this.ffprobe, ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'json', file], { windowsHide: true })
-      let out = ''
-      p.stdout.on('data', (d) => (out += d))
-      p.on('error', reject)
-      p.on('close', (code) => {
-        if (code !== 0) return reject(new Error(`Can't read ${path.basename(file)}.`))
-        const info = JSON.parse(out)
-        const video = info.streams?.find((s) => s.codec_type === 'video')
-        const kind = IMAGE.test(file) ? 'image' : video && !AUDIO.test(file) ? 'video' : 'audio'
-        resolve({
-          kind,
-          duration: kind === 'image' ? null : Number(info.format?.duration) || 0,
-          width: video?.width || null,
-          height: video?.height || null,
-          hasAudio: info.streams?.some((s) => s.codec_type === 'audio') || false
-        })
-      })
-    })
-  }
+  probe = (file) => probe(this.ffprobe, file)
 
   async addMedia(file, source = { type: 'file' }) {
     if (!fs.existsSync(file)) throw new Error(`File not found: ${file}`)

@@ -1128,3 +1128,279 @@ input.mini {
   align-items: center;
   gap: 18px;
 }
+
+/* ---------- references as tiles, and the media editor ---------- */
+.media-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.media-tile {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.media-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  border: 0;
+  cursor: pointer;
+}
+.media-thumb img,
+.media-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.media-wave {
+  font-size: 34px;
+  color: var(--pink);
+}
+.media-edit {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 6px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.media-thumb:hover .media-edit,
+.media-thumb:focus-visible .media-edit {
+  opacity: 1;
+}
+.media-thumb:hover {
+  outline: 1px solid var(--red);
+}
+.media-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.media-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.media-remove {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: rgba(16, 12, 14, 0.8);
+  color: var(--paper);
+  cursor: pointer;
+}
+.voice-control .media-tile {
+  width: 220px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 6, 7, 0.78);
+}
+.modal {
+  display: grid;
+  gap: 14px;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--ink);
+  border: 1px solid var(--line-strong);
+}
+.modal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.modal-head h2 {
+  margin: 0;
+  font: 700 28px / 1 var(--display);
+  text-transform: uppercase;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.modal-foot .spacer {
+  flex: 1;
+}
+.me-stage {
+  display: grid;
+  place-items: center;
+  /* the rest of the editor (title, crop bar, trim bar, buttons) takes about 380 px */
+  height: clamp(220px, calc(100vh - 400px), 560px);
+  background: #000;
+}
+.me-frame {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+.me-frame img,
+.me-frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.me-crop {
+  position: absolute;
+  border: 1px solid var(--cream);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  cursor: move;
+  touch-action: none;
+}
+.me-crop::before,
+.me-crop::after {
+  /* thirds, to help framing */
+  content: '';
+  position: absolute;
+  inset: 33.33% 0;
+  border-top: 1px solid rgba(244, 236, 220, 0.25);
+  border-bottom: 1px solid rgba(244, 236, 220, 0.25);
+  pointer-events: none;
+}
+.me-crop::after {
+  inset: 0 33.33%;
+  border: 0;
+  border-left: 1px solid rgba(244, 236, 220, 0.25);
+  border-right: 1px solid rgba(244, 236, 220, 0.25);
+}
+.me-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--red);
+  border: 2px solid var(--cream);
+  touch-action: none;
+}
+.me-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
+.me-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.me-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.me-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.me-crop-size {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.me-ratios {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.me-ratios .segmented button.shot {
+  background: var(--red);
+}
+.me-trim {
+  display: grid;
+  gap: 10px;
+}
+.me-bar {
+  position: relative;
+  height: 56px;
+  background: var(--ink-3);
+  cursor: pointer;
+  touch-action: none;
+}
+.me-peaks {
+  position: absolute;
+  inset: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+}
+.me-peaks span {
+  flex: 1;
+  background: var(--pink);
+  opacity: 0.55;
+}
+.me-out {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(8, 6, 7, 0.7);
+  pointer-events: none;
+}
+.me-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 2px solid var(--red);
+  pointer-events: none;
+}
+.me-grip {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 12px;
+  background: var(--red);
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.me-grip.in { left: -8px; }
+.me-grip.out { right: -8px; }
+.me-playhead {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--cream);
+  pointer-events: none;
+}
+.me-trim-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.me-snap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.media.drag-over {
+  outline: 2px dashed var(--red);
+  outline-offset: 6px;
+}
+
+/* a small primary button keeps its fill (.btn-small comes later in styles.css and clears it) */
+.btn.btn-primary.btn-small {
+  background: var(--paper);
+  border-color: var(--paper);
+  color: var(--ink);
+}
+.btn.btn-primary.btn-small:not(:disabled):hover {
+  background: var(--pink);
+  border-color: var(--pink);
+}

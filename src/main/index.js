@@ -6,6 +6,7 @@ import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/p
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS, TRACKS } from '../service/edits'
+import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
@@ -18,7 +19,7 @@ if (!app.requestSingleInstanceLock()) app.quit()
 // The editor plays local media through ivfile://local/?p=<path> (seekable, any media file on this PC).
 protocol.registerSchemesAsPrivileged([
   { scheme: 'ivmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
-  { scheme: 'ivfile', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
+  { scheme: 'ivfile', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 const MEDIA_FILE = /\.(mp4|mov|webm|mkv|m4v|wav|mp3|m4a|flac|ogg|aac|png|jpe?g|webp|bmp)$/i
 const MIME = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4', flac: 'audio/flac', ogg: 'audio/ogg', aac: 'audio/aac', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', bmp: 'image/bmp' }
@@ -27,13 +28,15 @@ function serveFile(req) {
   if (!file || !MEDIA_FILE.test(file) || !fs.existsSync(file)) return new Response('Not found', { status: 404 })
   const size = fs.statSync(file).size
   const type = MIME[file.split('.').pop().toLowerCase()] || 'application/octet-stream'
+  // The window's page is another origin; it reads files with fetch() too (the media editor's waveform).
+  const cors = { 'Access-Control-Allow-Origin': '*' }
   const range = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '')
-  if (!range) return new Response(Readable.toWeb(fs.createReadStream(file)), { headers: { 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes' } })
+  if (!range) return new Response(Readable.toWeb(fs.createReadStream(file)), { headers: { ...cors, 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes' } })
   const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
   const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
   return new Response(Readable.toWeb(fs.createReadStream(file, { start, end })), {
     status: 206,
-    headers: { 'Content-Type': type, 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes' }
+    headers: { ...cors, 'Content-Type': type, 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes' }
   })
 }
 
@@ -186,6 +189,10 @@ app.whenReady().then(() => {
     ffprobe: unpacked(ffmpegStatic.ffprobePath),
     fontFile: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf')
   })
+  // Crop and trim references before they go to H3 (Create's media editor).
+  const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+  handle('media:probe', (file) => mediaTools.probe(file))
+  handle('media:prepare', (opts) => mediaTools.prepare(opts))
   handle('edits:meta', () => ({ tracks: TRACKS, formats: FORMATS }))
   handle('edits:list', () => edits.list())
   handle('edits:get', (id) => edits.get(id))

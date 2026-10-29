@@ -142,6 +142,7 @@ Tools:
   `finish_shot`, `retake`, `render_out`.
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
 - **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
+- **References:** `prepare_media` (crop a picture, trim and crop a video or sound).
 - **Library:** `list_renders` (every render, with keys for the editor), `rename_project`, `delete_sequence`.
 - **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`
   (files or renders, optionally appended end to end), `edit_timeline` (add, move, trim, split, ripple
@@ -173,6 +174,7 @@ Tests are in `test/`:
 - `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
 - `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
+- `media-prepare.mjs`: crops a picture, trims a video frame-exact and trims a sound.
 - `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
 - `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out (queues real GPU renders).
 - `prompt-writer.mjs`: writes a prompt and a two-shot story with the local writer.

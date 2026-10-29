@@ -27,6 +27,8 @@ there for the person, and the other way round.
 Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Picture 1>`,
 `<Video 1>`, `<Audio 1>` in the prompt), `frames` (first and optional last frame), `continue`
 (extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
+`prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
+cropped to the shot's aspect, because they're stretched to fit).
 
 ## Writing H3 prompts
 

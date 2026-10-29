@@ -11,6 +11,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { Edits, editLength, FORMATS, TRACKS } from '../service/edits'
+import { MediaTools } from '../service/media'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
@@ -168,6 +169,13 @@ const edits = new Edits({
   ffprobe: unpacked(ffmpegStatic.ffprobePath),
   fontFile: path.join(resourcesDir(), 'fonts', 'BarlowCondensed-SemiBold.ttf')
 })
+const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+tool('prepare_media', 'Crop a picture, or trim (and optionally crop) a video or a sound, before using it as a reference, frame, source video or voice line. The original stays as it is; returns the new file. For first/last frames, crop to the shot aspect: frames are stretched to the shot size. H3 video lengths are 17n+5 frames at 24 fps (73 = 3.04 s, 124 = 5.17 s).', {
+  file: z.string().describe('Absolute path on this PC'),
+  crop: z.object({ x: z.number().min(0), y: z.number().min(0), w: z.number().min(16), h: z.number().min(16) }).optional().describe('In source pixels'),
+  start: z.number().min(0).optional().describe('Seconds'),
+  end: z.number().optional().describe('Seconds')
+}, (args) => mediaTools.prepare(args))
 const exporting = new Map() // edit id -> { state, progress, file, error, startedAt }
 
 // An edit as an agent reads it: media by id, then each track's clips in time order with the media name.

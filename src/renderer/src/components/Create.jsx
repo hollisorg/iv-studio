@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Hero from './Hero'
+import { MediaEditor, MediaTile } from './MediaEditor'
 import PromptWriter from './PromptWriter'
 
 const MODES = [
@@ -60,7 +61,7 @@ export default function Create({ setup, characters, notify, openShot, go }) {
   }, [characters])
 
   const request = useMemo(() => {
-    const { projectName, ...r } = form
+    const { projectName, voiceItem, ...r } = form
     return { ...r, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
   }, [form])
 
@@ -77,17 +78,50 @@ export default function Create({ setup, characters, notify, openShot, go }) {
   }, [request])
 
   async function addMedia(kind) {
-    const files = await window.ivstudio.files.pick(kind)
-    if (!files.length) return
-    const limit = form.mode === 'frames' ? 2 : form.mode === 'continue' ? 1 : 12
-    const next = form.mode === 'continue' ? [] : form.media
-    set({ media: [...next, ...files.map((path) => ({ kind, path }))].slice(0, limit) })
+    addFiles((await window.ivstudio.files.pick(kind)).map((path) => ({ kind, path })))
+  }
+  // Adds [{kind, path}] in one update (so several kinds dropped at once all land), each probed for the tile.
+  async function addFiles(list) {
+    if (!list.length) return
+    const added = await Promise.all(list.map(async (m) => ({ ...m, info: await window.ivstudio.media.probe(m.path).catch(() => null) })))
+    setForm((f) => {
+      const limit = f.mode === 'frames' ? 2 : f.mode === 'continue' ? 1 : 12
+      return { ...f, media: [...(f.mode === 'continue' ? [] : f.media), ...added].slice(0, limit) }
+    })
   }
 
   async function pickVoice() {
     const [file] = await window.ivstudio.files.pick('audio')
-    if (file) set({ voiceLine: file })
+    if (file) set({ voiceLine: file, voiceItem: { kind: 'audio', path: file, info: await window.ivstudio.media.probe(file).catch(() => null) } })
   }
+
+  // Files dropped on the references area, sorted by kind; the mode decides which kinds it takes.
+  const [dragOver, setDragOver] = useState(false)
+  function dropMedia(e) {
+    e.preventDefault()
+    setDragOver(false)
+    const kindOf = (p) => (/\.(png|jpe?g|webp|bmp)$/i.test(p) ? 'picture' : /\.(mp4|mov|webm|mkv|m4v)$/i.test(p) ? 'video' : /\.(wav|mp3|flac|m4a|ogg|aac)$/i.test(p) ? 'audio' : null)
+    const allowed = form.mode === 'frames' ? ['picture'] : form.mode === 'continue' ? ['video'] : ['picture', 'video', 'audio']
+    const paths = [...e.dataTransfer.files].map((f) => window.ivstudio.media.pathFor(f)).filter(Boolean)
+    const fit = paths.filter((p) => allowed.includes(kindOf(p)))
+    if (fit.length < paths.length) notify(`This mode takes ${allowed.map((k) => `${k}s`).join(', ')}; the other files were left out.`)
+    addFiles(fit.map((path) => ({ kind: kindOf(path), path })))
+  }
+
+  // The media editor: which reference is open (an index into media, or 'voice').
+  const [editing, setEditing] = useState(null)
+  const editItem = editing === 'voice' ? form.voiceItem || { kind: 'audio', path: form.voiceLine } : form.media[editing]
+  const editHint = {
+    frames: `Frames are stretched to the shot's size (${form.aspect}). Crop to "Shot" so nothing gets squashed.`,
+    continue: 'The shot carries on from the last frames you keep: trim where the clip should hand over.',
+    reference: 'Keep only what the shot should use. Shorter references are quicker.'
+  }
+  function applyEdit(next) {
+    if (editing === 'voice') set({ voiceLine: next.path, voiceItem: next })
+    else set({ media: form.media.map((m, j) => (j === editing ? next : m)) })
+    setEditing(null)
+  }
+  const mediaLabel = (m, i) => (form.mode === 'frames' ? (i === 0 ? 'First frame' : 'Last frame') : form.mode === 'continue' ? 'Source video' : `<${m.kind[0].toUpperCase() + m.kind.slice(1)} ${form.media.filter((x, j) => x.kind === m.kind && j <= i).length}>`)
 
   async function hunt() {
     setBusy(true)
@@ -169,7 +203,7 @@ export default function Create({ setup, characters, notify, openShot, go }) {
         <textarea className="prompt" rows={9} value={form.prompt} placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those." onChange={(e) => set({ prompt: e.target.value })} />
 
         {form.mode !== 'text' && (
-          <div className="media">
+          <div className={`media ${dragOver ? 'drag-over' : ''}`} onDragOver={(e) => (e.preventDefault(), setDragOver(true))} onDragLeave={() => setDragOver(false)} onDrop={dropMedia}>
             <div className="media-head">
               <span className="row-label">{form.mode === 'frames' ? 'Frames' : form.mode === 'continue' ? 'Source video' : 'References'}</span>
               <div className="media-actions">
@@ -190,16 +224,15 @@ export default function Create({ setup, characters, notify, openShot, go }) {
                 )}
               </div>
             </div>
-            {form.media.length === 0 && <p className="dim small">{form.mode === 'frames' ? 'Add the first frame, and optionally a last frame. Pick an aspect ratio that matches them.' : form.mode === 'continue' ? 'Add the clip to continue. 24 fps works best.' : 'Add what the shot should keep: a place, an outfit, a voice.'}</p>}
-            <div className="chips">
-              {form.media.map((m, i) => (
-                <span key={i} className="chip">
-                  <span className="mono pink">{form.mode === 'frames' ? (i === 0 ? 'First' : 'Last') : `<${m.kind[0].toUpperCase() + m.kind.slice(1)} ${form.media.filter((x, j) => x.kind === m.kind && j <= i).length}>`}</span>
-                  {base(m.path)}
-                  <button onClick={() => set({ media: form.media.filter((_, j) => j !== i) })}>×</button>
-                </span>
-              ))}
-            </div>
+            {form.media.length === 0 && <p className="dim small">{form.mode === 'frames' ? 'Add the first frame, and optionally a last frame, or drop pictures here. Pick an aspect ratio that matches them.' : form.mode === 'continue' ? 'Add the clip to continue, or drop it here. 24 fps works best.' : 'Add what the shot should keep: a place, an outfit, a voice. You can drop files here too.'}</p>}
+            {form.media.length > 0 && (
+              <div className="media-tiles">
+                {form.media.map((m, i) => (
+                  <MediaTile key={`${i}:${m.path}`} item={m} label={mediaLabel(m, i)} onEdit={() => setEditing(i)} onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })} />
+                ))}
+              </div>
+            )}
+            {form.media.length > 0 && <p className="dim small">Click a reference to crop it or trim it. The original file isn't changed.</p>}
             {form.mode === 'continue' && (
               <div className="row">
                 <span className="row-label">Overlap frames</span>
@@ -219,11 +252,7 @@ export default function Create({ setup, characters, notify, openShot, go }) {
           <span className="row-label">Voice line</span>
           <div className="voice-control">
             {form.voiceLine ? (
-              <span className="chip">
-                <span className="mono pink">Lip-sync</span>
-                {base(form.voiceLine)}
-                <button onClick={() => set({ voiceLine: null })}>×</button>
-              </span>
+              <MediaTile item={form.voiceItem || { kind: 'audio', path: form.voiceLine }} label="Lip-sync" onEdit={() => setEditing('voice')} onRemove={() => set({ voiceLine: null, voiceItem: null })} />
             ) : (
               <button className="btn btn-small" onClick={pickVoice}>
                 + Recording to lip-sync
@@ -381,6 +410,7 @@ export default function Create({ setup, characters, notify, openShot, go }) {
           {busy ? 'Starting…' : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`}
         </button>
       </section>
+      {editItem && <MediaEditor item={editItem} shotAspect={form.aspect} hint={editing === 'voice' ? 'Keep just the line to lip-sync. Write the same words in the prompt.' : editHint[form.mode]} onApply={applyEdit} onClose={() => setEditing(null)} notify={notify} />}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // Every call resolves to its value or throws the service's error message.
 const call =
@@ -17,6 +17,8 @@ const on = (channel) => (cb) => {
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
+  // pathFor: the path of a file dropped on the window.
+  media: { probe: call('media:probe'), prepare: call('media:prepare'), pathFor: (file) => webUtils.getPathForFile(file) },
   agents: {
     info: call('agents:info'),
     installSkill: call('agents:installSkill')

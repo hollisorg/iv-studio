@@ -5,6 +5,8 @@ description: Make MiniMax H3 videos with IV Studio through its MCP server - rend
 
 If the `iv-studio` MCP tools aren't available, IV Studio has to be installed and its server added: the exact command for an install is under Settings -> Agents (MCP) in the app. Download: https://github.com/hollisorg/iv-studio/releases
 
+# Using IV Studio from an agent
+
 IV Studio is a desktop app for MiniMax H3 video on a local ComfyUI: it renders shots and continuous
 sequences with recurring characters, and cuts them together on its own timeline. Its MCP server
 (`iv-studio`) uses the same projects, renders and edits as the app window, so what you make shows up
@@ -32,6 +34,8 @@ there for the person, and the other way round.
 Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Picture 1>`,
 `<Video 1>`, `<Audio 1>` in the prompt), `frames` (first and optional last frame), `continue`
 (extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
+`prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
+cropped to the shot's aspect, because they're stretched to fit).
 
 ## Writing H3 prompts
 
