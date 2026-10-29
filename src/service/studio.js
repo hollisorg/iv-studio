@@ -251,14 +251,17 @@ export class Studio {
       for (const j of this.listJobs(p.id)) {
         for (const o of j.outputs || []) {
           if (!['final', 'preview'].includes(o.kind)) continue
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
+          // set: the shot (or the sequence a shot render belongs to), so its takes show as one tile
+          const variant = o.kind === 'final' ? 'Final' : `Preview ${o.candidate}`
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: o.kind === 'final' ? 0 : 10 + (o.candidate || 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null })
         }
       }
     }
     for (const sq of this.listSequences()) {
       const v = this.sequenceView(sq.id)
-      for (const x of v.versions) if (x.file) items.push({ key: `${sq.id}:${x.id}`, label: `${sq.name} · ${x.label}`, group: 'Sequences', at: x.createdAt, file: x.file })
-      for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file })
+      const set = { set: `sequence:${sq.id}`, setName: sq.name, sequenceId: sq.id, projectId: null }
+      for (const x of v.versions) if (x.file) items.push({ key: `${sq.id}:${x.id}`, label: `${sq.name} · ${x.label}`, group: 'Sequences', at: x.createdAt, file: x.file, ...set, variant: x.label, rank: 5 })
+      for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file, ...set, variant: 'Final', rank: 0 })
     }
     const seen = new Set() // a finish job lists its picked preview again
     return items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))

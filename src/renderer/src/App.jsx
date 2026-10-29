@@ -94,15 +94,6 @@ export default function App() {
     return window.ivstudio.jobs.onUpdate((job) => setJobs((all) => ({ ...all, [job.id]: job })))
   }, [recheck])
 
-  const openShot = (id) => {
-    setProjectId(id)
-    setPage('shot')
-  }
-
-  const openSequence = (id) => {
-    setSequenceId(id)
-    setPage('sequence')
-  }
 
   const openShinobi = (id) => {
     setShinobiId(id)
@@ -122,7 +113,17 @@ export default function App() {
     } catch {}
     if (page !== 'media' && !SECTIONS[next].some(([id]) => id === page || SUBPAGES[id]?.includes(page))) setPage(SECTIONS[next][0][0])
   }
-  // Edit is on the Video side; Music opens it from Audio
+  // Shots, Sequences and Edit are on the Video side; the Library and Music open them from anywhere
+  const openShot = (id) => {
+    setProjectId(id)
+    switchSection('video')
+    setPage('shot')
+  }
+  const openSequence = (id) => {
+    setSequenceId(id)
+    switchSection('video')
+    setPage('sequence')
+  }
   const openEdit = (id) => {
     setEditId(id)
     switchSection('video')
