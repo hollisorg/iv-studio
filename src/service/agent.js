@@ -7,7 +7,7 @@ import path from 'node:path'
 export const readGuide = (resourcesDir) => fs.readFileSync(path.join(resourcesDir, 'agent-guide.md'), 'utf8')
 
 export const INSTRUCTIONS = `IV Studio renders MiniMax H3 video shots and continuous sequences with recurring characters on a local ComfyUI, and cuts them together on its own timeline. It shares projects, renders and edits with the IV Studio window the person sees.
-Start with check_setup and list_characters, and call get_guide once for the full workflow (shots, prompts, sequences, timeline edits, Shinobi agent-driven edits, character training) and the house rules.
+Start with check_setup and list_characters, and call get_guide once for the full workflow (shots, prompts, sequences, timeline edits, Shinobi agent-driven edits, website sizzle videos, character training) and the house rules.
 Prompts write {char} where the character goes. Renders take GPU minutes: poll get_job every 20-30 s. Ask the person before deleting anything or using the paid Context IR writer, and only cancel jobs you started.`
 
 // mcp: { command, args } of this install, or null for the copy hosted on GitHub.
@@ -17,7 +17,7 @@ export function skillMarkdown(guide, mcp = null) {
     : `If the \`iv-studio\` MCP tools aren't available, IV Studio has to be installed and its server added: the exact command for an install is under Settings -> Agents (MCP) in the app. Download: https://github.com/hollisorg/iv-studio/releases`
   return `---
 name: iv-studio
-description: Make MiniMax H3 videos with IV Studio through its MCP server - render shots and continuous sequences with recurring characters, hunt and finish previews, retake stretches, and cut renders together on IV Studio's timeline (trims, titles, sound, export). Use whenever the person asks for IV Studio, an H3 shot or sequence, a character video, or an edit of their IV Studio renders.
+description: Make MiniMax H3 videos with IV Studio through its MCP server - render shots and continuous sequences with recurring characters, hunt and finish previews, retake stretches, and cut renders together on IV Studio's timeline (trims, titles, sound, export), and turn a website into a sizzle or promo film. Use whenever the person asks for IV Studio, an H3 shot or sequence, a character video, a sizzle or promo video for a website, or an edit of their IV Studio renders.
 ---
 
 ${setup}

@@ -3275,3 +3275,134 @@ button.nav-update {
 button.nav-update:hover {
   background: #ff5c6c;
 }
+
+/* ---------- website sizzle ---------- */
+.sizzle .block {
+  margin-bottom: 34px;
+}
+.sizzle-start {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.sizzle-start input {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+.sz-status {
+  margin: 6px 0 22px;
+}
+.sz-site {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.sz-hero {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--line);
+}
+.sz-kit h3 {
+  font: 800 26px/1.05 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+  margin: 0 0 8px;
+}
+.sz-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+.sz-swatch {
+  width: 64px;
+  height: 46px;
+  border: 1px solid var(--line-strong);
+  display: flex;
+  align-items: flex-end;
+}
+.sz-swatch .mono {
+  font-size: 9px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 1px 3px;
+}
+.sz-logo {
+  max-width: 180px;
+  max-height: 80px;
+  margin-top: 8px;
+  background: #fff1;
+  padding: 6px;
+}
+.sz-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-top: 12px;
+  padding-bottom: 6px;
+}
+.sz-strip figure {
+  margin: 0;
+  flex: none;
+}
+.sz-strip img {
+  height: 96px;
+  display: block;
+  border: 1px solid var(--line);
+}
+.sz-scenes {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sz-scene {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 8px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.sz-scene.error {
+  border-color: var(--red);
+}
+.sz-media {
+  aspect-ratio: 16 / 9;
+  background: #000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.sz-media img,
+.sz-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sz-title {
+  font: 800 18px/1.05 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+  text-align: center;
+  padding: 8px;
+}
+.sz-wait {
+  color: var(--paper-dim);
+}
+.sz-text {
+  display: grid;
+  gap: 4px;
+}
+.sz-final {
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
+  margin-bottom: 12px;
+}
+.error-text {
+  color: var(--red);
+}

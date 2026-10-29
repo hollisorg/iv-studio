@@ -1,6 +1,6 @@
 ---
 name: iv-studio
-description: Make MiniMax H3 videos with IV Studio through its MCP server - render shots and continuous sequences with recurring characters, hunt and finish previews, retake stretches, and cut renders together on IV Studio's timeline (trims, titles, sound, export). Use whenever the person asks for IV Studio, an H3 shot or sequence, a character video, or an edit of their IV Studio renders.
+description: Make MiniMax H3 videos with IV Studio through its MCP server - render shots and continuous sequences with recurring characters, hunt and finish previews, retake stretches, and cut renders together on IV Studio's timeline (trims, titles, sound, export), and turn a website into a sizzle or promo film. Use whenever the person asks for IV Studio, an H3 shot or sequence, a character video, a sizzle or promo video for a website, or an edit of their IV Studio renders.
 ---
 
 If the `iv-studio` MCP tools aren't available, IV Studio has to be installed and its server added: the exact command for an install is under Settings -> Agents (MCP) in the app. Download: https://github.com/hollisorg/iv-studio/releases
@@ -149,6 +149,35 @@ typography, masks and effects, captions from speech, sound cues, even 3D scenes,
 5. `save_timeline` with the revision from `get_project`, then `preview_timeline` (pictures) at the opening,
    cuts and titles. `start_render` with a new request id, then poll `get_render`.
 6. Tell the person; the render shows on the Shinobi page, where it can go into Edit.
+
+## Website sizzle: a web address in, a promo film out
+
+When the person gives you a website and wants a sizzle, promo or launch video for it:
+
+1. `sizzle_capture` {url}. It returns the sizzle id and pictures of the real site: the hero, a contact
+   sheet of every screen down the page, the phone layout and the logo, plus its copy, colours and fonts.
+   `view_sizzle_capture` shows any one capture larger (screen-3, mobile, image-2…).
+2. Write the storyboard with `save_sizzle_plan`. About 20-40 s; scenes play in order:
+   - `screen`: one of the site's captures with camera motion. These carry the real product: use them.
+   - `h3`: an H3 shot (3-8 or 10 s, `character` "none" or a preset), written as an H3 prompt that fits
+     the site's look and audience. People using the product, the world it promises, mood b-roll.
+   - `image`: a Z-Image picture from a prompt (backgrounds, product-style stills, abstract brand art).
+   - `title`: words on screen. Take them from the site's own headings, buttons and copy.
+   - `music`: MiniMax Music 3 (`minimax`, best) or ACE-Step (`ace`, seconds), an instrumental unless the
+     person wants lyrics. `voiceover` is optional: a voice id (`list_voices`) and lines.
+   Open on a hook, show what the site does, end on the logo, the main button's words and the web address.
+3. Show the person the storyboard (each scene, its length, the music) and wait for their OK. Then
+   `approve_sizzle_plan`. Nothing renders before that.
+4. `make_sizzle_assets` makes everything on this PC: about 3-5 minutes per H3 shot, seconds per picture,
+   a few minutes for MiniMax music. Poll `get_sizzle` (it also moves each H3 shot from preview to its 1 MP
+   finish) until status is `ready`. Look at the pieces before cutting.
+5. `sizzle_to_shinobi` puts every piece in a Shinobi project with a brief (`iv-brief.md`). Cut the film
+   there (see Shinobi above): the site's screens with push-ins, pans and screen-to-screen scrolls, kinetic titles in its colours
+   and fonts (`render_page` for custom ones), cuts on the music's beat, the end card. Render, look at the
+   frames and listen, then tell the person where the film is.
+
+Only use claims the site itself makes: no invented numbers, prices, reviews, guarantees or scarcity. The
+site's screens are real captures; keep them sharp and unstretched.
 
 ## Replace: swap who or what is in a video
 

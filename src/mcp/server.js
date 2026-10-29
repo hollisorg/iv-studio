@@ -25,6 +25,7 @@ import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
+import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -629,6 +630,75 @@ tool('get_music', 'One song, brought up to date: status (queued, running, succes
 tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
 tool('rename_music', 'Rename a song.', { songId: z.string(), name: z.string().min(1) }, ({ songId, name }) => music.rename(songId, name))
 tool('delete_music', "Delete a song and its file in IV Studio's music folder (ComfyUI's own output copy stays). Ask the person first.", { songId: z.string() }, ({ songId }) => music.delete(songId))
+
+// ---------- Website sizzle: a web address in, a promo film out ----------
+const sizzles = new Sizzles({ dataDir: DATA, studio, music, voices, trainings, shinobi })
+// A capture as a small JPEG for the agent to look at; screens can be tiled into one contact sheet.
+async function sizzlePicture(files, { width = 960, tile = null } = {}) {
+  const out = path.join(os.tmpdir(), `sizzle-${process.pid}-${Date.now()}.jpg`)
+  const args = ['-v', 'error', '-y', ...files.flatMap((f) => ['-i', f])]
+  if (tile && files.length > 1) {
+    // same-size screens, in rows of tile[0]
+    const h = Math.round((width * 9) / 16)
+    const scaled = files.map((_, k) => `[${k}]scale=${width}:${h}[v${k}]`).join(';')
+    const layout = files.map((_, k) => `${(k % tile[0]) * width}_${Math.floor(k / tile[0]) * h}`).join('|')
+    args.push('-filter_complex', `${scaled};${files.map((_, k) => `[v${k}]`).join('')}xstack=inputs=${files.length}:layout=${layout}:fill=black`)
+  } else args.push('-vf', `scale=${width}:-2`)
+  args.push('-frames:v', '1', '-q:v', '4', out)
+  await edits.run(args)
+  const data = fs.readFileSync(out).toString('base64')
+  fs.rmSync(out, { force: true })
+  return { type: 'image', data, mimeType: 'image/jpeg' }
+}
+const sizzleTool = (name, description, shape, fn) =>
+  server.registerTool(name, { description, inputSchema: shape }, async (args) => {
+    try {
+      const { pictures = [], ...value } = await fn(args)
+      return { content: [...pictures, { type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: value }
+    } catch (err) {
+      return fail(err)
+    }
+  })
+const sizzleSummary = (s) => {
+  const { site, ...rest } = s
+  return { ...rest, site: site && { url: site.url, title: site.title, description: site.description, headings: site.headings, ctas: site.ctas, nav: site.nav, paragraphs: site.paragraphs, colors: site.colors, fonts: site.fonts, captures: site.captures.map(({ name, width, height, what, file }) => ({ name, width, height, what, file })), images: site.images.map((im, k) => ({ name: `image-${k + 1}`, file: im.file, alt: im.alt, width: im.width, height: im.height })) } }
+}
+sizzleTool('sizzle_capture', `Website sizzle, step 1: capture a website for a promo film. Opens the address in this PC's Edge or Chrome (headless) and saves real screenshots (hero, one per screen down the page, the phone layout, the logo), the copy that's on the page, its colours and fonts, and its biggest pictures. Returns the sizzle and pictures of the captures to look at. Then write the storyboard (save_sizzle_plan). Takes about 30-60 s. Formats: ${Object.keys(SIZZLE_FORMATS).join(', ')}.`, {
+  url: z.string().describe('The website, e.g. https://example.com'),
+  name: z.string().optional(),
+  format: z.enum(Object.keys(SIZZLE_FORMATS)).default('16:9')
+}, async ({ url, name, format }) => {
+  const s = await sizzles.create({ url, name, format })
+  const cap = (n) => s.site.captures.find((c) => c.name === n)?.file
+  const screens = s.site.captures.filter((c) => c.name === 'hero' || c.name.startsWith('screen-')).map((c) => c.file)
+  const pictures = [await sizzlePicture([cap('hero')], { width: 960 }), await sizzlePicture(screens, { width: 480, tile: [4, Math.ceil(screens.length / 4)] }), await sizzlePicture([cap('mobile')], { width: 390 })]
+  if (cap('logo')) pictures.push(await sizzlePicture([cap('logo')], { width: 480 }))
+  return { pictures, ...sizzleSummary(s) }
+})
+sizzleTool('view_sizzle_capture', 'One capture of a sizzle (hero, screen-N, mobile, logo or image-N) as a picture, to look at before choosing it for a screen scene.', { sizzleId: z.string(), name: z.string(), width: z.number().int().min(240).max(1600).default(960) }, async ({ sizzleId, name, width }) => {
+  const s = sizzles.get(sizzleId)
+  const file = s.site.captures.find((c) => c.name === name)?.file || s.site.images[Number(String(name).split('-')[1]) - 1]?.file
+  if (!file || !fs.existsSync(file)) throw new Error(`No capture ${name}.`)
+  return { pictures: [await sizzlePicture([file], { width })], name, file }
+})
+tool('list_sizzles', 'Website sizzles, newest first: site, status (planning, approved, rendering, ready, editing), scenes and the finished film once Shinobi has rendered it.', {}, () => ({ items: sizzles.list() }))
+tool('get_sizzle', 'A sizzle, brought up to date: the site capture, the storyboard, each scene\'s piece (status, file), the music and voice-over, and the Shinobi film. Call it to move rendering along: a finished H3 preview is finished at 1 MP here.', { sizzleId: z.string() }, async ({ sizzleId }) => sizzleSummary(await sizzles.refresh(sizzleId)))
+tool('save_sizzle_plan', `Website sizzle, step 2: the storyboard. Scenes play in order: h3 (an H3 shot from prompt, ${'3-8 or 10'} s; character "none" or a preset), image (a Z-Image picture from prompt, shown with camera motion), screen (one of the site's captures, e.g. hero, screen-3, mobile, image-2) and title (words on screen, from the site's own copy). music: {engine minimax|ace, caption, lyrics?, instrumental?}. voiceover (optional): {voiceId, lines}. Saving resets approval. Then show the person the storyboard and wait for their OK.`, {
+  sizzleId: z.string(),
+  plan: z.object({
+    scenes: z.array(z.object({ id: z.string().optional(), kind: z.enum(SCENE_KINDS), seconds: z.number(), prompt: z.string().optional(), character: z.string().optional(), capture: z.string().optional(), text: z.string().optional(), note: z.string().optional() })).min(2),
+    music: z.object({ engine: z.enum(['minimax', 'ace']).default('minimax'), caption: z.string(), lyrics: z.string().optional(), instrumental: z.boolean().optional(), seconds: z.number().optional() }),
+    voiceover: z.object({ voiceId: z.string(), lines: z.array(z.string()) }).optional(),
+    notes: z.string().optional()
+  })
+}, ({ sizzleId, plan }) => sizzleSummary(sizzles.savePlan(sizzleId, plan)))
+tool('approve_sizzle_plan', 'Record that the person approved the storyboard. Only call this after they said yes to it (or approve it on the Sizzle page themselves).', { sizzleId: z.string() }, ({ sizzleId }) => sizzleSummary(sizzles.approve(sizzleId)))
+tool('make_sizzle_assets', 'Website sizzle, step 3: make the pieces on this PC from the approved storyboard: the voice-over, Z-Image pictures, the music, and one H3 preview per shot (each finished at 1 MP once its preview is done). Free and local, but it takes the GPU for a while (about 3-5 min per H3 shot). Poll get_sizzle until status is ready.', { sizzleId: z.string() }, async ({ sizzleId }) => sizzleSummary(await sizzles.makeAssets(sizzleId)))
+tool('sizzle_to_shinobi', "Website sizzle, step 4: put every piece (shots, pictures, the site's screens and logo, music, voice-over) into a Shinobi project with a brief (iv-brief.md: the site's copy, colours, fonts, the storyboard and how to cut it). Then cut the film with the shinobi tools (read_guide agent and timeline first), render it and check it.", { sizzleId: z.string() }, async ({ sizzleId }) => {
+  const r = await sizzles.toShinobi(sizzleId)
+  return { ...sizzleSummary(r), shinobi: r.shinobi, brief: r.brief }
+})
+tool('delete_sizzle', 'Delete a sizzle and its capture (renders, songs and the Shinobi film stay). Ask the person first.', { sizzleId: z.string() }, ({ sizzleId }) => sizzles.remove(sizzleId))
 
 // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
 // Downloads use CIVITAI_API_KEY from this server's environment (the app keeps its own key encrypted).

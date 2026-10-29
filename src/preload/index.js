@@ -27,6 +27,18 @@ contextBridge.exposeInMainWorld('ivstudio', {
     characterFaces: call('replace:characterFaces'),
     toEdit: call('replace:toEdit')
   },
+  sizzle: {
+    meta: call('sizzle:meta'),
+    list: call('sizzle:list'),
+    create: call('sizzle:create'),
+    get: call('sizzle:get'),
+    savePlan: call('sizzle:savePlan'),
+    approve: call('sizzle:approve'),
+    makeAssets: call('sizzle:makeAssets'),
+    toShinobi: call('sizzle:toShinobi'),
+    delete: call('sizzle:delete'),
+    onLog: on('sizzle:log')
+  },
   shinobi: {
     status: call('shinobi:status'),
     install: call('shinobi:install'),

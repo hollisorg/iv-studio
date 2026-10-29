@@ -7,6 +7,7 @@ import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
 import { DEFAULT_TRACKS } from '../service/timeline'
+import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
@@ -353,6 +354,18 @@ app.whenReady().then(() => {
     voices
   })
   handle('training:meta', () => ({ gpus: TRAIN_GPUS, scenes: SCENES, talks: TALKS }))
+
+  // ---------- Website sizzle: a web address in, a promo film out (captured site, storyboard, pieces, Shinobi) ----------
+  const sizzles = new Sizzles({ dataDir: DATA, studio, music, voices, trainings, shinobi, onLog: (line) => send('sizzle:log', line) })
+  handle('sizzle:meta', () => ({ formats: SIZZLE_FORMATS, kinds: SCENE_KINDS }))
+  handle('sizzle:list', () => sizzles.list())
+  handle('sizzle:create', (input) => sizzles.create(input))
+  handle('sizzle:get', (id) => sizzles.refresh(id))
+  handle('sizzle:savePlan', (id, plan) => sizzles.savePlan(id, plan))
+  handle('sizzle:approve', (id) => sizzles.approve(id))
+  handle('sizzle:makeAssets', (id) => sizzles.makeAssets(id))
+  handle('sizzle:toShinobi', (id) => sizzles.toShinobi(id))
+  handle('sizzle:delete', (id) => sizzles.remove(id))
   handle('training:list', () => trainings.list())
   handle('training:create', (init) => trainings.create(init))
   handle('training:get', (id) => trainings.refresh(id))

@@ -18,6 +18,7 @@ import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 import { UpdateButton } from './components/Update'
+import { SizzleList, SizzleProject } from './components/Sizzle'
 
 // The sidebar's two halves, switched at its foot. Characters and Settings are in both; the Library (everything
 // made, page 'media') sits above the switch and belongs to neither.
@@ -42,7 +43,7 @@ const SECTIONS = {
     ['settings', 'Settings']
   ]
 }
-const SUBPAGES = { library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace'] }
+const SUBPAGES = { library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace', 'sizzle', 'sizzle-project'] }
 const savedSection = () => {
   try {
     return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
@@ -108,6 +109,12 @@ export default function App() {
     setShinobiId(id)
     setPage('shinobi-film')
   }
+  const [sizzleId, setSizzleId] = useState(null)
+  const openSizzle = (id) => {
+    setSizzleId(id)
+    switchSection('video')
+    setPage('sizzle-project')
+  }
 
   const openCharacter = (id) => {
     setTrainingId(id)
@@ -150,7 +157,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, focus, setFocus }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -208,6 +215,8 @@ export default function App() {
         {page === 'workflows' && <Workflows {...ctx} />}
         {page === 'replace' && <Replace {...ctx} />}
         {page === 'shinobi' && <ShinobiList {...ctx} />}
+        {page === 'sizzle' && <SizzleList {...ctx} />}
+        {page === 'sizzle-project' && sizzleId && <SizzleProject key={sizzleId} sizzleId={sizzleId} {...ctx} />}
         {page === 'shinobi-film' && shinobiId && <ShinobiProject key={shinobiId} projectId={shinobiId} {...ctx} />}
         {page === 'characters' && <CharacterList {...ctx} />}
         {page === 'character' && trainingId && <CharacterTrainer key={trainingId} trainingId={trainingId} {...ctx} />}
