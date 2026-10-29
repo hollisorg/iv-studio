@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     approve: call('sizzle:approve'),
     makeAssets: call('sizzle:makeAssets'),
     toShinobi: call('sizzle:toShinobi'),
+    firstCut: call('sizzle:firstCut'),
     delete: call('sizzle:delete'),
     onLog: on('sizzle:log')
   },

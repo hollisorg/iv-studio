@@ -5,12 +5,13 @@ import { fileUrl } from './edit/model'
 
 // Website sizzle: a web address in, a promo film out. IV Studio captures the site; your agent writes the
 // storyboard from it; you approve it; IV Studio makes the H3 shots, pictures, music and voice-over on this
-// PC; then your agent cuts the film in Shinobi with the site's own screens, colours and fonts.
+// PC; then IV Studio cuts a first version on the music's beat (Cut it for me), which your agent can refine in
+// Shinobi with the site's own screens, colours and fonts.
 const Z = () => window.ivstudio.sizzle
 const KIND = { h3: 'H3 shot', image: 'Picture', screen: 'Site screen', title: 'Title' }
 // An H3 prompt's shot description, without its field labels and sound fields.
 const shotText = (p) => String(p || '').replace(/^\s*integrated_multimodal_description:\s*/i, '').split(/\n\s*overall_soundscape:/i)[0].replace(/\s*There is no writing anywhere in the picture\.?/i, '')
-const STATUS = { planning: 'Storyboard', approved: 'Approved', rendering: 'Making the pieces', ready: 'Pieces ready', editing: 'Editing in Shinobi' }
+const STATUS = { planning: 'Storyboard', approved: 'Approved', rendering: 'Making the pieces', ready: 'Pieces ready', editing: 'Cut in Shinobi' }
 
 function agentMessage(s) {
   if (!s.plan)
@@ -21,7 +22,7 @@ function agentMessage(s) {
 3. Write a storyboard with save_sizzle_plan: about 20-40 s, a hook, the site's real screens, H3 shots and pictures that fit its look, titles from its own copy, music, and an end card with the logo and the web address.
 4. Show me the storyboard and wait for my OK before anything renders.`
   if (s.status === 'ready' || s.status === 'editing')
-    return `The pieces for the ${s.name} sizzle (sizzle id ${s.id}) are ready. Call sizzle_to_shinobi, read its brief, then cut the film with the shinobi tools: read_guide (agent, timeline, effects) first, preview it before rendering, render with start_render and check the result. Tell me when it's ready.`
+    return `The pieces for the ${s.name} sizzle (sizzle id ${s.id}) are ready${s.cut ? ' and IV Studio has cut a first version' : ''}. ${s.cut ? 'Look at it (get_sizzle, then the shinobi tools on its project)' : 'Call sizzle_first_cut and look at the frames it returns'}, then make it better with the shinobi tools: read_guide (agent, timeline, effects) first and read the project's iv-brief.md. Preview before rendering, render with start_render and check the result. Tell me what you changed and when it's ready.`
   return `Carry on with the ${s.name} sizzle (sizzle id ${s.id}): get_sizzle shows where it is.`
 }
 
@@ -48,7 +49,7 @@ export function SizzleList({ notify, openSizzle }) {
       <Hero title="Sizzle" kicker="A website, made into a film" />
       <p className="lede">
         Put in a web address and get a promo film.
-        <span className="lede-small dim">IV Studio captures the site as people see it. Your agent writes a storyboard from it, you approve it, and the H3 shots, pictures, music and voice-over are made on this PC. Then your agent cuts it in Shinobi with the site's own screens, colours and fonts.</span>
+        <span className="lede-small dim">IV Studio captures the site as people see it. Your agent writes a storyboard from it, you approve it, and the H3 shots, pictures, music and voice-over are made on this PC. Then IV Studio cuts it on the music's beat with the site's own screens and colours, and your agent can refine the cut in Shinobi.</span>
       </p>
       <div className="sizzle-start">
         <input value={url} placeholder="https://your-site.com" onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && !busy && capture()} />
@@ -103,9 +104,10 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
   }, [sizzleId])
   // while pieces are being made (or an agent is working on it), keep it current
   useEffect(() => {
-    const h = setInterval(load, s?.status === 'rendering' ? 8000 : 20000)
+    const fast = s?.status === 'rendering' || (s?.render?.state && !s.render.video && !s.render.error)
+    const h = setInterval(load, fast ? 8000 : 20000)
     return () => clearInterval(h)
-  }, [s?.status])
+  }, [s?.status, s?.render?.state, s?.render?.video])
   async function act(label, fn) {
     setBusy(label)
     try {
@@ -124,6 +126,7 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
   const msg = agentMessage(s)
   const made = s.scenes.filter((x) => x.kind === 'h3' || x.kind === 'image')
   const done = made.filter((x) => x.status === 'success').length
+  const rendering = s.render?.state && !s.render.video && !s.render.error
 
   return (
     <div className="sizzle">
@@ -133,7 +136,7 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
       </button>
       <p className="mono small dim sz-status">
         {STATUS[s.status] || s.status} · {s.url} · {s.format}
-        {busy && ` · ${busy}…`}
+        {busy && ` · ${busy.replace(/…$/, '')}…`}
       </p>
 
       <section className="block">
@@ -217,11 +220,17 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
                   {done} of {made.length} made · music {s.assets.music?.status || 'waiting'} · H3 shots take 3-5 min each
                 </span>
               )}
-              {s.status === 'ready' && (
-                <button className="btn btn-primary" disabled={!!busy} onClick={() => act('Sending to Shinobi', () => Z().toShinobi(s.id))}>
-                  Send to Shinobi
+              {(s.status === 'ready' || s.status === 'editing') && (
+                <button className={`btn ${s.cut ? '' : 'btn-primary'}`} disabled={!!busy || rendering} onClick={() => act('Cutting the film', () => Z().firstCut(s.id, { render: true }))}>
+                  {s.cut ? 'Cut it again' : 'Cut it for me'}
                 </button>
               )}
+              {s.status === 'ready' && (
+                <button className="btn btn-small" disabled={!!busy} onClick={() => act('Sending to Shinobi', () => Z().toShinobi(s.id))}>
+                  Send to Shinobi for my agent
+                </button>
+              )}
+              {rendering && <span className="mono small dim">Rendering in Shinobi · about 2-3 min</span>}
               {s.shinobi && (
                 <button className="btn btn-small" onClick={() => openShinobi(s.shinobi.projectId)}>
                   Open in Shinobi
@@ -234,7 +243,12 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
 
       <section className="block">
         <p className="mono label">03 · {s.final ? 'The film' : 'Your agent'}</p>
-        {s.final && <video className="sz-final" src={fileUrl(s.final)} controls playsInline />}
+        {s.final && <video key={s.final} className="sz-final" src={fileUrl(s.final)} controls playsInline />}
+        {s.cut && (
+          <p className="mono small dim">
+            First cut {new Date(s.cut.at).toLocaleString()} · {s.cut.seconds} s{s.render?.error ? ` · the render failed: ${s.render.error}` : ''}
+          </p>
+        )}
         <pre className="code shinobi-brief">{msg}</pre>
         <button className="btn btn-small" onClick={() => navigator.clipboard.writeText(msg).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}>
           {copied ? 'Copied' : 'Copy message'}

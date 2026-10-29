@@ -166,10 +166,16 @@ When the person gives you a website and wants a sizzle, promo or launch video fo
 4. `make_sizzle_assets` makes everything on this PC: about 3-5 minutes per H3 shot, seconds per picture,
    a few minutes for MiniMax music. Poll `get_sizzle` (it also moves each H3 shot from preview to its 1 MP
    finish) until status is `ready`. Look at the pieces before cutting.
-5. `sizzle_to_shinobi` puts every piece in a Shinobi project with a brief (`iv-brief.md`). Cut the film
-   there (see Shinobi above): the site's screens with push-ins, pans and screen-to-screen scrolls, kinetic titles in its colours
-   and fonts (`render_page` for custom ones), cuts on the music's beat, the end card. Render, look at the
-   frames and listen, then tell the person where the film is.
+5. `sizzle_first_cut` {sizzleId} has IV Studio cut the film itself: it imports every piece into a Shinobi
+   project (with a brief, `iv-brief.md`), cuts on the music's beat, gives screens slow push-ins and
+   whip/push transitions, sets two-tone titles in the site's colours (Barlow Condensed, sized to fit), ends
+   on the logo, the main button's words and the web address, and ends where the music does. It returns a
+   frame from every scene; `render: true` renders it too (about 2-3 min; `get_sizzle` shows the film).
+6. Make it better where it needs it, in the same Shinobi project (see Shinobi above): pans and
+   screen-to-screen scrolls, the site's own fonts, `render_page` titles, effects. Cutting again replaces
+   the timeline, so call `sizzle_first_cut` only to start over. (`sizzle_to_shinobi` imports the pieces
+   without cutting, for an agent that wants to cut from scratch.) Render, look at the frames and listen,
+   then tell the person where the film is.
 
 Only use claims the site itself makes: no invented numbers, prices, reviews, guarantees or scarcity. The
 site's screens are real captures; keep them sharp and unstretched.

@@ -365,6 +365,7 @@ app.whenReady().then(() => {
   handle('sizzle:approve', (id) => sizzles.approve(id))
   handle('sizzle:makeAssets', (id) => sizzles.makeAssets(id))
   handle('sizzle:toShinobi', (id) => sizzles.toShinobi(id))
+  handle('sizzle:firstCut', (id, opts) => sizzles.firstCut(id, opts))
   handle('sizzle:delete', (id) => sizzles.remove(id))
   handle('training:list', () => trainings.list())
   handle('training:create', (init) => trainings.create(init))

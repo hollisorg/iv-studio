@@ -634,12 +634,12 @@ tool('delete_music', "Delete a song and its file in IV Studio's music folder (Co
 // ---------- Website sizzle: a web address in, a promo film out ----------
 const sizzles = new Sizzles({ dataDir: DATA, studio, music, voices, trainings, shinobi })
 // A capture as a small JPEG for the agent to look at; screens can be tiled into one contact sheet.
-async function sizzlePicture(files, { width = 960, tile = null } = {}) {
+async function sizzlePicture(files, { width = 960, tile = null, aspect = 16 / 9 } = {}) {
   const out = path.join(os.tmpdir(), `sizzle-${process.pid}-${Date.now()}.jpg`)
   const args = ['-v', 'error', '-y', ...files.flatMap((f) => ['-i', f])]
   if (tile && files.length > 1) {
     // same-size screens, in rows of tile[0]
-    const h = Math.round((width * 9) / 16)
+    const h = Math.round(width / aspect / 2) * 2
     const scaled = files.map((_, k) => `[${k}]scale=${width}:${h}[v${k}]`).join(';')
     const layout = files.map((_, k) => `${(k % tile[0]) * width}_${Math.floor(k / tile[0]) * h}`).join('|')
     args.push('-filter_complex', `${scaled};${files.map((_, k) => `[v${k}]`).join('')}xstack=inputs=${files.length}:layout=${layout}:fill=black`)
@@ -694,9 +694,16 @@ tool('save_sizzle_plan', `Website sizzle, step 2: the storyboard. Scenes play in
 }, ({ sizzleId, plan }) => sizzleSummary(sizzles.savePlan(sizzleId, plan)))
 tool('approve_sizzle_plan', 'Record that the person approved the storyboard. Only call this after they said yes to it (or approve it on the Sizzle page themselves).', { sizzleId: z.string() }, ({ sizzleId }) => sizzleSummary(sizzles.approve(sizzleId)))
 tool('make_sizzle_assets', 'Website sizzle, step 3: make the pieces on this PC from the approved storyboard: the voice-over, Z-Image pictures, the music, and one H3 preview per shot (each finished at 1 MP once its preview is done). Free and local, but it takes the GPU for a while (about 3-5 min per H3 shot). Poll get_sizzle until status is ready.', { sizzleId: z.string() }, async ({ sizzleId }) => sizzleSummary(await sizzles.makeAssets(sizzleId)))
-tool('sizzle_to_shinobi', "Website sizzle, step 4: put every piece (shots, pictures, the site's screens and logo, music, voice-over) into a Shinobi project with a brief (iv-brief.md: the site's copy, colours, fonts, the storyboard and how to cut it). Then cut the film with the shinobi tools (read_guide agent and timeline first), render it and check it.", { sizzleId: z.string() }, async ({ sizzleId }) => {
+tool('sizzle_to_shinobi', "Website sizzle, step 4: put every piece (shots, pictures, the site's screens and logo, music, voice-over) into a Shinobi project with a brief (iv-brief.md: the site's copy, colours, fonts, the storyboard and how to cut it). Use it to cut from scratch with the shinobi tools (read_guide agent and timeline first); sizzle_first_cut does this and cuts a first version for you.", { sizzleId: z.string() }, async ({ sizzleId }) => {
   const r = await sizzles.toShinobi(sizzleId)
   return { ...sizzleSummary(r), shinobi: r.shinobi, brief: r.brief }
+})
+sizzleTool('sizzle_first_cut', "Website sizzle, step 5: IV Studio cuts the film itself from the approved storyboard and saves it as the Shinobi project's timeline: cuts on the music's beat, the site's screens with slow push-ins, two-tone titles in the site's colours (Barlow Condensed), and an end card on the logo, the main button's words and the web address, ending where the music ends. Returns a frame from every scene to look at. render: true renders it too (about 2-3 min; get_sizzle shows the film when it's done). Then refine it with the shinobi tools if anything needs work; cutting again replaces the timeline.", { sizzleId: z.string(), render: z.boolean().default(false).describe('Render the film as well') }, async ({ sizzleId, render }) => {
+  const r = await sizzles.firstCut(sizzleId, { render })
+  const f = SIZZLE_FORMATS[r.format]
+  const frames = (r.cut.previews || []).filter((x) => fs.existsSync(x))
+  const pictures = frames.length ? [await sizzlePicture(frames, { width: f.width >= f.height ? 480 : 270, tile: [4, Math.ceil(frames.length / 4)], aspect: f.width / f.height })] : []
+  return { pictures, ...sizzleSummary(r), shinobi: r.shinobi, warnings: r.warnings }
 })
 tool('delete_sizzle', 'Delete a sizzle and its capture (renders, songs and the Shinobi film stay). Ask the person first.', { sizzleId: z.string() }, ({ sizzleId }) => sizzles.remove(sizzleId))
 

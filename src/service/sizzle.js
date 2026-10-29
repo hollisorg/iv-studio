@@ -1,15 +1,18 @@
 // Website sizzle: a web address in, a short promo film out. IV Studio captures the site (sitecapture.js), an
 // agent writes the storyboard from what's actually on it, the person approves it, and IV Studio makes the
 // pieces on this PC: H3 shots (one preview each, finished at 1 MP), Z-Image pictures, a MiniMax or
-// ACE-Step track and, optionally, a voice-over. Then it hands everything to Shinobi with a brief, where the
-// agent cuts the film: the site's own screens, colours and fonts, typography and motion, on the beat.
+// ACE-Step track and, optionally, a voice-over. Then it hands everything to Shinobi with a brief and cuts a
+// first version itself (sizzlecut.js), which the agent can refine: the site's own screens, colours,
+// typography and motion, on the beat.
 //   sizzle/<id>/sizzle.json  the project; site/ the capture
 // Nothing renders before the storyboard is approved, and the brief tells the agent to use only claims the
 // site itself makes.
-import { randomUUID } from 'node:crypto'
+import { spawn } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { captureSite } from './sitecapture.js'
+import { firstCut, fontMetrics } from './sizzlecut.js'
 
 export const SIZZLE_FORMATS = { '16:9': { width: 1920, height: 1088 }, '9:16': { width: 1088, height: 1920 }, '1:1': { width: 1440, height: 1440 } }
 export const SCENE_KINDS = ['h3', 'image', 'screen', 'title']
@@ -275,6 +278,91 @@ export class Sizzles {
     return lines.filter((l) => typeof l === 'string' && l).join('\n').replace(/\n(#+ )/g, '\n\n$1') + '\n'
   }
 
+  // ---------- 5 the first cut ----------
+  // IV Studio cuts the film itself (sizzlecut.js) from the approved storyboard and the music's beat, saves it as
+  // the Shinobi project's timeline, and looks at a frame from every scene. render: true renders it too.
+  // An agent can refine the cut with the shinobi tools afterwards; cutting again replaces the timeline.
+  async firstCut(id, { render = false } = {}) {
+    let s = this.get(id)
+    if (!s.shinobi) {
+      await this.toShinobi(id)
+      s = this.get(id)
+    }
+    const projectId = s.shinobi.projectId
+    const dir = this.shinobi.projectDir(projectId)
+    const fontFile = path.join(this.shinobi.resourcesDir, 'fonts', 'BarlowCondensed-SemiBold.ttf')
+    const project = () => readJson(path.join(dir, 'project.json'), { assets: [] })
+    if (!project().assets.some((a) => a.kind === 'font' && a.name === path.basename(fontFile))) await this.shinobi.call('import_media', { project_id: projectId, source: fontFile, rights: 'licensed_font' })
+    const assets = project().assets
+    // The project's media copies are matched to the sizzle's files by their SHA-256. Shinobi converts sound
+    // on import ("<name> excerpt", a WAV), so those are matched by name.
+    const bySha = new Map(assets.map((a) => [a.sha256, a]))
+    const assetOf = (file) => {
+      if (!file || !fs.existsSync(file)) return null
+      const stem = path.parse(file).name
+      return bySha.get(createHash('sha256').update(fs.readFileSync(file)).digest('hex')) || assets.find((a) => a.kind === 'audio' && (a.name === stem || a.name.startsWith(`${stem} `)))
+    }
+    const capture = (name) => s.site.captures.find((c) => c.name === name)?.file || s.site.images[Number(String(name).split('-')[1]) - 1]?.file
+    const media = {}
+    for (const sc of s.plan.scenes) {
+      const file = sc.kind === 'screen' ? capture(sc.capture) : s.assets[sc.id]?.file
+      const a = sc.kind === 'title' ? null : assetOf(file)
+      if (sc.kind !== 'title' && !a) throw new Error(`The ${sc.id} scene's piece isn't in the Shinobi project${s.assets[sc.id]?.status && s.assets[sc.id].status !== 'success' ? ` (it ${s.assets[sc.id].status === 'error' ? 'failed' : `is ${s.assets[sc.id].status}`})` : ''}.`)
+      if (a) media[sc.id] = a
+    }
+    const font = assets.find((a) => a.kind === 'font' && a.name === path.basename(fontFile))
+    const musicAsset = assetOf(s.assets.music?.file)
+    let music = null
+    let beats = []
+    if (musicAsset) {
+      this.onLog('Finding the beat…')
+      const au = await this.shinobi.call('analyze_audio', { project_id: projectId, source: path.join(dir, musicAsset.path), fps: 30 })
+      beats = au.beats || au.beat_times || au.grid?.beats || []
+      const duration = musicAsset.duration || (await this.shinobi.duration(s.assets.music.file))
+      music = { assetId: musicAsset.id, duration, end: await this.silentFrom(s.assets.music.file, duration) }
+    }
+    const voiceover = []
+    for (const l of s.assets.voiceover?.lines || []) {
+      const a = assetOf(l.file)
+      if (a) voiceover.push({ assetId: a.id, duration: l.duration || a.duration || (await this.shinobi.duration(l.file)) })
+    }
+    const host = new URL(s.url).hostname.replace(/^www\./, '')
+    const cut = firstCut({ scenes: s.plan.scenes, format: SIZZLE_FORMATS[s.format], colors: s.site.colors, media, logo: assetOf(capture('logo')), music, voiceover, beats, site: { name: s.name, host, ctas: s.site.ctas }, font: { family: 'Barlow Condensed', url: font.path, measure: fontMetrics(fontFile) } })
+    const check = await this.shinobi.call('validate_timeline', { project_id: projectId, timeline: cut.timeline })
+    if (check.ok === false || check.valid === false) throw new Error(`Shinobi turned the cut down: ${JSON.stringify(check.errors || check).slice(0, 400)}`)
+    const current = await this.shinobi.call('get_project', { project_id: projectId })
+    await this.shinobi.call('save_timeline', { project_id: projectId, timeline: cut.timeline, revision: current.revision ?? null })
+    this.onLog('Looking at the frames…')
+    const pv = await this.shinobi.call('preview_timeline', { project_id: projectId, frames: cut.checkFrames })
+    let job = null
+    if (render) {
+      this.onLog('Rendering in Shinobi…')
+      job = await this.shinobi.call('start_render', { project_id: projectId, request_id: `iv-sizzle-${s.id}-${Date.now().toString(36)}` })
+    }
+    s = this.get(id)
+    s.cut = { at: now(), seconds: cut.seconds, scenes: cut.bounds.slice(0, -1).map((b, k) => ({ id: s.plan.scenes[k].id, at: +b.toFixed(2), seconds: +(cut.bounds[k + 1] - b).toFixed(2) })), palette: cut.palette, previews: pv.preview_images || [], renderJob: job?.job_id || job?.id || null }
+    s.status = 'editing'
+    this.write(s)
+    return { ...this.view(s), warnings: check.warnings || [] }
+  }
+
+  // Where the music falls silent for good (ffmpeg silencedetect), when that's before its end; else null.
+  silentFrom(file, duration) {
+    return new Promise((resolve) => {
+      const p = spawn(path.join(this.shinobi.ffmpegDir, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'), ['-hide_banner', '-nostats', '-i', file, '-af', 'silencedetect=noise=-45dB:d=0.4', '-f', 'null', '-'], { windowsHide: true })
+      let err = ''
+      p.stderr.on('data', (d) => (err += d))
+      p.on('error', () => resolve(null))
+      p.on('close', () => {
+        const starts = [...err.matchAll(/silence_start: ([\d.]+)/g)].map((m) => Number(m[1]))
+        const ends = [...err.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]))
+        // a silence that never ends (or ends at the file's end) is the tail
+        const tail = starts.at(-1)
+        resolve(tail !== undefined && (ends.length < starts.length || ends.at(-1) > duration - 0.1) && tail > duration * 0.5 ? tail : null)
+      })
+    })
+  }
+
   // ---------- views ----------
   finalOf(s) {
     if (!s.shinobi) return null
@@ -291,6 +379,11 @@ export class Sizzles {
       const capture = sc.kind === 'screen' ? s.site.captures.find((c) => c.name === sc.capture)?.file || s.site.images[Number(String(sc.capture).split('-')[1]) - 1]?.file : null
       return { ...sc, status: sc.kind === 'screen' || sc.kind === 'title' ? 'ready' : a?.status || 'waiting', file: a?.file || capture || null, preview: a?.preview || null, error: a?.error || null }
     })
-    return { ...s, scenes, final: this.finalOf(s) }
+    let render = null
+    try {
+      const r = s.shinobi && this.shinobi.renders(s.shinobi.projectId)[0]
+      if (r) render = { state: r.state, video: r.video, error: r.error, createdAt: r.createdAt }
+    } catch {}
+    return { ...s, scenes, final: this.finalOf(s), render }
   }
 }
