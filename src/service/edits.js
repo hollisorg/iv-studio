@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { clipEnd, clipLength } from './timeline.js'
 
 export const TRACKS = [
   { id: 'V2', kind: 'video', label: 'V2' },
@@ -34,8 +35,6 @@ const readJson = (file, fallback) => {
 }
 const now = () => new Date().toISOString()
 
-export const clipLength = (c) => Math.max(0, c.out - c.in)
-export const clipEnd = (c) => c.start + clipLength(c)
 export const editLength = (e) => e.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0)
 
 export class Edits {

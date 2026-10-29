@@ -3,7 +3,7 @@
 
 const TEMPLATE_SKIP = new Set(['PixaromaGroupSwitch', 'PixaromaLabel', 'MarkdownNote', 'Note'])
 
-function comboOptions(info, cls, input) {
+export function comboOptions(info, cls, input) {
   const spec = info[cls]?.input?.required?.[input] || info[cls]?.input?.optional?.[input]
   if (!spec) return null
   return Array.isArray(spec[0]) ? spec[0] : spec[1]?.options || []

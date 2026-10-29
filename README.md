@@ -119,7 +119,8 @@ and a ComfyUI recent enough for MiniMax H3. You'll need about 60 GB free for the
 ## Agents (MCP)
 
 IV Studio includes a local MCP server (stdio). It uses the same service, projects and results as
-the window, so Claude Code or any other MCP client can plan, hunt, finish and collect shots. The
+the window, so Claude Code or any other MCP client can do nearly everything a person can: render shots
+and sequences, cut them together on the timeline and export, and manage characters and models. The
 command for your install is under **Settings → Agents (MCP)**. For a development checkout:
 
 ```
@@ -134,6 +135,16 @@ Tools:
   `finish_shot`, `retake`, `render_out`.
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
 - **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
+- **Library:** `list_renders` (every render, with keys for the editor), `rename_project`, `delete_sequence`.
+- **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`
+  (files or renders, optionally appended end to end), `edit_timeline` (add, move, trim, split, ripple
+  delete, fades, volume, titles, all checked before anything changes), `grab_frame` (a picture of any
+  moment, so an agent can check its cut), `export_edit`, `get_edit_export`, `cancel_edit_export`.
+- **Models and characters:** `list_h3_models`, `set_workflow_model`, `list_choices` (LoRAs and RefMods),
+  `save_character`, `delete_character`.
+
+An edit open in the window reloads when an agent changes it, and Ctrl+Z puts the person's version
+back. The MCP server always renders on the local ComfyUI (the cloud token stays with the app).
 
 `write_prompt` uses the local writer unless `COMFY_ORG_API_KEY` is set in the server's environment.
 
@@ -152,8 +163,11 @@ Tests are in `test/`:
 - `graph-parity.mjs`: the headless graph matches the ComfyUI GUI export for 32 switch states.
 - `service-e2e.mjs`: renders previews and a finish on a live ComfyUI.
 - `mcp-smoke.mjs`: runs the MCP server over stdio.
+- `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
+- `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
+- `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
 - `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
-- `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out.
+- `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out (queues real GPU renders).
 - `prompt-writer.mjs`: writes a prompt and a two-shot story with the local writer.
 
 Data (projects, jobs, characters, settings) is stored in `%APPDATA%\IV Studio`. Renders are saved

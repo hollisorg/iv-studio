@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     addOutput: call('edits:addOutput'),
     export: call('edits:export'),
     cancelExport: call('edits:cancelExport'),
-    onProgress: on('edits:progress')
+    onProgress: on('edits:progress'),
+    onChanged: on('edits:changed')
   },
   cloud: {
     status: call('cloud:status'),

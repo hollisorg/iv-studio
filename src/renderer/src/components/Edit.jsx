@@ -249,6 +249,25 @@ export function EditEditor({ editId, notify, go }) {
     apply({ ...e, ...h.future[0] })
   }
 
+  // An agent changed this edit through the MCP server: show its version, with ours one undo away.
+  useEffect(
+    () =>
+      window.ivstudio.edits.onChanged(async ({ id }) => {
+        if (id !== editId) return
+        const fresh = await window.ivstudio.edits.get(id)
+        const e = editRef.current
+        const same = (k) => JSON.stringify(fresh[k]) === JSON.stringify(e[k])
+        if (!e || ['clips', 'media', 'name', 'settings'].every(same)) return
+        clearTimeout(saveTimer.current)
+        histRef.current = { past: [...histRef.current.past.slice(-99), { clips: e.clips, media: e.media }], future: [] }
+        setHist(histRef.current)
+        editRef.current = fresh
+        setEdit(fresh)
+        notify('An agent changed this edit. Ctrl+Z puts it back.')
+      }),
+    [editId]
+  )
+
   const length = edit ? editLength(edit.clips) : 0
   const seek = (t) => {
     setPlaying(false)

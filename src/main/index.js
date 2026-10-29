@@ -127,23 +127,7 @@ function createWindow() {
   else win.loadFile(path.join(__dirname, '../renderer/index.html'))
 }
 
-// An output as a file on this PC: its own path when local, else downloaded from the (cloud)
-// ComfyUI into Videos\IV Studio under the same name.
-async function localCopy(file) {
-  const p = typeof file === 'string' ? file : file?.path
-  if (p && fs.existsSync(p)) return p
-  if (!file?.url) throw new Error('That file is not on this PC.')
-  const u = new URL(file.url)
-  const dest = path.join(app.getPath('videos'), 'IV Studio', u.searchParams.get('filename'))
-  if (!fs.existsSync(dest)) {
-    const res = await fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers() })
-    if (!res.ok) throw new Error(`Download failed (${res.status}).`)
-    fs.mkdirSync(path.dirname(dest), { recursive: true })
-    fs.writeFileSync(`${dest}.part`, Buffer.from(await res.arrayBuffer()))
-    fs.renameSync(`${dest}.part`, dest)
-  }
-  return dest
-}
+const localCopy = (file) => studio.localCopy(file, path.join(app.getPath('videos'), 'IV Studio'))
 
 // Errors cross IPC as plain messages so the window can show them.
 function handle(channel, fn) {
@@ -205,32 +189,42 @@ app.whenReady().then(() => {
   handle('edits:list', () => edits.list())
   handle('edits:get', (id) => edits.get(id))
   handle('edits:create', (name) => edits.create(name))
-  handle('edits:save', (id, patch) => edits.save(id, patch))
+  // An agent (the MCP server) can change edits and Settings -> Models too: an open edit reloads in the
+  // window, and renders pick up the models. Saves from the window itself are not echoed back.
+  const ownWrites = new Map() // edit id -> updatedAt of the window's last save
+  handle('edits:save', (id, patch) => {
+    const e = edits.save(id, patch)
+    ownWrites.set(id, e.updatedAt)
+    return e
+  })
+  const settle = new Map()
+  const later = (key, fn) => {
+    clearTimeout(settle.get(key))
+    settle.set(key, setTimeout(fn, 200))
+  }
+  fs.mkdirSync(edits.dir, { recursive: true })
+  fs.watch(edits.dir, (_, name) => {
+    if (!name?.endsWith('.json')) return
+    const id = name.slice(0, -5)
+    later(id, () => {
+      let e
+      try {
+        e = edits.get(id)
+      } catch {
+        return
+      }
+      if (e.updatedAt === ownWrites.get(id)) return
+      ownWrites.set(id, e.updatedAt)
+      send('edits:changed', { id, updatedAt: e.updatedAt })
+    })
+  })
+  fs.watch(DATA, (_, name) => name === 'settings.json' && later('settings', () => (studio.models = readSettings(DATA).models || {})))
   handle('edits:delete', (id) => edits.remove(id))
   handle('edits:pickFiles', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'wav', 'mp3', 'm4a', 'flac', 'ogg', 'png', 'jpg', 'jpeg', 'webp'] }] })
     return Promise.all((r.canceled ? [] : r.filePaths).map((f) => edits.addMedia(f)))
   })
-  // IV Studio's own renders, ready to drop on the timeline: finals and previews of every shot,
-  // and every sequence version and final.
-  handle('edits:library', () => {
-    const items = []
-    for (const p of studio.listProjects()) {
-      for (const j of studio.listJobs(p.id)) {
-        for (const o of j.outputs || []) {
-          if (!['final', 'preview'].includes(o.kind)) continue
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
-        }
-      }
-    }
-    for (const sq of studio.listSequences()) {
-      const v = studio.sequenceView(sq.id)
-      for (const x of v.versions) if (x.file) items.push({ key: `${sq.id}:${x.id}`, label: `${sq.name} · ${x.label}`, group: 'Sequences', at: x.createdAt, file: x.file })
-      for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file })
-    }
-    const seen = new Set() // a finish job lists its picked preview again
-    return items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))
-  })
+  handle('edits:library', () => studio.library())
   handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
   handle('edits:export', (id) => edits.export(id, path.join(app.getPath('videos'), 'IV Studio', 'Edits'), (p) => send('edits:progress', { id, progress: p })))
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
@@ -323,16 +317,7 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
-  // H3 models the connected ComfyUI can load, and what each workflow uses by default.
-  handle('models:h3', async () => {
-    const spec = (await studio.comfy.objectInfo('UNETLoader')).UNETLoader.input.required.unet_name
-    const all = (Array.isArray(spec[0]) ? spec[0] : spec[1]?.options) || []
-    const t = studio.template
-    return {
-      models: all.filter((n) => /h3|minimax/i.test(n)),
-      defaults: { text: t['101'].inputs.unet_name, frames: t['201'].inputs.unet_name, reference: t['301'].inputs.unet_name, continue: t['601'].inputs.unet_name, take: t['301'].inputs.unet_name, retake: t['301'].inputs.unet_name }
-    }
-  })
+  handle('models:h3', () => studio.h3Models())
   handle('models:status', () => installer.status())
   handle('models:download', (ids) => installer.enqueue(ids))
   handle('models:cancel', (id) => installer.cancel(id))

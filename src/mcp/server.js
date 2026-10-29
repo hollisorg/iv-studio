@@ -3,18 +3,30 @@
 //   ELECTRON_RUN_AS_NODE=1 "IV Studio.exe" <resources>/app.asar/out/main/mcp.js
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import ffmpegStatic from 'ffmpeg-ffprobe-static'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { z } from 'zod'
-import { dataDir, readSettings, resourcesDir } from '../service/paths'
+import { Edits, editLength, FORMATS, TRACKS } from '../service/edits'
+import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
+import { applyOps, clipEnd } from '../service/timeline'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' })
+// Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
+const VIDEOS = path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
+// Packaged, the ffmpeg binaries sit outside the asar archive.
+const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
 // MCP structured results must be objects, so lists go out as { items }.
 const ok = (value) => {
+  if (value?.image) return { content: [{ type: 'image', data: value.image, mimeType: 'image/png' }, { type: 'text', text: value.caption }] }
   const structured = value && typeof value === 'object' && !Array.isArray(value) ? value : { items: value }
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: structured }
 }
@@ -133,6 +145,190 @@ tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that ma
   }
   if (projectId) return studio.listJobs(projectId).map((j) => ({ job: j.id, kind: j.kind, status: j.status, resolved: j.plan.resolved, outputs: j.outputs }))
   throw new Error('Give jobId or projectId.')
+})
+
+// ---------- projects and sequences ----------
+tool('rename_project', 'Rename a project in the library.', { projectId: z.string(), name: z.string().min(1) }, ({ projectId, name }) => studio.renameProject(projectId, name))
+tool('delete_sequence', 'Delete a sequence and its record of versions. Rendered video files stay on disk. Ask the person first.', { sequenceId: z.string() }, ({ sequenceId }) => studio.deleteSequence(sequenceId))
+
+// ---------- renders library ----------
+tool('list_renders', 'Every IV Studio render (shot finals and previews, sequence versions and finals), newest first. Pass a key to add_media to put one on a timeline.', { limit: z.number().int().min(1).max(500).default(50) }, ({ limit }) =>
+  studio.library().slice(0, limit).map(({ key, label, group, at, file }) => ({ key, label, group, at, path: file.path || null, url: file.url || null }))
+)
+
+// ---------- edits (the timeline editor) ----------
+const edits = new Edits({
+  dataDir: DATA,
+  ffmpeg: unpacked(ffmpegStatic.ffmpegPath),
+  ffprobe: unpacked(ffmpegStatic.ffprobePath),
+  fontFile: path.join(resourcesDir(), 'fonts', 'BarlowCondensed-SemiBold.ttf')
+})
+const exporting = new Map() // edit id -> { state, progress, file, error, startedAt }
+
+// An edit as an agent reads it: media by id, then each track's clips in time order with the media name.
+function describe(e) {
+  const tracks = Object.fromEntries(
+    TRACKS.map((t) => [
+      t.id,
+      e.clips
+        .filter((c) => c.track === t.id)
+        .sort((a, b) => a.start - b.start)
+        .map((c) => ({ clip: c.id, ...(c.text ? { title: c.text } : { media: c.media, name: e.media[c.media]?.name }), start: c.start, end: +clipEnd(c).toFixed(3), in: c.in, out: c.out, fadeIn: c.fadeIn, fadeOut: c.fadeOut, ...(c.text ? {} : { volume: c.volume ?? 1, muted: !!c.muted }) }))
+    ])
+  )
+  return { id: e.id, name: e.name, settings: e.settings, seconds: +editLength(e).toFixed(3), media: Object.values(e.media).map(({ id, name, kind, duration, width, height, hasAudio, path: p }) => ({ id, name, kind, duration, width, height, hasAudio, path: p })), tracks, exports: e.exports || [] }
+}
+
+const LIVE = 'If the edit is open in the IV Studio window, it reloads there and the person can undo your change with Ctrl+Z.'
+tool('list_edits', 'Edits (timelines in the Edit page), newest first.', {}, () => edits.list())
+tool('get_edit', 'An edit: its media (with ids), each track\'s clips in order (clip ids, start/end on the timeline, in/out in the media, fades, volume), settings and past exports. Tracks: V2 is drawn over V1; T1 holds titles; A1/A2 are sound. Video clips play their own sound too unless muted.', { editId: z.string() }, ({ editId }) => describe(edits.get(editId)))
+tool('create_edit', 'Create an empty edit.', { name: z.string().default('Untitled edit'), format: z.enum(Object.keys(FORMATS)).default('1080p'), fps: z.number().int().min(12).max(60).default(24) }, ({ name, format, fps }) => {
+  const e = edits.create(name)
+  return describe(edits.save(e.id, { settings: { format, fps } }))
+})
+tool('set_edit_settings', `Rename an edit or change its export format (${Object.entries(FORMATS).map(([k, f]) => `${k} = ${f.label}`).join(', ')}) and frame rate. ${LIVE}`, {
+  editId: z.string(),
+  name: z.string().min(1).optional(),
+  format: z.enum(Object.keys(FORMATS)).optional(),
+  fps: z.number().int().min(12).max(60).optional()
+}, ({ editId, name, format, fps }) => {
+  const e = edits.get(editId)
+  return describe(edits.save(editId, { name, settings: { ...e.settings, ...(format && { format }), ...(fps && { fps }) } }))
+})
+tool('delete_edit', 'Delete an edit (the timeline only: its media files and exported videos stay). Ask the person first.', { editId: z.string() }, ({ editId }) => edits.remove(editId))
+tool('add_media', `Add files to an edit's media bin: local video, picture or audio paths, and/or IV Studio renders by key (list_renders; cloud renders download to Videos\\IV Studio). Returns the new media ids. With append, each also goes on the end of V1 (video, pictures) or A1 (sound), in the order given. ${LIVE}`, {
+  editId: z.string(),
+  files: z.array(z.string()).optional().describe('Absolute paths on this PC'),
+  renders: z.array(z.string()).optional().describe('Keys from list_renders'),
+  append: z.boolean().default(false)
+}, async ({ editId, files = [], renders = [], append }) => {
+  const e = edits.get(editId)
+  const lib = renders.length ? studio.library() : []
+  const added = []
+  for (const f of files) added.push(await edits.addMedia(f))
+  for (const key of renders) {
+    const item = lib.find((i) => i.key === key)
+    if (!item) throw new Error(`No render ${key}. list_renders gives the keys.`)
+    added.push(await edits.addMedia(await studio.localCopy(item.file, VIDEOS), { type: 'iv', label: item.label }))
+  }
+  if (!added.length) throw new Error('Give files or renders.')
+  const media = { ...e.media, ...Object.fromEntries(added.map((m) => [m.id, m])) }
+  const { clips, results } = append ? applyOps({ ...e, media }, added.map((m) => ({ op: 'add_clip', media: m.id }))) : { clips: e.clips, results: [] }
+  edits.save(editId, { media, clips })
+  return { media: added.map(({ id, name, kind, duration, width, height, hasAudio }) => ({ id, name, kind, duration, width, height, hasAudio })), placed: results }
+})
+
+const op = {
+  add_clip: z.object({ op: z.literal('add_clip'), media: z.string().describe('Media id'), track: z.enum(['V1', 'V2', 'A1', 'A2']).optional().describe('Default V1, or A1 for sound'), start: z.number().min(0).optional().describe('Timeline seconds; default = the end of that track'), in: z.number().min(0).optional().describe('Where in the media to start (default 0)'), out: z.number().optional().describe('Where in the media to stop (default its end; pictures 4 s)'), duration: z.number().optional().describe('Instead of out: how long the clip plays'), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional() }),
+  add_title: z.object({ op: z.literal('add_title'), content: z.string(), start: z.number().min(0).default(0), duration: z.number().min(0.1).default(3), size: z.number().min(2).max(30).optional().describe('Text height as % of the frame (default 8)'), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional().describe('#rrggbb'), box: z.boolean().optional().describe('Dark box behind the text'), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional() }),
+  update_clip: z.object({ op: z.literal('update_clip'), clip: z.string(), track: z.enum(['V1', 'V2', 'T1', 'A1', 'A2']).optional(), start: z.number().min(0).optional().describe('Move it on the timeline'), in: z.number().min(0).optional().describe('Trim the head (media seconds)'), out: z.number().optional().describe('Trim the tail (media seconds)'), duration: z.number().optional(), fadeIn: z.number().min(0).optional(), fadeOut: z.number().min(0).optional(), volume: z.number().min(0).max(4).optional(), muted: z.boolean().optional(), content: z.string().optional().describe('Titles only, as are size, position, color, box'), size: z.number().optional(), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional(), box: z.boolean().optional() }),
+  split_clip: z.object({ op: z.literal('split_clip'), clip: z.string(), at: z.number().describe('Timeline seconds, inside the clip') }),
+  remove_clip: z.object({ op: z.literal('remove_clip'), clip: z.string(), ripple: z.boolean().default(false).describe('Close the gap: later clips on the same track move left') }),
+  remove_media: z.object({ op: z.literal('remove_media'), media: z.string().describe('Takes it out of the bin with all its clips (the file stays)') }),
+  clear: z.object({ op: z.literal('clear'), track: z.enum(['V1', 'V2', 'T1', 'A1', 'A2']).optional().describe('One track, or every clip when left out') })
+}
+tool('edit_timeline', `Change an edit's timeline with a list of operations, applied in order: add_clip, add_title, update_clip (move, trim, change track, fades, volume, mute, title text), split_clip, remove_clip (optionally ripple), remove_media, clear. All are checked against the media first; if one fails, nothing changes. Returns what each did and the edit afterwards. ${LIVE}`, {
+  editId: z.string(),
+  ops: z.array(z.discriminatedUnion('op', Object.values(op))).min(1)
+}, ({ editId, ops }) => {
+  const e = edits.get(editId)
+  const { clips, media, results } = applyOps(e, ops)
+  return { results, edit: describe(edits.save(editId, { clips, media })) }
+})
+
+tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye: either an edit at a timeline time (the top visible video clip, without titles) or any video file at a time.', {
+  editId: z.string().optional(),
+  file: z.string().optional().describe('Instead of editId: an absolute video path'),
+  at: z.number().min(0).describe('Seconds'),
+  width: z.number().int().min(160).max(1920).default(640)
+}, async ({ editId, file, at, width }) => {
+  let src = file
+  let t = at
+  if (editId) {
+    const e = edits.get(editId)
+    const c = ['V2', 'V1'].flatMap((tr) => e.clips.filter((x) => x.track === tr && at >= x.start && at < clipEnd(x)))[0]
+    if (!c) throw new Error(`Nothing on V1 or V2 at ${at} s.`)
+    src = e.media[c.media].path
+    t = e.media[c.media].kind === 'image' ? 0 : c.in + (at - c.start)
+  }
+  if (!src || !fs.existsSync(src)) throw new Error('Give editId or an existing file.')
+  const png = await new Promise((resolve, reject) => {
+    const p = spawn(edits.ffmpeg, ['-v', 'error', '-ss', t.toFixed(3), '-i', src, '-frames:v', '1', '-vf', `scale=${width}:-2`, '-f', 'image2pipe', '-c:v', 'png', 'pipe:1'], { windowsHide: true })
+    const out = []
+    p.stdout.on('data', (d) => out.push(d))
+    p.on('error', reject)
+    p.on('close', (code) => (code === 0 && out.length ? resolve(Buffer.concat(out)) : reject(new Error(`No frame at ${t.toFixed(2)} s in ${path.basename(src)}.`))))
+  })
+  return { image: png.toString('base64'), caption: `${path.basename(src)} at ${t.toFixed(2)} s` }
+})
+
+tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\IV Studio\\Edits, or outDir. Returns at once; follow with get_edit_export. The export runs inside this MCP server, so it stops if the server stops.`, {
+  editId: z.string(),
+  outDir: z.string().optional()
+}, ({ editId, outDir }) => {
+  if (exporting.get(editId)?.state === 'running') throw new Error('This edit is already exporting.')
+  const e = edits.get(editId)
+  if (!e.clips.length) throw new Error('The timeline is empty.')
+  const st = { state: 'running', progress: 0, file: null, error: null, startedAt: new Date().toISOString(), seconds: +editLength(e).toFixed(2) }
+  exporting.set(editId, st)
+  edits
+    .export(editId, outDir || path.join(VIDEOS, 'Edits'), (p) => (st.progress = +p.toFixed(3)))
+    .then((f) => Object.assign(st, { state: 'done', progress: 1, file: f }))
+    .catch((err) => Object.assign(st, { state: /cancel/i.test(err.message) ? 'cancelled' : 'failed', error: err.message }))
+  return st
+})
+tool('get_edit_export', 'Progress of an export started with export_edit (state running, done, failed or cancelled; file when done).', { editId: z.string() }, ({ editId }) => {
+  const st = exporting.get(editId)
+  if (!st) throw new Error('No export started for this edit from this MCP server. Past exports are in get_edit.')
+  return st
+})
+tool('cancel_edit_export', 'Stop an export started with export_edit.', { editId: z.string() }, ({ editId }) => ({ cancelled: edits.cancelExport(editId) }))
+
+// ---------- models and characters ----------
+const WORKFLOWS = ['text', 'frames', 'reference', 'continue', 'take', 'retake']
+tool('list_h3_models', 'H3 models the ComfyUI can load, each workflow\'s built-in default, and the model chosen in Settings for each (text, frames, reference, continue, take = Sequences one take, retake). Some models suit realism, others animation.', {}, async () => {
+  const { models, defaults } = await studio.h3Models()
+  return { models, defaults, chosen: readSettings(DATA).models || {} }
+})
+tool('set_workflow_model', 'Choose the H3 model one workflow uses (Settings -> Models). model null = back to the default. Applies to this MCP server at once and to the app window from its next render.', {
+  workflow: z.enum(WORKFLOWS),
+  model: z.string().nullable()
+}, async ({ workflow, model }) => {
+  if (model) {
+    const { models } = await studio.h3Models()
+    if (!models.includes(model)) throw new Error(`ComfyUI has no H3 model "${model}". list_h3_models shows them.`)
+  }
+  const next = { ...(readSettings(DATA).models || {}) }
+  if (model) next[workflow] = model
+  else delete next[workflow]
+  studio.models = writeSettings({ models: next }, DATA).models
+  return { chosen: studio.models }
+})
+tool('list_choices', 'Character LoRAs and RefMods the ComfyUI can load (for save_character and the refmods of a request).', {}, () => studio.choices())
+tool('save_character', 'Add a character preset, or update one by id. The LoRA must be a name from list_choices. Only invented characters, or real people who agreed to it.', {
+  id: z.string().regex(/^[a-z0-9_-]{2,32}$/).describe('Short id, e.g. "tess"'),
+  name: z.string().min(1).optional(),
+  lora: z.string().optional(),
+  strength: z.number().min(0).max(1.5).optional(),
+  trigger: z.string().min(2).optional().describe('The trigger word the LoRA was trained on; prompts write {char} for it'),
+  voiceRefmod: z.string().nullable().optional(),
+  visualRefmod: z.string().nullable().optional()
+}, async ({ id, ...fields }) => {
+  const list = studio.characters()
+  const old = list.find((c) => c.id === id)
+  const next = { ...(old || { strength: 0.8 }), id, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) }
+  for (const k of ['name', 'lora', 'trigger']) if (!next[k]) throw new Error(`A new character needs ${k}.`)
+  if (fields.lora) {
+    const { loras } = await studio.choices()
+    if (!loras.some((l) => l.replace(/\\/g, '/') === fields.lora.replace(/\\/g, '/'))) throw new Error(`ComfyUI has no LoRA "${fields.lora}". list_choices shows them.`)
+  }
+  studio.saveCharacters(old ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
+  return next
+})
+tool('delete_character', 'Remove a character preset (the LoRA file stays). Ask the person first.', { id: z.string() }, ({ id }) => {
+  const list = studio.characters()
+  if (!list.some((c) => c.id === id)) throw new Error(`No character ${id}.`)
+  return studio.saveCharacters(list.filter((c) => c.id !== id))
 })
 
 server.connect(new StdioServerTransport()).catch((err) => {

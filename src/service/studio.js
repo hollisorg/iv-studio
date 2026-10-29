@@ -10,7 +10,7 @@ import { planFinish, planPreviews } from './plan.js'
 import { adaptGraph, capabilities } from './remote.js'
 import { contextIrGraph, fromContextIr, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
-import { checkSetup } from './setup.js'
+import { checkSetup, comboOptions } from './setup.js'
 
 const DEFAULT_CHARACTERS = [
   { id: 'tess', name: 'Tess Marlow', lora: 'MiniMax H3\\tess\\tess_mmh3-000040.safetensors', strength: 0.8, trigger: 't3ss4', voiceRefmod: 'characters/tess_audio', visualRefmod: 'characters/tess_visual' }
@@ -187,6 +187,62 @@ export class Studio {
     writeJson(this.jobFile(job.id), job)
     if (projectId) this.touchProject(projectId, job.id)
     return this.publicJob(job)
+  }
+
+  // ---------- renders, files and models (shared by the window and the MCP server) ----------
+  // An output as a file on this PC: its own path when local, else downloaded from the (cloud)
+  // ComfyUI into dir under the same name.
+  async localCopy(file, dir) {
+    const p = typeof file === 'string' ? file : file?.path
+    if (p && fs.existsSync(p)) return p
+    if (!file?.url) throw new Error('That file is not on this PC.')
+    const u = new URL(file.url)
+    const dest = path.join(dir, u.searchParams.get('filename'))
+    if (!fs.existsSync(dest)) {
+      const res = await fetch(`${this.comfy.url}/view${u.search}`, { headers: this.comfy.headers() })
+      if (!res.ok) throw new Error(`Download failed (${res.status}).`)
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(`${dest}.part`, Buffer.from(await res.arrayBuffer()))
+      fs.renameSync(`${dest}.part`, dest)
+    }
+    return dest
+  }
+
+  // Every IV Studio render, newest first: shot finals and previews, sequence versions and finals.
+  library() {
+    const items = []
+    for (const p of this.listProjects()) {
+      for (const j of this.listJobs(p.id)) {
+        for (const o of j.outputs || []) {
+          if (!['final', 'preview'].includes(o.kind)) continue
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
+        }
+      }
+    }
+    for (const sq of this.listSequences()) {
+      const v = this.sequenceView(sq.id)
+      for (const x of v.versions) if (x.file) items.push({ key: `${sq.id}:${x.id}`, label: `${sq.name} · ${x.label}`, group: 'Sequences', at: x.createdAt, file: x.file })
+      for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file })
+    }
+    const seen = new Set() // a finish job lists its picked preview again
+    return items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  }
+
+  // H3 models the ComfyUI can load, and each workflow's default (Settings -> Models).
+  async h3Models() {
+    const all = comboOptions(await this.comfy.objectInfo('UNETLoader'), 'UNETLoader', 'unet_name') || []
+    const t = this.template
+    return {
+      models: all.filter((n) => /h3|minimax/i.test(n)),
+      defaults: { text: t['101'].inputs.unet_name, frames: t['201'].inputs.unet_name, reference: t['301'].inputs.unet_name, continue: t['601'].inputs.unet_name, take: t['301'].inputs.unet_name, retake: t['301'].inputs.unet_name }
+    }
+  }
+
+  // Character LoRAs and RefMods the ComfyUI can load (for new characters and refmods in a request).
+  async choices() {
+    const refmod = this.template['1101'].class_type
+    const [l, r] = await Promise.all([this.comfy.objectInfo('LoraLoaderModelOnly'), this.comfy.objectInfo(refmod)])
+    return { loras: comboOptions(l, 'LoraLoaderModelOnly', 'lora_name') || [], refmods: (comboOptions(r, refmod, 'mod_1') || []).filter((n) => n !== '(none)') }
   }
 
   // ---------- prompt writer ----------
