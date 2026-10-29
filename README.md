@@ -1,207 +1,293 @@
-# IV Studio
-
-A free Infinite Variance desktop app for making MiniMax H3 video on your own PC. It drives your own
-[ComfyUI](https://github.com/comfyanonymous/ComfyUI) through the **IV Studio** workflow: write a shot,
-hunt a few quick previews, pick the take you like, then finish it at full size with the same motion.
-
 <p align="center">
-  <img src="docs/images/create.png" alt="IV Studio's Create page with a prompt for Tess in a parked car" width="100%">
+  <img src="docs/images/banner.png" alt="IV Studio: AI films with recurring actors, on your own PC" width="100%">
 </p>
 
-## How it works
+<p align="center">
+  <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-Setup.exe"><b>Download for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="#what-you-need">What you need</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/hollisorg/iv-studio/releases/latest">Release notes</a>
+  &nbsp;·&nbsp;
+  <a href="https://infinitevariance.ai">Infinite Variance</a>
+</p>
+
+# IV Studio
+
+A free Infinite Variance desktop app for making short films with
+[MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) on your own PC. Give a recurring actor a face
+and a voice, write a shot, hunt a few quick previews and finish the best one at full size. Then add
+music, cut it all together and export. IV Studio drives your own
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI); nothing leaves your machine unless you choose the
+cloud.
+
+<p align="center">
+  <img src="docs/images/candidates.png" alt="A shot of Tess at the potter's wheel with two preview takes to pick from" width="100%">
+</p>
+
+## What it does
+
+- **Shots.** Write a shot (or type the idea in plain words and let **Write it for me** write the H3
+  prompt), hunt one to three quick previews, pick one and finish it at 1 to 2 MP with DLSS, an RTX 2×
+  upscale and frame generation. Four modes: text, reference pictures, video and audio, first and last
+  frame, and continuing a video.
+- **Characters.** Recurring actors as trained H3 LoRAs with a trigger word. Use the ready-made Tess and
+  Theo, add a LoRA you have, or design, clip and train your own on your Modal account.
+- **Voices.** Give each character a voice: design one from a description, or save one from a recording.
+  Type a line and **Speak it**: the character says it on screen, lip-synced. Runs on your PC with
+  VoxCPM2 and Whisper.
+- **Music.** Songs with sung lyrics, or instrumentals, from a style and lyrics: MiniMax Music 3 for full
+  songs up to five minutes, ACE-Step 1.5 for a draft in seconds. Put a song under an edit, or have a
+  character sing it.
+- **Sequences.** Several shots that play as one continuous video, rendered as one take or shot by shot,
+  with retakes of any stretch.
+- **Edit.** A multi-track timeline: two video tracks, titles and two audio tracks, with fades, volume,
+  snapping, undo and MP4 export at 1080p, 4K, vertical or square.
+- **Workflows.** **Replace** swaps a person or an object in a video while the camera, motion and sound
+  stay. **Shinobi** lets an agent cut a whole edit in code.
+- **Library.** Every shot, sequence, export, song and spoken line in one place, ready to drop onto an
+  edit or into a shot.
+- **Agents.** A local MCP server with 86 tools gives Claude Code or any MCP client nearly everything a
+  person can do in the window.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/create.png" alt="Create: Tess, a Write it for me idea and the H3 prompt"></td>
+    <td width="50%"><img src="docs/images/finish.png" alt="A finished 1 MP shot of Tess at the potter's wheel"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Write the shot, or describe it and let it be written</sub></td>
+    <td align="center"><sub>Finish the take you like at full size</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/characters.png" alt="Characters: Tess with her LoRA and voice, and the ready-made Theo"></td>
+    <td width="50%"><img src="docs/images/voices.png" alt="Voices: a designed voice and Tess's voice, each given to a character"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Recurring characters, ready-made or trained</sub></td>
+    <td align="center"><sub>A voice for every character</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/music.png" alt="Music: an ACE-Step instrumental and a MiniMax Music 3 song"></td>
+    <td width="50%"><img src="docs/images/lines.png" alt="Lines: lines spoken in Tess's voice, ready to use in a shot"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Songs and scores, made on your PC</sub></td>
+    <td align="center"><sub>Say it in their voice</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/edit.png" alt="Edit: a finished shot on V1 and its song on A1"></td>
+    <td width="50%"><img src="docs/images/library.png" alt="Library: every shot, song and line in one place"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Cut it together and export</sub></td>
+    <td align="center"><sub>Everything you've made, in one place</sub></td>
+  </tr>
+</table>
+
+## What you need
+
+- **Windows 10 or 11** (64-bit).
+- **An NVIDIA GPU.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works with smaller
+  previews and finals. 64 GB of system RAM is recommended.
+- **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
+  IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings).
+- **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
+  (ACE-Step); voices add about 12 GB. Each is a one-click download inside the app.
+- **Optional:** [Ollama](https://ollama.com) for the free local prompt writer, and a
+  [Modal](https://modal.com) account for cloud rendering and character training.
+
+## Install
+
+1. [Download `IV-Studio-Setup.exe`](https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-Setup.exe)
+   (about 180 MB).
+2. Run it. The installer isn't code-signed yet, so Windows may show **"Windows protected your PC"**.
+   Click **More info → Run anyway**. It installs for your user only; no admin rights needed.
+3. Start ComfyUI, then IV Studio. The **Setup** page checks ComfyUI, your GPU, the node packs and every
+   model, downloads missing models straight into ComfyUI's models folder (each checked against the
+   SHA-256 its host publishes) and links any node pack you still need.
+4. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
+   **Audio → Music** and download the engine you want.
+
+Your projects, voices and songs are kept in `%APPDATA%\IV Studio`; renders are saved in ComfyUI's
+output folder under `H3\`.
+
+<p align="center">
+  <img src="docs/images/setup.png" alt="The Setup page" width="100%">
+</p>
+
+## How a shot works
 
 1. **Create.** Pick a mode, a character and write the shot.
    - **Text:** just the prompt.
    - **References:** pictures, videos or audio guide the shot (`<Picture 1>`, `<Video 1>`, `<Audio 1>`).
+     Click a reference to crop or trim it; videos snap to H3's lengths.
    - **First / last frame:** the clip opens on a picture and can end on a second one.
    - **Continue a video:** carries a clip on from its last frames.
 
-   Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras:
-   a voice recording to lip-sync, RefMods, extra LoRAs and the step count.
+   Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras: a voice
+   line to lip-sync, RefMods, extra LoRAs and the step count.
 2. **Hunt.** IV Studio queues the previews on ComfyUI and shows them as they finish.
-3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), RTX 2× upscale,
-   frame generation (30/50/60/120 fps) and the sound source. The finish reuses the preview's
-   cached latent, so the motion stays the same and stage 1 doesn't run again.
+3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), RTX 2× upscale, frame
+   generation (30/50/60/120 fps) and the sound source. The finish starts from the preview's own latent,
+   so the motion stays the same.
 4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/candidates.png" alt="A preview ready to pick"></td>
-    <td width="50%"><img src="docs/images/finish.png" alt="The finish panel and a finished clip"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Pick a preview</sub></td>
-    <td align="center"><sub>Finish it at full size</sub></td>
-  </tr>
-</table>
+### Write it for me
 
-## Write it for me
+You don't need to know H3's prompt format. Type the idea in plain words, for example "Tess in a parked
+car at night admits she kept the letter", and press **Write my prompt**. You get a finished H3 prompt
+back to edit, keep or undo. It always uses your mode, length, aspect, character and media. Choose the
+writer under **Settings → Prompt writer**:
 
-You don't need to know H3's prompt format. Type the idea in plain words, for example "Tess in a
-parked car at night admits she kept the letter", and press **Write my prompt**. You get a finished
-H3 prompt back to edit, keep or undo. The writer always uses your mode, length, aspect, character
-and media, and writes `{char}` where the character goes. Choose the writer under **Settings → Prompt
-writer**:
+- **Local (free):** a model in Ollama on your PC with IV Studio's H3 rule sheet. The recommended model is
+  `qwen3-vl:8b-instruct` (about 6 GB, one click to install). It can look at your pictures, and while
+  ComfyUI is rendering it runs on the CPU, so it never takes H3's VRAM.
+- **MiniMax Context IR:** MiniMax's own prompt rewriter through ComfyUI, paid through your Comfy.org
+  account (about $0.02 to $0.11 a prompt). Your API key is stored encrypted on your PC.
 
-- **Local (free):** a model in [Ollama](https://ollama.com) on your PC, with IV Studio's H3 rule
-  sheet. The recommended model is `qwen3-vl:8b-instruct` (about 6 GB, one click to install). It can
-  also look at your pictures. It loads only while writing; while ComfyUI is rendering it runs on the
-  CPU, so it never takes H3's VRAM.
-- **MiniMax Context IR:** MiniMax's own prompt rewriter, run through ComfyUI. It writes in the exact
-  format H3 was trained on and looks at your reference media. It's paid through your Comfy.org
-  account (about $0.02 a prompt, $0.05 with first/last frames, $0.06–0.11 with reference media).
-  Your API key is stored encrypted on your PC.
+## Characters
 
-In a sequence, every shot has its own writer, and **Write all shots from a story** turns a few
-sentences into one prompt per shot that join cleanly.
+A character is a trained MiniMax H3 LoRA plus its trigger word; write `{char}` in the prompt where the
+character goes. On the **Characters** page:
+
+- **Your characters:** each with its picture, trigger, strength, LoRA (checked against ComfyUI) and voice.
+- **Ready-made:** IV Studio's own invented characters, Tess Marlow and Theo Lindqvist. Download one and
+  its LoRA (about 150 MB, from this repo's `characters-v1` release, checked against its SHA-256) goes into
+  ComfyUI, and their bundled voice comes with them.
+- **Train your own,** the method that made Tess:
+  1. **Design:** describe the face; Z-Image Turbo renders four candidates on your PC. The one you pick is
+     rendered in eight scenes on the same seed. Or add your own pictures, only of an invented person or
+     someone who agreed.
+  2. **Clips:** H3 renders talking clips from the stills and the character's voice, or you add your own.
+     Everything is fitted to Fizgig's rules (24 fps, 17n+5 frames, 32 kHz stereo).
+  3. **Train:** Fizgig on your own Modal account, with the minutes and dollars shown first. Theo took
+     56 minutes and about $4.10 on an H200.
+  4. **Pick:** checkpoints are rendered side by side on one seed; the one you choose becomes a character,
+     keeping the voice its clips were made with.
+
+  **Likeness:** with InsightFace's face models (a one-time 289 MB download; non-commercial licence), IV
+  Studio scores every still and clip against the picked face and can keep the closest of each scene.
+
+## Voices
+
+**Audio → Voices** keeps a voice for every character, and **Audio → Lines** says anything in any of them.
+
+- **Design a voice** from a description ("a woman in her forties from Glasgow, low, warm and a little
+  gravelly"): three takes to choose from.
+- **From a recording:** a clean 10 to 20 seconds of one person talking. Only your own voice, an invented
+  one, or someone who agreed, and IV Studio asks you to confirm.
+- **Speak it:** in **Create**, a character with a voice gets a **Speak it** box. Type the line; it becomes
+  the shot's voice line, and the same words go into the prompt so H3 lip-syncs them.
+- **Lines** keeps every line you've spoken, ready to use in a shot or drop on an edit. A new seed gives a
+  new read of the same words.
+
+The speaking runs on your PC in IV Studio's own Python environment (set up once, about 12 GB):
+[VoxCPM2](https://huggingface.co/openbmb/VoxCPM2) (OpenBMB, Apache-2.0) designs, clones and speaks, and
+[Whisper large-v3 turbo](https://huggingface.co/openai/whisper-large-v3-turbo) (OpenAI, MIT) reads the
+words in a recording. A line takes about 4 seconds once the model is loaded. The voice engine is stopped
+before every render, so it never shares the GPU with H3.
+
+## Music
+
+**Audio → Music** makes songs and instrumentals on your PC through ComfyUI's own nodes:
+
+- **MiniMax Music 3:** full songs up to five minutes with the clearest sung words of the open models.
+  Describe the style and write lyrics with `[Verse]`, `[Chorus]` and other section tags; the song's length
+  follows the lyrics. About a minute or two per song on an RTX 4090.
+- **ACE-Step 1.5 Turbo:** a song in seconds, with tempo, key, time signature and language. Best for drafts,
+  background music and instrumentals.
+
+Every song is kept in IV Studio's music folder. **Add to edit** puts it on A1 of a new or existing edit;
+**Use in a shot** makes it the voice line, so a character sings it (trim it to the shot first).
 
 ## Sequences
 
 Several shots that play as one continuous video.
 
 - **One take:** every shot renders together in one seamless take through
-  [H3 Multishot](https://github.com/jlucasmcrell/ComfyUI-H3-Multishot)'s sampler, so there are no
-  cuts, colour shifts or breaks in the sound. You can add a voice sample for the whole take to keep.
-- **Shot by shot:** hunt and pick each shot in turn. Each one carries on from the end of the shot
-  before. Change a shot and only the shots after it need redoing.
-- **Retake:** mark a stretch of any version and redo the picture and sound, the picture only, or the
-  sound only. Everything around it stays as it was.
-- **Render out:** optional colour smoothing across the joins, then the DLSS pass with RTX 2× and
-  frame generation.
+  [H3 Multishot](https://github.com/jlucasmcrell/ComfyUI-H3-Multishot)'s sampler, so there are no cuts,
+  colour shifts or breaks in the sound.
+- **Shot by shot:** hunt and pick each shot in turn; each carries on from the end of the one before.
+- **Retake:** mark a stretch of any version and redo the picture and sound, the picture only, or the sound
+  only. Everything around it stays.
+- **Render out:** optional colour smoothing across the joins, then DLSS with RTX 2× and frame generation.
 
-Shots are 10 or 15 seconds, the windows H3 Multishot is tested at. Needs the H3 Multishot node pack.
+Shots are 10 or 15 seconds, the lengths H3 Multishot is tested at.
 
 ## Edit
 
-A multi-track timeline for cutting shots and sequences together: two video tracks (V2 plays over
-V1), a titles track and two audio tracks. Add files from your PC or any IV Studio render (cloud
-renders download first), drag clips to move them between tracks, drag their edges to trim, split at
-the playhead, delete or ripple delete, and undo or redo anything. Clips snap to each other and to the
-playhead. Each clip has a fade in and out and a volume; titles have their own text, size, colour,
-position and an optional dark box. The preview plays live, and **Export MP4** renders the whole timeline
-with ffmpeg at 1080p, 4K, vertical or square, 24/30/60 fps, into `Videos\IV Studio\Edits`.
+A multi-track timeline for cutting shots, sequences, songs and lines together: two video tracks (V2 plays
+over V1), a titles track and two audio tracks. Drag clips between tracks, trim their edges, split, delete or
+ripple delete, and undo anything. Each clip has fades and volume; titles have their own text, size, colour,
+position and box. **Export MP4** renders the timeline at 1080p, 4K, vertical or square, 24/30/60 fps, into
+`Videos\IV Studio\Edits`.
 
-Shortcuts: Space play/pause · S split · Delete · Shift+Delete ripple delete · Ctrl+Z / Ctrl+Shift+Z ·
+Shortcuts: Space play · S split · Delete · Shift+Delete ripple delete · Ctrl+Z / Ctrl+Shift+Z ·
 ← → one frame (Shift: one second) · Home / End.
 
-## Models
+## Library
 
-**Settings → Models** picks the main H3 model for each workflow (Text, First / last frame, Continue,
-References, Sequences one take and retake) from the H3 models your ComfyUI has, so a fine-tune that
-suits realism or animation can be used where it fits. Text, First / last frame and Continue need an
-fl2va-type model; References and Sequences need a ref2va-type model, and Settings warns when they
-don't match.
+The **Library** button above the Video | Audio switch opens everything you've made: shot finals and
+previews, sequences, Replace runs, Edit exports, songs and spoken lines, newest first. Filter by type or
+search, then add any of them to an edit or use a sound as a shot's voice line.
 
 ## Workflows
 
-The **Workflows** page holds tools that take a video further: **Shinobi** and **Replace**, with room for more.
+### Replace
 
-## Replace
+Swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
 
-**Replace** swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
-
-- **Person:** a picture (or one of your trained characters, optionally with their LoRA) replaces the main person.
-- **Several people:** 1-4 characters, each replacing someone you describe; one pass per person for two.
+- **Person:** a picture (or one of your trained characters, with their LoRA) replaces the main person.
+- **Several people:** one to four characters, each replacing someone you describe.
 - **Object:** change something (hair, a jacket, a car), remove it, or put a new background behind the person.
 - **Finish:** redraw small faces at close-up size, or soften H3's look.
 - **Check the mask** first shows what will be redrawn, in about a minute.
 
-It runs [OpenJutsu](https://github.com/D3voz/openjutsu)'s ComfyUI workflows (MIT, commit `47c3724`):
-SAM 3.1 tracks the people, Qwen3-VL describes the shots, MiniMax H3 redraws the masked area through the
-H3 Context Loop. OpenJutsu's mode code is vendored unchanged in `src/service/replace/`; its workflows are in
-`resources/workflows/replace/`. It needs OpenJutsu's node packs (the page links any that are missing) and
-two models, offered on Setup: SAM 3.1 and the Qwen3-VL 8B describer. Agents use `replace_check`,
-`replace_video` and `replace_history`.
+It runs [OpenJutsu](https://github.com/D3voz/openjutsu)'s ComfyUI workflows (MIT, commit `47c3724`): SAM 3.1
+tracks the people, Qwen3-VL describes the shots, and MiniMax H3 redraws the masked area.
 
-## Shinobi
+### Shinobi
 
-**Shinobi** is IV Studio's agent-driven editor. Where **Edit** is a timeline you cut by hand, Shinobi
-lets an agent (or a one-click recipe) author the whole edit in code: cuts on the beat, speed ramps,
-punch-ins and camera moves, typography, masks and effects, captions from speech and sound cues, even 3D
-scenes. It renders on your PC with the Edge or Chrome you already have and IV Studio's ffmpeg.
+IV Studio's agent-driven editor. Where **Edit** is cut by hand, Shinobi lets an agent (or a one-click recipe
+from 12 styles) author the whole edit in code: cuts on the beat, speed ramps, punch-ins, typography, masks,
+captions from speech and sound cues. It renders on your PC with the Edge or Chrome you already have.
+Shinobi's engine is [OpenKatana](https://github.com/rk0neki/OpenKatana) (Apache-2.0), installed unmodified;
+Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
 
-- **Set up** once from the Shinobi page (about 440 MB, under a minute, inside IV Studio's own folder).
-- **A film:** write a brief, add files or any IV Studio render, and either build a first cut from one of
-  12 styles (beat montage, noir portrait, speed ramp and freeze, lyric type…) or copy the brief to your agent.
-- **Agents** reach every Shinobi tool through IV Studio's MCP (`shinobi_tools`, `shinobi`), and get
-  preview frames back as pictures. Finished renders go into Edit with one click.
+## Models and the GPU
 
-Shinobi's engine is [OpenKatana](https://github.com/rk0neki/OpenKatana) by its contributors (Apache-2.0),
-installed unmodified at commit `f24f60a`; its licence and notice are in `resources/licenses/`. Shinobi is not
-affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
+- **Settings → Models** picks the main H3 model for each workflow from the ones your ComfyUI has, so a
+  fine-tune that suits realism or animation can be used where it fits.
+- **One model family at a time.** Before every job, IV Studio stops its own voice engine and, when the job
+  before used a different family (H3 video, music or design pictures), asks ComfyUI to unload first. Jobs
+  of the same family keep their models loaded.
 
-## Characters
+## Cloud
 
-A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
-the character goes. Everything about characters is on the **Characters** page:
-
-- **Your characters:** each with its picture, trigger, strength and LoRA (with a check that ComfyUI has it);
-  add one from a LoRA you already have, or delete one.
-- **Ready-made:** IV Studio's own invented characters, Tess Marlow and Theo Lindqvist, each shown with one
-  face picture (`resources/characters/`). Download one and its LoRA (about 150 MB, from the
-  `characters-v1` release of this repo, checked against its SHA-256) goes into ComfyUI's loras folder and
-  they join your characters. Agents use `list_ready_characters` and `install_ready_character`.
-- **Train your own:** below.
-
-**Train your own** on the **Characters** page, the method that made Tess:
-
-1. **Design:** describe the face; Z-Image Turbo renders four candidates on your PC. Pick one, and it is
-   rendered in eight scenes (different places, clothes and light) on the same seed. Keep the most alike.
-   Or add your own pictures (only of an invented person, or someone who agreed).
-2. **Clips:** H3 renders talking clips from two of the stills and an optional designed voice, or you add
-   your own clips. Everything is fitted to Fizgig's rules (24 fps, 17n+5 frames, sides multiple of 32,
-   32 kHz stereo). Captions never describe the face or voice, so they bind to the trigger word.
-3. **Train:** Fizgig on your own Modal account (`resources/cloud/train_app.py`, B200 or H200), with the
-   minutes and dollars shown first; Tess took 29 minutes and $3.80. It keeps training if IV Studio
-   closes. Or open the dataset folder and train in Fizgig yourself.
-**Likeness:** with InsightFace's face models (downloaded once from the Characters page, 289 MB; the
-models are for non-commercial research use), IV Studio scores every still and clip against the picked
-face (`resources/python/likeness.py`: InsightFace's SCRFD and ArcFace through ONNX Runtime, the same
-numbers as InsightFace's own pipeline) and can keep the closest candidate of each scene.
-
-4. **Pick:** chosen checkpoints are downloaded into ComfyUI's `loras\MiniMax H3\<name>\` and rendered on
-   one seed side by side; the one you choose becomes a character at strength 0.8.
-
-Designing needs Z-Image Turbo, its text encoder and VAE (optional downloads on Setup). AI_Characters'
-Smartphone Snapshot v8 LoRA (Civitai) is used for a candid phone-photo look when it's installed.
-
-## Setup
-
-**Setup** checks ComfyUI, the GPU, every node pack and every model the workflow needs, using
-ComfyUI's own `/object_info`. That way it works with any install.
-
-- **Missing models:** they download straight into ComfyUI's models folder from their upstream
-  hosts. Each download is checked against the SHA-256 that Hugging Face publishes before it's put in
-  place. A paused or interrupted download resumes where it stopped.
-- **Missing node packs:** these link to their GitHub pages.
-- **Bundled nodes:** the IV Studio pack (latent cache and shot list) is in
-  `resources/comfy-nodes/ComfyUI-IV-Studio`. Copy it into `ComfyUI/custom_nodes`.
-
-<p align="center">
-  <img src="docs/images/setup.png" alt="The Setup page" width="100%">
-</p>
-
-Requirements: Windows 10 or 11, an NVIDIA GPU (16 GB of VRAM or more recommended; 24 GB tested)
-and a ComfyUI recent enough for MiniMax H3. You'll need about 60 GB free for the models.
+The **Cloud** page renders on your own [Modal](https://modal.com) account instead of your PC: it installs
+Modal's client, signs you in on Modal's own page and deploys IV Studio's ComfyUI app there. GPUs bill by the
+second and stop on their own when idle, and new Modal accounts get free monthly credit. Cloud renders use a
+2× AI upscale and RIFE frame interpolation in place of DLSS, which is Windows-only. Voices and music run on
+your PC.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio). It uses the same service, projects and results as
-the window, so Claude Code or any other MCP client can do nearly everything a person can: render shots
-and sequences, cut them together on the timeline and export, and manage characters and models. The
-command for your install is under **Settings → Agents (MCP)**, together with a message you can paste
-straight into any agent (it adds the server, reads the guide and checks your setup) and a button that adds
-the IV Studio skill to Claude Code. For a development checkout:
+IV Studio includes a local MCP server (stdio) with 86 tools. It uses the same projects, characters, voices
+and songs as the window, so Claude Code or any MCP client can render shots and sequences, speak lines, make
+music, cut them together and export. **Settings → Agents (MCP)** has the command for your install, a
+message to paste into any agent, and a button that adds the IV Studio skill to Claude Code. For a
+development checkout:
 
 ```
 claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "<checkout>\node_modules\electron\dist\electron.exe" "<checkout>\out\main\mcp.js"
 ```
 
-Agents are told how to use it in three ways, all from `resources/agent-guide.md`: the server's
-instructions on connect, the `get_guide` tool, and the Claude Code skill
-([`skills/iv-studio/SKILL.md`](skills/iv-studio/SKILL.md), rebuilt with `node scripts/make-skill.mjs`).
+Agents learn how to use it from `resources/agent-guide.md`: the server's instructions on connect, the
+`get_guide` tool, and the Claude Code skill ([`skills/iv-studio/SKILL.md`](skills/iv-studio/SKILL.md)).
 
-Tools:
+<details>
+<summary>All tools</summary>
 
 - **Guide:** `get_guide`.
 - **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
@@ -211,24 +297,45 @@ Tools:
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
 - **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
 - **References:** `prepare_media` (crop a picture, trim and crop a video or sound).
-- **Library:** `list_renders` (every render, with keys for the editor), `rename_project`, `delete_project`, `delete_sequence`.
-- **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`
-  (files or renders, optionally appended end to end), `edit_timeline` (add, move, trim, split, ripple
-  delete, fades, volume, titles, all checked before anything changes), `grab_frame` (a picture of any
-  moment, so an agent can check its cut), `export_edit`, `get_edit_export`, `cancel_edit_export`.
-- **Character training:** `list_character_trainings`, `get_character_training`, `create_character_training`,
-  `update_character_training`, `design_faces`, `pick_face`, `design_scenes`, `pick_still`, `make_training_clips`,
-  `set_training_item`, `add_training_files`, `rank_likeness`, `estimate_training`, `start_training` (paid: needs the person's OK and
-  `confirm_cost`), `stop_training`, `test_checkpoints`, `adopt_checkpoint`.
-- **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi` (any of its 72 tools; pictures come
-  back as images), `shinobi_project`.
-- **Models and characters:** `list_h3_models`, `set_workflow_model`, `list_choices` (LoRAs and RefMods),
-  `save_character`, `delete_character`.
+- **Library:** `list_renders`, `rename_project`, `delete_project`, `delete_sequence`.
+- **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`,
+  `edit_timeline` (add, move, trim, split, ripple delete, fades, volume, titles, all checked before anything
+  changes), `grab_frame`, `export_edit`, `get_edit_export`, `cancel_edit_export`.
+- **Voices:** `voice_status`, `setup_voices`, `list_voices`, `design_voice`, `create_voice`, `update_voice`,
+  `delete_voice`, `speak_line`, `list_lines`, `delete_line`, `release_voice_engine`.
+- **Music:** `music_status`, `make_music`, `list_music`, `get_music`, `cancel_music`, `rename_music`,
+  `delete_music`.
+- **Characters:** `list_ready_characters`, `install_ready_character`, `save_character`, `delete_character`,
+  `list_choices` (LoRAs and RefMods).
+- **Character training:** `list_character_trainings`, `get_character_training`,
+  `create_character_training`, `update_character_training`, `design_faces`, `pick_face`, `design_scenes`,
+  `pick_still`, `make_training_clips`, `set_training_item`, `add_training_files`, `rank_likeness`,
+  `estimate_training`, `start_training` (paid: needs the person's OK and `confirm_cost`), `stop_training`,
+  `test_checkpoints`, `adopt_checkpoint`.
+- **Replace:** `replace_check`, `replace_video`, `replace_history`.
+- **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi`, `shinobi_project`.
+- **Models:** `list_h3_models`, `set_workflow_model`.
 
-An edit open in the window reloads when an agent changes it, and Ctrl+Z puts the person's version
-back. The MCP server always renders on the local ComfyUI (the cloud token stays with the app).
+An edit open in the window reloads when an agent changes it, and Ctrl+Z puts the person's version back.
+The MCP server always renders on the local ComfyUI.
 
-`write_prompt` uses the local writer unless `COMFY_ORG_API_KEY` is set in the server's environment.
+</details>
+
+## Use it well
+
+- **Model licences.** IV Studio doesn't bundle any model weights; each one downloads from its own host under
+  its own licence, linked from Setup. Read them before commercial work. In particular:
+  - **MiniMax H3** is under the MiniMax H3 Community Licence, which covers use worldwide *except* the EU,
+    the UK, South Korea and the USA. Use in those places needs a licence from MiniMax.
+  - **MiniMax Music 3** is under the MiniMax-Music3 Community Licence: commercial use is allowed if the
+    product shows "MiniMax-Music3", with MiniMax's written permission above $20M a year.
+  - **ACE-Step 1.5**, **VoxCPM2** and **Qwen3-VL** are Apache-2.0; **Whisper** is MIT.
+  - **InsightFace's** face models (only for likeness scoring) are for non-commercial research use.
+- **People.** Characters and voices must be invented, your own, or of someone who agreed. Don't make a real
+  person say or do things without their consent, and don't clone a voice from a recording you found.
+- **Music.** Write your own lyrics and describe a style rather than imitating a named artist.
+
+---
 
 ## Develop
 
@@ -244,25 +351,20 @@ Tests are in `test/`:
 
 - `graph-parity.mjs`: the headless graph matches the ComfyUI GUI export for 32 switch states.
 - `service-e2e.mjs`: renders previews and a finish on a live ComfyUI.
-- `mcp-smoke.mjs`: runs the MCP server over stdio.
-- `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
-- `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
+- `mcp-smoke.mjs`, `mcp-tools.mjs`, `mcp-live.mjs`: the MCP server over stdio, every editor, library,
+  model and character tool, and an agent's edit reloading in an open dev window.
+- `mcp-voices.mjs`: every voice tool against a set-up voice engine (pass its folder).
+- `mcp-music.mjs`: every music tool against the local ComfyUI (`--minimax` adds a MiniMax song).
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
-- `replace.mjs`: checks every Replace mode against the live ComfyUI, then renders a mask check and a person replace.
-- `shinobi.mjs`: installs the pinned engine, builds a beat-cut from a recipe, renders it with Edge, and scores
-  likeness against InsightFace's own numbers.
-- `training-local.mjs`: designs faces and scenes, renders talking clips and builds a dataset that fits Fizgig's rules
-  (local GPU, nothing on Modal).
-- `media-prepare.mjs`: crops a picture, trims a video frame-exact and trims a sound.
-- `models-download.mjs`: checks a fresh download, a resume and a rejected corrupt file.
-- `sequence-graphs.mjs`: renders a two-shot take, a retake and a render out (queues real GPU renders).
-- `prompt-writer.mjs`: writes a prompt and a two-shot story with the local writer.
-
-Data (projects, jobs, characters, settings) is stored in `%APPDATA%\IV Studio`. Renders are saved
-to ComfyUI's output folder under `H3\`.
+- `replace.mjs`, `shinobi.mjs`, `training-local.mjs`, `sequence-graphs.mjs`: Replace, Shinobi, character
+  design and sequences on real hardware (the last one queues GPU renders).
+- `media-prepare.mjs`, `models-download.mjs`, `prompt-writer.mjs`: media trims, checked downloads and the
+  local prompt writer.
 
 ## Licences
 
-IV Studio is MIT-licensed (see `LICENSE`). Third-party notices are in `THIRD_PARTY_NOTICES.md`.
-The models aren't bundled: each one downloads from its own host under its own licence. Check its
-page (linked from Setup) before using it for commercial work.
+IV Studio is MIT-licensed (see [LICENSE](LICENSE)); the Infinite Variance eye artwork is Infinite Variance's
+own and isn't covered by the MIT licence. Third-party notices are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The bundled FFmpeg build is GPL.
+
+Screenshots show Tess Marlow, an invented IV Studio character, in renders made with IV Studio.
