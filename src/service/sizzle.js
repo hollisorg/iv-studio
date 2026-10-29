@@ -172,7 +172,10 @@ export class Sizzles {
           Object.assign(a, { status: song.status === 'success' && !song.file ? 'running' : song.status, file: song.file || null, duration: song.duration || null })
         } else if (a.kind === 'image') {
           const j = await this.studio.refreshJob(a.jobId)
-          Object.assign(a, { status: j.status, error: j.error || null, file: j.outputs.find((o) => o.kind === 'image')?.path || null })
+          // ComfyUI doesn't give picture paths; the file is fetched into the sizzle's own folder
+          const out = j.outputs.find((o) => o.kind === 'image')
+          const file = out && (out.path && fs.existsSync(out.path) ? out.path : await this.studio.localCopy(out, path.join(this.dir, id, 'pieces')))
+          Object.assign(a, { status: j.status, error: j.error || null, file: file || null })
         } else if (a.kind === 'h3') {
           if (!a.finishJob) {
             const p = await this.studio.refreshJob(a.previewJob)
