@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Create from './components/Create'
 import Library from './components/Library'
 import Cloud from './components/Cloud'
+import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
 import Setup from './components/Setup'
@@ -11,6 +12,7 @@ const PAGES = [
   ['create', 'Create'],
   ['library', 'Shots'],
   ['sequences', 'Sequences'],
+  ['edits', 'Edit'],
   ['setup', 'Setup'],
   ['cloud', 'Cloud'],
   ['settings', 'Settings']
@@ -20,6 +22,7 @@ export default function App() {
   const [page, setPage] = useState('create')
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
+  const [editId, setEditId] = useState(null)
   const [setup, setSetup] = useState(null)
   const [checking, setChecking] = useState(false)
   const [characters, setCharacters] = useState([])
@@ -62,8 +65,13 @@ export default function App() {
     setPage('sequence')
   }
 
+  const openEdit = (id) => {
+    setEditId(id)
+    setPage('edit')
+  }
+
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, jobs, setJobs, info, go: setPage }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -82,7 +90,7 @@ export default function App() {
       </header>
       <nav className="nav">
         {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') ? 'on' : ''}`} onClick={() => setPage(id)}>
+          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
@@ -90,12 +98,14 @@ export default function App() {
         ))}
         <div className="nav-foot mono dim">v{info?.version}</div>
       </nav>
-      <main className="page">
+      <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'create' && <Create {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
+        {page === 'edits' && <EditList {...ctx} />}
+        {page === 'edit' && editId && <EditEditor key={editId} editId={editId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}
         {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}

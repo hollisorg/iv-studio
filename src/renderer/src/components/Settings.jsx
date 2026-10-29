@@ -4,6 +4,70 @@ import Hero from './Hero'
 const WRITER_MODEL = 'qwen3-vl:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
 
+const WORKFLOWS = [
+  ['text', 'Text', 'fl2va'],
+  ['frames', 'First / last frame', 'fl2va'],
+  ['continue', 'Continue a video', 'fl2va'],
+  ['reference', 'References', 'ref2va'],
+  ['take', 'Sequences · one take', 'ref2va'],
+  ['retake', 'Sequences · retake', 'ref2va']
+]
+const short = (n) => n.split(/[\\/]/).pop().replace(/\.safetensors$/, '')
+const kindOf = (n) => (/fl2va/i.test(n) ? 'fl2va' : /ref2va|omniref/i.test(n) ? 'ref2va' : null)
+
+// Which H3 model each workflow runs: fine-tunes differ (realism, animation, speed).
+function ModelSettings({ settings, setSettings, notify }) {
+  const [info, setInfo] = useState(null)
+  useEffect(() => {
+    window.ivstudio.h3Models().then(setInfo).catch((err) => setInfo({ error: err.message }))
+  }, [])
+  const choices = settings.models || {}
+  async function choose(id, name) {
+    try {
+      setSettings(await window.ivstudio.settings.set({ models: { ...choices, [id]: name || undefined } }))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  return (
+    <section className="group">
+      <div className="group-head">
+        <h2>Models</h2>
+        <p className="dim small">The main H3 model each workflow runs. Fine-tunes lean towards realism, animation or speed.</p>
+      </div>
+      <div className="group-body">
+        {info?.error && <p className="small pink">ComfyUI didn't answer: {info.error}</p>}
+        {info?.models &&
+          WORKFLOWS.map(([id, label, want]) => {
+            const value = choices[id] || ''
+            const picked = value || info.defaults[id]
+            const kind = kindOf(picked)
+            return (
+              <div key={id} className="row">
+                <span className="row-label">{label}</span>
+                <div className="model-pick">
+                  <select value={value} onChange={(e) => choose(id, e.target.value)}>
+                    <option value="">Default · {short(info.defaults[id])}</option>
+                    {info.models.map((m) => (
+                      <option key={m} value={m}>
+                        {short(m)}
+                        {kindOf(m) ? ` · ${kindOf(m)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {kind && kind !== want && <span className="small pink">This workflow expects a {want} model.</span>}
+                </div>
+              </div>
+            )
+          })}
+        <p className="small dim">
+          Text, First / last frame and Continue use an fl2va-type model (it lands on exact frames). References and Sequences use a ref2va-type model (it follows reference pictures and keeps a voice across shots). A cloud ComfyUI only lists the models in its own storage.
+        </p>
+      </div>
+    </section>
+  )
+}
+
 // Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
 function WriterSettings({ settings, setSettings, notify }) {
   const [status, setStatus] = useState(null)
@@ -206,6 +270,8 @@ export default function Settings({ info, recheck, notify, characters, setCharact
           </div>
         </div>
       </section>
+
+      <ModelSettings settings={settings} setSettings={setSettings} notify={notify} />
 
       <WriterSettings settings={settings} setSettings={setSettings} notify={notify} />
 

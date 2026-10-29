@@ -71,6 +71,27 @@ Several shots that play as one continuous video.
 
 Shots are 10 or 15 seconds, the windows H3 Multishot is tested at. Needs the H3 Multishot node pack.
 
+## Edit
+
+A multi-track timeline for cutting shots and sequences together: two video tracks (V2 plays over
+V1), a titles track and two audio tracks. Add files from your PC or any IV Studio render (cloud
+renders download first), drag clips to move them between tracks, drag their edges to trim, split at
+the playhead, delete or ripple delete, and undo or redo anything. Clips snap to each other and to the
+playhead. Each clip has a fade in and out and a volume; titles have their own text, size, colour,
+position and an optional dark box. The preview plays live, and **Export MP4** renders the whole timeline
+with ffmpeg at 1080p, 4K, vertical or square, 24/30/60 fps, into `Videos\IV Studio\Edits`.
+
+Shortcuts: Space play/pause · S split · Delete · Shift+Delete ripple delete · Ctrl+Z / Ctrl+Shift+Z ·
+← → one frame (Shift: one second) · Home / End.
+
+## Models
+
+**Settings → Models** picks the main H3 model for each workflow (Text, First / last frame, Continue,
+References, Sequences one take and retake) from the H3 models your ComfyUI has, so a fine-tune that
+suits realism or animation can be used where it fits. Text, First / last frame and Continue need an
+fl2va-type model; References and Sequences need a ref2va-type model, and Settings warns when they
+don't match.
+
 ## Characters
 
 A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where

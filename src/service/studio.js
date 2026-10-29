@@ -16,6 +16,8 @@ const DEFAULT_CHARACTERS = [
   { id: 'tess', name: 'Tess Marlow', lora: 'MiniMax H3\\tess\\tess_mmh3-000040.safetensors', strength: 0.8, trigger: 't3ss4', voiceRefmod: 'characters/tess_audio', visualRefmod: 'characters/tess_visual' }
 ]
 const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
+// The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
+export const MODEL_NODES = { text: '101', frames: '201', reference: '301', continue: '601' }
 
 const readJson = (file, fallback) => {
   try {
@@ -33,7 +35,9 @@ const slug = (s) => (s || 'shot').toLowerCase().replace(/[^a-z0-9]+/g, '_').repl
 const now = () => new Date().toISOString()
 
 export class Studio {
-  constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, outputDir }) {
+  // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
+  constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, outputDir, models = null }) {
+    this.models = models || {}
     this.dataDir = dataDir
     this.template = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.json'), 'utf8'))
     this.meta = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.groups.json'), 'utf8'))
@@ -129,6 +133,8 @@ export class Studio {
     for (const m of request.media || []) media.push({ ...m, file: await this.stage(m.file || m.path, 'minimax_h3') })
     const voiceLine = request.voiceLine ? await this.stage(request.voiceLine, 'iv_studio') : null
     const plan = planPreviews({ ...request, media, voiceLine }, this.characters())
+    const unet = this.models[plan.request.mode]
+    if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name
@@ -329,7 +335,7 @@ export class Studio {
     const voiceRef = s.voiceRef ? await this.stage(s.voiceRef, 'iv_studio') : null
     const n = s.versions.length + 1
     const name = `${slug(s.name)}_${s.id}_v${n}`
-    const { graph, resolved } = takeGraph({ template: this.template, seq: s, character, name, voiceRef })
+    const { graph, resolved } = takeGraph({ template: this.template, seq: s, character, name, voiceRef, unet: this.models.take })
     const j = await this.submitGraph({ kind: 'take', graph, sequenceId: s.id, name, plan: { saves: SAVES, resolved } })
     s.versions.push({ id: `v${n}`, kind: 'take', label: `Take ${s.versions.filter((v) => v.kind === 'take').length + 1}`, jobId: j.id, createdAt: j.createdAt, seed: s.seed })
     return this.sequenceJob(s, j)
@@ -349,7 +355,7 @@ export class Studio {
     const { v, path: sourcePath } = this.versionPath(id, versionId)
     const n = s.versions.length + 1
     const name = `${slug(s.name)}_${s.id}_v${n}`
-    const { graph } = retakeGraph({ template: this.template, seq: s, character, name, sourcePath, prompt, start, end, mode, seed: seed ?? s.seed + n })
+    const { graph } = retakeGraph({ template: this.template, seq: s, character, name, sourcePath, prompt, start, end, mode, seed: seed ?? s.seed + n, unet: this.models.retake })
     const j = await this.submitGraph({ kind: 'retake', graph, sequenceId: s.id, name, plan: { saves: SAVES, resolved: { start, end, mode } } })
     s.versions.push({ id: `v${n}`, kind: 'retake', label: `Retake of ${v.label}, ${start}–${end} s`, jobId: j.id, createdAt: j.createdAt, source: versionId, start, end, mode, prompt })
     return this.sequenceJob(s, j)

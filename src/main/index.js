@@ -1,8 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import { Readable } from 'node:stream'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { Cloud, GPUS } from '../service/cloud'
+import { Edits, FORMATS, TRACKS } from '../service/edits'
+import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
@@ -11,7 +14,27 @@ if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUD
 if (!app.requestSingleInstanceLock()) app.quit()
 // ComfyUI refuses cross-site browser requests, so the window loads outputs through ivmedia://view?...,
 // which the main process fetches from ComfyUI's /view (Range passed through so videos can seek).
-protocol.registerSchemesAsPrivileged([{ scheme: 'ivmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }])
+// The editor plays local media through ivfile://local/?p=<path> (seekable, any media file on this PC).
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'ivmedia', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } },
+  { scheme: 'ivfile', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
+])
+const MEDIA_FILE = /\.(mp4|mov|webm|mkv|m4v|wav|mp3|m4a|flac|ogg|aac|png|jpe?g|webp|bmp)$/i
+const MIME = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4', flac: 'audio/flac', ogg: 'audio/ogg', aac: 'audio/aac', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', bmp: 'image/bmp' }
+function serveFile(req) {
+  const file = new URL(req.url).searchParams.get('p')
+  if (!file || !MEDIA_FILE.test(file) || !fs.existsSync(file)) return new Response('Not found', { status: 404 })
+  const size = fs.statSync(file).size
+  const type = MIME[file.split('.').pop().toLowerCase()] || 'application/octet-stream'
+  const range = /bytes=(\d*)-(\d*)/.exec(req.headers.get('range') || '')
+  if (!range) return new Response(Readable.toWeb(fs.createReadStream(file)), { headers: { 'Content-Type': type, 'Content-Length': String(size), 'Accept-Ranges': 'bytes' } })
+  const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+  const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+  return new Response(Readable.toWeb(fs.createReadStream(file, { start, end })), {
+    status: 206,
+    headers: { 'Content-Type': type, 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes' }
+  })
+}
 
 const BG = '#100c0e'
 // A copy started with its own user data (testing beside the installed app) says so everywhere.
@@ -42,7 +65,7 @@ function makeStudio() {
   stopWatch?.()
   const s = readSettings(DATA)
   const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
-  studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ...cloud })
+  studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -104,6 +127,24 @@ function createWindow() {
   else win.loadFile(path.join(__dirname, '../renderer/index.html'))
 }
 
+// An output as a file on this PC: its own path when local, else downloaded from the (cloud)
+// ComfyUI into Videos\IV Studio under the same name.
+async function localCopy(file) {
+  const p = typeof file === 'string' ? file : file?.path
+  if (p && fs.existsSync(p)) return p
+  if (!file?.url) throw new Error('That file is not on this PC.')
+  const u = new URL(file.url)
+  const dest = path.join(app.getPath('videos'), 'IV Studio', u.searchParams.get('filename'))
+  if (!fs.existsSync(dest)) {
+    const res = await fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers() })
+    if (!res.ok) throw new Error(`Download failed (${res.status}).`)
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(`${dest}.part`, Buffer.from(await res.arrayBuffer()))
+    fs.renameSync(`${dest}.part`, dest)
+  }
+  return dest
+}
+
 // Errors cross IPC as plain messages so the window can show them.
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_e, ...args) => {
@@ -124,6 +165,7 @@ function mcpCommand() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   makeStudio()
+  protocol.handle('ivfile', serveFile)
   protocol.handle('ivmedia', (req) => {
     const u = new URL(req.url)
     if (u.hostname !== 'view') return new Response('Not found', { status: 404 })
@@ -144,6 +186,48 @@ app.whenReady().then(() => {
     if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
     return publicSettings(writeSettings({ comfyApiKey: seal(k) }, DATA))
   })
+  // ---------- edits (the timeline editor) ----------
+  const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+  const edits = new Edits({
+    dataDir: DATA,
+    ffmpeg: unpacked(ffmpegStatic.ffmpegPath),
+    ffprobe: unpacked(ffmpegStatic.ffprobePath),
+    fontFile: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf')
+  })
+  handle('edits:meta', () => ({ tracks: TRACKS, formats: FORMATS }))
+  handle('edits:list', () => edits.list())
+  handle('edits:get', (id) => edits.get(id))
+  handle('edits:create', (name) => edits.create(name))
+  handle('edits:save', (id, patch) => edits.save(id, patch))
+  handle('edits:delete', (id) => edits.remove(id))
+  handle('edits:pickFiles', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'wav', 'mp3', 'm4a', 'flac', 'ogg', 'png', 'jpg', 'jpeg', 'webp'] }] })
+    return Promise.all((r.canceled ? [] : r.filePaths).map((f) => edits.addMedia(f)))
+  })
+  // IV Studio's own renders, ready to drop on the timeline: finals and previews of every shot,
+  // and every sequence version and final.
+  handle('edits:library', () => {
+    const items = []
+    for (const p of studio.listProjects()) {
+      for (const j of studio.listJobs(p.id)) {
+        for (const o of j.outputs || []) {
+          if (!['final', 'preview'].includes(o.kind)) continue
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${o.kind === 'final' ? 'final' : `preview ${o.candidate}`}`, group: p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename } })
+        }
+      }
+    }
+    for (const sq of studio.listSequences()) {
+      const v = studio.sequenceView(sq.id)
+      for (const x of v.versions) if (x.file) items.push({ key: `${sq.id}:${x.id}`, label: `${sq.name} · ${x.label}`, group: 'Sequences', at: x.createdAt, file: x.file })
+      for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file })
+    }
+    const seen = new Set() // a finish job lists its picked preview again
+    return items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  })
+  handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
+  handle('edits:export', (id) => edits.export(id, path.join(app.getPath('videos'), 'IV Studio', 'Edits'), (p) => send('edits:progress', { id, progress: p })))
+  handle('edits:cancelExport', (id) => edits.cancelExport(id))
+
   // ---------- cloud (Modal, the user's own account) ----------
   const cloud = new Cloud({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), onLog: (line) => send('cloud:log', line) })
   let cloudBusy = null
@@ -228,9 +312,20 @@ app.whenReady().then(() => {
     const { comfyApiKey, cloudToken, cloud, target, ...safe } = patch || {}
     const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
+    if ('models' in (patch || {})) studio.models = s.models || {}
     return s
   })
   handle('setup:check', () => studio.checkSetup())
+  // H3 models the connected ComfyUI can load, and what each workflow uses by default.
+  handle('models:h3', async () => {
+    const spec = (await studio.comfy.objectInfo('UNETLoader')).UNETLoader.input.required.unet_name
+    const all = (Array.isArray(spec[0]) ? spec[0] : spec[1]?.options) || []
+    const t = studio.template
+    return {
+      models: all.filter((n) => /h3|minimax/i.test(n)),
+      defaults: { text: t['101'].inputs.unet_name, frames: t['201'].inputs.unet_name, reference: t['301'].inputs.unet_name, continue: t['601'].inputs.unet_name, take: t['301'].inputs.unet_name, retake: t['301'].inputs.unet_name }
+    }
+  })
   handle('models:status', () => installer.status())
   handle('models:download', (ids) => installer.enqueue(ids))
   handle('models:cancel', (id) => installer.cancel(id))
@@ -291,20 +386,9 @@ app.whenReady().then(() => {
   // A path on this PC opens in Explorer. An output that lives in the cloud is downloaded to
   // Videos\IV Studio first (same file name), then shown.
   handle('files:reveal', async (file) => {
-    const p = typeof file === 'string' ? file : file?.path
-    if (p && fs.existsSync(p)) return shell.showItemInFolder(p), p
-    if (!file?.url) throw new Error('That file is not on this PC.')
-    const u = new URL(file.url)
-    const dest = path.join(app.getPath('videos'), 'IV Studio', u.searchParams.get('filename'))
-    if (!fs.existsSync(dest)) {
-      const res = await fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers() })
-      if (!res.ok) throw new Error(`Download failed (${res.status}).`)
-      fs.mkdirSync(path.dirname(dest), { recursive: true })
-      fs.writeFileSync(`${dest}.part`, Buffer.from(await res.arrayBuffer()))
-      fs.renameSync(`${dest}.part`, dest)
-    }
-    shell.showItemInFolder(dest)
-    return dest
+    const p = await localCopy(file)
+    shell.showItemInFolder(p)
+    return p
   })
   handle('links:open', (url) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)

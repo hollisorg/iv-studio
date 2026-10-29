@@ -17,6 +17,20 @@ const on = (channel) => (cb) => {
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
+  edits: {
+    meta: call('edits:meta'),
+    list: call('edits:list'),
+    get: call('edits:get'),
+    create: call('edits:create'),
+    save: call('edits:save'),
+    delete: call('edits:delete'),
+    pickFiles: call('edits:pickFiles'),
+    library: call('edits:library'),
+    addOutput: call('edits:addOutput'),
+    export: call('edits:export'),
+    cancelExport: call('edits:cancelExport'),
+    onProgress: on('edits:progress')
+  },
   cloud: {
     status: call('cloud:status'),
     install: call('cloud:install'),
@@ -30,6 +44,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
   setup: { check: call('setup:check') },
+  h3Models: call('models:h3'),
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
   characters: { list: call('characters:list'), save: call('characters:save') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename') },

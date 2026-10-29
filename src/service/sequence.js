@@ -31,9 +31,10 @@ const fill = (text, character) => (character ? text.replaceAll('{char}', charact
 
 // Loaders shared by every sequence graph: ref2va (it carries identity and voice across a chain),
 // the turbo LoRA, then the character LoRA.
-function loaders(template, character) {
+// unet: the model chosen for this workflow in Settings, else the template's ref2va.
+function loaders(template, character, unet) {
   const g = {
-    unet: { class_type: 'UNETLoader', inputs: { unet_name: template['301'].inputs.unet_name, weight_dtype: 'default' } },
+    unet: { class_type: 'UNETLoader', inputs: { unet_name: unet || template['301'].inputs.unet_name, weight_dtype: 'default' } },
     clip: { class_type: 'CLIPLoader', inputs: { ...template['2'].inputs } },
     vvae: { class_type: 'VAELoader', inputs: { ...template['3'].inputs } },
     avae: { class_type: 'VAELoader', inputs: { ...template['4'].inputs } },
@@ -65,8 +66,8 @@ export function validateSequence(seq, characters) {
 }
 
 // The whole sequence as one continuous take.
-export function takeGraph({ template, seq, character, name, voiceRef }) {
-  const { g, model } = loaders(template, character)
+export function takeGraph({ template, seq, character, name, voiceRef, unet }) {
+  const { g, model } = loaders(template, character, unet)
   const { width, height } = resolveSize(seq.aspect, seq.megapixels)
   const frames = resolveFrames(seq.shotSeconds)
   const sampler = {
@@ -97,8 +98,8 @@ export function takeGraph({ template, seq, character, name, voiceRef }) {
 }
 
 // Redo start..end seconds of a finished video. Everything outside the window is kept as it was.
-export function retakeGraph({ template, seq, character, name, sourcePath, prompt, start, end, mode, seed }) {
-  const { g, model } = loaders(template, character)
+export function retakeGraph({ template, seq, character, name, sourcePath, prompt, start, end, mode, seed, unet }) {
+  const { g, model } = loaders(template, character, unet)
   g.src = { class_type: 'VHS_LoadVideoPath', inputs: { video: sourcePath, force_rate: 24, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } }
   g.sampler = { class_type: 'KSamplerSelect', inputs: { sampler_name: 'er_sde' } }
   g.sigmas = { class_type: 'BasicScheduler', inputs: { model, scheduler: 'beta', steps: seq.steps, denoise: 1 } }

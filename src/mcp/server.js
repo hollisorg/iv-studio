@@ -10,7 +10,7 @@ import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 
 const DATA = dataDir()
-const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl })
+const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' })
 
 // MCP structured results must be objects, so lists go out as { items }.
