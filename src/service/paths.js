@@ -10,7 +10,8 @@ export function dataDir() {
 
 // Packaged: <install>/resources/resources. Dev and the built MCP script: the repo's resources folder.
 export function resourcesDir(hint) {
-  const candidates = [hint, process.resourcesPath && path.join(process.resourcesPath, 'resources'), path.resolve(__dirname, '../../resources'), path.resolve('resources')]
+  // Built code sits in out/main or, when shared between entries, out/main/chunks.
+  const candidates = [hint, process.resourcesPath && path.join(process.resourcesPath, 'resources'), path.resolve(__dirname, '../../resources'), path.resolve(__dirname, '../../../resources'), path.resolve('resources')]
   for (const c of candidates) if (c && fs.existsSync(path.join(c, 'workflows', 'iv_studio_api.json'))) return c
   throw new Error('IV Studio resources not found')
 }

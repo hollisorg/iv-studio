@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS, TRACKS } from '../service/edits'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
@@ -317,6 +318,18 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
+  // Settings -> Agents: what to paste into an agent, and the Claude Code skill (with this install's command).
+  const skillFile = path.join(app.getPath('home'), '.claude', 'skills', 'iv-studio', 'SKILL.md')
+  const skillText = () => skillMarkdown(readGuide(resourcesDir(path.join(app.getAppPath(), 'resources'))), mcpCommand())
+  handle('agents:info', () => {
+    const installed = fs.existsSync(skillFile)
+    return { paste: pasteMessage(mcpCommand()), skillFile, skillInstalled: installed, skillCurrent: installed && fs.readFileSync(skillFile, 'utf8') === skillText() }
+  })
+  handle('agents:installSkill', () => {
+    fs.mkdirSync(path.dirname(skillFile), { recursive: true })
+    fs.writeFileSync(skillFile, skillText())
+    return skillFile
+  })
   handle('models:h3', () => studio.h3Models())
   handle('models:status', () => installer.status())
   handle('models:download', (ids) => installer.enqueue(ids))

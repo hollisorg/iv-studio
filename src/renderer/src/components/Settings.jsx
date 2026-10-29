@@ -215,10 +215,96 @@ function WriterSettings({ settings, setSettings, notify }) {
   )
 }
 
+// A block of text with a Copy button.
+function Copyable({ text, label = 'Copy' }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="copyable">
+      <pre className="code">{text}</pre>
+      <button
+        className="btn btn-small"
+        onClick={() => {
+          navigator.clipboard.writeText(text)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        }}
+      >
+        {copied ? 'Copied' : label}
+      </button>
+    </div>
+  )
+}
+
+// Agents (MCP): a message to paste into any agent, the manual commands, and the Claude Code skill.
+function AgentSettings({ mcp, notify }) {
+  const [agents, setAgents] = useState(null)
+  const [client, setClient] = useState('claude')
+  const refresh = () => window.ivstudio.agents.info().then(setAgents)
+  useEffect(() => {
+    refresh()
+  }, [])
+  if (!mcp || !agents) return null
+  const cmd = `"${mcp.command}" "${mcp.args[0]}"`
+  const manual = {
+    claude: `claude mcp add -s user iv-studio -e ELECTRON_RUN_AS_NODE=1 -- ${cmd}`,
+    codex: `codex mcp add iv-studio --env ELECTRON_RUN_AS_NODE=1 -- ${cmd}`,
+    json: JSON.stringify({ mcpServers: { 'iv-studio': mcp } }, null, 2)
+  }
+  async function installSkill() {
+    try {
+      await window.ivstudio.agents.installSkill()
+      refresh()
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  return (
+    <section className="group">
+      <div className="group-head">
+        <h2>Agents (MCP)</h2>
+        <p className="dim small">Claude Code, Codex and other agents can render, sequence and edit in IV Studio, with the same projects and results you see here.</p>
+      </div>
+      <div className="group-body">
+        <p className="mono label">Paste into your agent</p>
+        <p className="small dim">One message: your agent adds IV Studio, reads its guide and checks your setup.</p>
+        <Copyable text={agents.paste} label="Copy message" />
+
+        <p className="mono label">Or add it yourself</p>
+        <div className="segmented">
+          {[
+            ['claude', 'Claude Code'],
+            ['codex', 'Codex'],
+            ['json', 'Other (JSON)']
+          ].map(([id, label]) => (
+            <button key={id} className={client === id ? 'on' : ''} onClick={() => setClient(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <Copyable text={manual[client]} label="Copy command" />
+
+        <p className="mono label">Claude Code skill</p>
+        <p className="small dim">
+          Teaches Claude Code IV Studio's workflow (shots, H3 prompts, sequences, timeline edits and the house rules) so it picks the right tools without being told. The server also hands every agent a short version, and the full guide through get_guide.
+        </p>
+        <div className="row-actions">
+          <button className="btn btn-small" onClick={installSkill}>
+            {!agents.skillInstalled ? 'Add the skill to Claude Code' : agents.skillCurrent ? 'Skill added ✓' : 'Update the skill'}
+          </button>
+          <button className="link-btn mono" onClick={() => window.ivstudio.links.open('https://github.com/hollisorg/iv-studio/blob/main/skills/iv-studio/SKILL.md')}>
+            View it on GitHub ↗
+          </button>
+        </div>
+        {agents.skillInstalled && <p className="mono small dim">{agents.skillFile}</p>}
+        <p className="dim small">39 tools: setup, shots, sequences, prompt writing, renders, timeline editing, models and characters.</p>
+      </div>
+    </section>
+  )
+}
+
 export default function Settings({ info, recheck, notify, characters, setCharacters }) {
   const [settings, setSettings] = useState(null)
   const [url, setUrl] = useState('')
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     window.ivstudio.settings.get().then((s) => {
@@ -235,10 +321,6 @@ export default function Settings({ info, recheck, notify, characters, setCharact
       notify(err.message)
     }
   }
-
-  const mcp = info?.mcp
-  const claudeCmd = mcp ? `claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "${mcp.command}" "${mcp.args[0]}"` : ''
-  const jsonCfg = mcp ? JSON.stringify({ mcpServers: { 'iv-studio': mcp } }, null, 2) : ''
 
   async function saveCharacter(i, patch) {
     const list = characters.map((c, j) => (j === i ? { ...c, ...patch } : c))
@@ -312,29 +394,7 @@ export default function Settings({ info, recheck, notify, characters, setCharact
         </div>
       </section>
 
-      <section className="group">
-        <div className="group-head">
-          <h2>Agents (MCP)</h2>
-          <p className="dim small">Lets Claude Code and other agents use IV Studio with the same projects and results.</p>
-        </div>
-        <div className="group-body">
-          <p className="mono label">Claude Code</p>
-          <pre className="code">{claudeCmd}</pre>
-          <button
-            className="btn btn-small"
-            onClick={() => {
-              navigator.clipboard.writeText(claudeCmd)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 1500)
-            }}
-          >
-            {copied ? 'Copied' : 'Copy command'}
-          </button>
-          <p className="mono label">Other clients (JSON)</p>
-          <pre className="code">{jsonCfg}</pre>
-          <p className="dim small">Tools: check_setup, list_characters, list_projects, plan_render, generate_previews, finish_candidate, get_job, cancel_job, get_outputs.</p>
-        </div>
-      </section>
+      <AgentSettings mcp={info?.mcp} notify={notify} />
 
       <section className="group">
         <div className="group-head">

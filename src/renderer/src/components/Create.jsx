@@ -147,6 +147,10 @@ export default function Create({ setup, characters, notify, openShot, go }) {
             </button>
           </div>
         </div>
+        <div className="row">
+          <span className="row-label">Shot name</span>
+          <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant (optional)" onChange={(e) => set({ projectName: e.target.value })} />
+        </div>
         <PromptWriter
           context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
           current={form.prompt}
@@ -357,26 +361,23 @@ export default function Create({ setup, characters, notify, openShot, go }) {
         )}
       </section>
 
-      <section className="block go">
-        <div className="row">
-          <span className="row-label">Shot name</span>
-          <input value={form.projectName} placeholder="e.g. Tess car rant" onChange={(e) => set({ projectName: e.target.value })} />
-        </div>
-        <div className="summary">
+      {/* Stays at the bottom of the window while the form scrolls: what will render, and the button. */}
+      <section className="go-dock">
+        <div className="go-info">
           {r ? (
             <>
               <span className="mono">
-                {r.previews} preview{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.frames} frames · {r.seconds} s · {r.model}
+                {r.previews} preview{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {r.model}
               </span>
               <span className="mono dim">
-                Finish at 2 MP → {plan.finish.width} × {plan.finish.height}
+                {r.frames} frames · finish at 2 MP → {plan.finish.width} × {plan.finish.height}
               </span>
             </>
           ) : (
             <span className="mono pink">{planError}</span>
           )}
         </div>
-        <button className="btn btn-primary big" disabled={busy || !form.prompt.trim() || !r || blocked} onClick={hunt}>
+        <button className="btn btn-primary" disabled={busy || !form.prompt.trim() || !r || blocked} onClick={hunt}>
           {busy ? 'Starting…' : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`}
         </button>
       </section>

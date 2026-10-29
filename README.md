@@ -121,14 +121,21 @@ and a ComfyUI recent enough for MiniMax H3. You'll need about 60 GB free for the
 IV Studio includes a local MCP server (stdio). It uses the same service, projects and results as
 the window, so Claude Code or any other MCP client can do nearly everything a person can: render shots
 and sequences, cut them together on the timeline and export, and manage characters and models. The
-command for your install is under **Settings → Agents (MCP)**. For a development checkout:
+command for your install is under **Settings → Agents (MCP)**, together with a message you can paste
+straight into any agent (it adds the server, reads the guide and checks your setup) and a button that adds
+the IV Studio skill to Claude Code. For a development checkout:
 
 ```
 claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "<checkout>\node_modules\electron\dist\electron.exe" "<checkout>\out\main\mcp.js"
 ```
 
+Agents are told how to use it in three ways, all from `resources/agent-guide.md`: the server's
+instructions on connect, the `get_guide` tool, and the Claude Code skill
+([`skills/iv-studio/SKILL.md`](skills/iv-studio/SKILL.md), rebuilt with `node scripts/make-skill.mjs`).
+
 Tools:
 
+- **Guide:** `get_guide`.
 - **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
   `finish_candidate`.
 - **Sequences:** `list_sequences`, `get_sequence`, `save_sequence`, `render_take`, `hunt_shot`,

@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
+import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { Edits, editLength, FORMATS, TRACKS } from '../service/edits'
 import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -18,7 +19,7 @@ import { applyOps, clipEnd } from '../service/timeline'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
-const server = new McpServer({ name: 'iv-studio', version: '0.1.0' })
+const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
 const VIDEOS = path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
 // Packaged, the ffmpeg binaries sit outside the asar archive.
@@ -70,6 +71,10 @@ const finish = {
   rerollSeed: z.number().int().optional()
 }
 
+// The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill).
+server.registerTool('get_guide', { description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit.', inputSchema: {} }, () => ({
+  content: [{ type: 'text', text: readGuide(resourcesDir()) }]
+}))
 tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing.', {}, () => studio.checkSetup())
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())

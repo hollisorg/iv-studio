@@ -17,6 +17,10 @@ const on = (channel) => (cb) => {
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
+  agents: {
+    info: call('agents:info'),
+    installSkill: call('agents:installSkill')
+  },
   edits: {
     meta: call('edits:meta'),
     list: call('edits:list'),
