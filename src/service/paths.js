@@ -16,9 +16,10 @@ export function resourcesDir(hint) {
   throw new Error('IV Studio resources not found')
 }
 
-// comfyApiKey is stored encrypted by the app (Electron safeStorage); it is never sent to the window.
+// comfyApiKey and civitaiKey are stored encrypted by the app (Electron safeStorage); they're never sent to the window.
+// civitaiMature: mature LoRAs from civitai.red on the LoRAs page, off unless the person turns it on.
 // target: 'local' (comfyUrl) or 'cloud' (cloud.url behind the gate, cloudToken; both set by the Cloud page).
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {} }
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false }
 
 export function readSettings(dir = dataDir()) {
   try {

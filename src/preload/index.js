@@ -16,7 +16,7 @@ const on = (channel) => (cb) => {
 
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
-  settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
+  settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
   // pathFor: the path of a file dropped on the window.
   replace: {
     meta: call('replace:meta'),
@@ -138,6 +138,17 @@ contextBridge.exposeInMainWorld('ivstudio', {
     toEdit: call('music:toEdit')
   },
   library: { all: call('library:all'), toEdit: call('library:toEdit') },
+  loras: {
+    meta: call('loras:meta'),
+    search: call('loras:search'),
+    model: call('loras:model'),
+    download: call('loras:download'),
+    downloads: call('loras:downloads'),
+    yours: call('loras:yours'),
+    identify: call('loras:identify'),
+    prefs: call('loras:prefs'),
+    onProgress: on('loras:progress')
+  },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
   sequences: {

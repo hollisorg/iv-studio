@@ -91,6 +91,20 @@ a recording. A spoken line is the shot's voice line: H3 lip-syncs to it.
 4. A different `seed` gives another read of the same words; `list_lines` shows what was said before. The
    first line after a pause takes about 25 s while the model loads, later ones about 5 s.
 
+## LoRAs (Civitai and this PC)
+
+LoRAs change how H3 looks and moves: styles, motion, camera, speed. IV Studio finds them on Civitai and keeps
+track of the ones already in ComfyUI.
+1. `list_my_loras` shows the installed H3 LoRAs with their Civitai names, trigger words and the person's
+   favourites; `identify_lora` looks one up on Civitai by its file hash.
+2. `search_loras` (query, tag, sort) finds more; `get_lora` shows a LoRA's versions, trigger words, preview
+   clips and licence. Check the licence before commercial work.
+3. `download_lora` installs one (ask the person first; needs `CIVITAI_API_KEY` in this server's
+   environment). It returns the LoRA name.
+4. Use a LoRA by passing `extraLoras: [{ name, strength }]` to `generate_previews` (strength about 0.6 to 1),
+   and put its trigger words in the prompt.
+Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned them on in the app.
+
 ## Music (Audio)
 
 IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:

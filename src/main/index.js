@@ -17,6 +17,8 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
+import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
+import { Comfy } from '../service/comfy'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -59,6 +61,7 @@ let replace = null
 let catalog = null
 let voices = null
 let music = null
+let civitai = null
 const pending = new Set() // job ids the window is waiting on
 
 function send(channel, payload) {
@@ -85,6 +88,8 @@ function makeStudio() {
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
   if (music) music.studio = studio
+  // LoRAs live on this PC's ComfyUI, also when renders go to the cloud
+  if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
   // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
   studio.beforeRender = () => voices?.release()
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
@@ -186,10 +191,10 @@ app.whenReady().then(() => {
     }
   })()
   handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, links }))
-  // The window never sees the Comfy.org key, only whether one is saved.
+  // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, cloudToken, ...rest } = s
-    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken }
+    const { comfyApiKey, cloudToken, civitaiKey, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey }
   }
   const comfyKey = () => unseal(readSettings(DATA).comfyApiKey)
   handle('settings:get', () => publicSettings(readSettings(DATA)))
@@ -197,6 +202,11 @@ app.whenReady().then(() => {
     const k = String(key || '').trim()
     if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
     return publicSettings(writeSettings({ comfyApiKey: seal(k) }, DATA))
+  })
+  handle('settings:setCivitaiKey', (key) => {
+    const k = String(key || '').trim()
+    if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    return publicSettings(writeSettings({ civitaiKey: seal(k) }, DATA))
   })
   // ---------- edits (the timeline editor) ----------
   const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
@@ -252,6 +262,16 @@ app.whenReady().then(() => {
     if (!song.file) throw new Error('That song has not finished yet.')
     return putOnEdit(song.file, song.name, editId, 'music')
   })
+  // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
+  civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(DATA).comfyUrl), key: () => unseal(readSettings(DATA).civitaiKey), mature: () => !!readSettings(DATA).civitaiMature, onProgress: (u) => send('loras:progress', u) })
+  handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(DATA).civitaiMature, hasKey: !!readSettings(DATA).civitaiKey }))
+  handle('loras:search', (opts) => civitai.search(opts))
+  handle('loras:model', (id) => civitai.model(id))
+  handle('loras:download', (opts) => civitai.download(opts))
+  handle('loras:downloads', () => civitai.downloadState())
+  handle('loras:yours', () => civitai.yours())
+  handle('loras:identify', (name) => civitai.identify(name))
+  handle('loras:prefs', (name, patch) => civitai.setPrefs(name, patch))
   // ---------- Library: everything made in IV Studio, in one place ----------
   handle('library:all', () => {
     const items = studio.library().map((i) => ({ ...i, type: 'video' }))
@@ -493,7 +513,7 @@ app.whenReady().then(() => {
   handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(DATA).ollamaModel }))
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, cloudToken, cloud, target, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, ...safe } = patch || {}
     const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}

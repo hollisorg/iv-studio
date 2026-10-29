@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Hero from './Hero'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import PromptWriter from './PromptWriter'
+import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 
 const MODES = [
   ['text', 'Text', 'Just the prompt.'],
@@ -36,7 +37,7 @@ const withLine = (prompt, text) => {
   return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
 }
 
-export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora }) {
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
@@ -129,6 +130,29 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     takeLine(incomingLine)
     clearIncomingLine?.()
   }, [incomingLine])
+
+  // The LoRA tray: each LoRA as its picture with a strength slider. A LoRA's trigger words go into the
+  // prompt when it's added (the shot's first description), unless the person turned that off for it.
+  const [picking, setPicking] = useState(false)
+  const [yours, , reloadYours] = useYours()
+  const loraInfo = (name) => yours?.find((x) => x.name === name)
+  function addLora({ name, words = [], title }) {
+    if (form.extraLoras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already in the shot.`, 'info')
+    const info = loraInfo(name)
+    const strength = info?.prefs?.strength ?? 1
+    const auto = info?.prefs?.autoTrigger !== false
+    const add = auto ? words.filter((w) => w && !form.prompt.includes(w)) : []
+    const prompt = add.length ? (/\[Shot 1\] /.test(form.prompt) ? form.prompt.replace('[Shot 1] ', `[Shot 1] ${add.join(', ')}. `) : `${add.join(', ')}. ${form.prompt}`) : form.prompt
+    set({ extraLoras: [...form.extraLoras, { name, strength }], prompt })
+    if (add.length) notify(`Added ${title || loraTitle(name)} and its trigger words (${add.join(', ')}) to the prompt.`, 'info')
+    setPicking(false)
+    reloadYours()
+  }
+  useEffect(() => {
+    if (!incomingLora) return
+    addLora(incomingLora)
+    clearIncomingLora?.()
+  }, [incomingLora])
 
   async function pickVoice() {
     const [file] = await window.ivstudio.files.pick('audio')
@@ -225,6 +249,35 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           <span className="row-label">Shot name</span>
           <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant (optional)" onChange={(e) => set({ projectName: e.target.value })} />
         </div>
+        <div className="row lora-tray-row">
+          <span className="row-label">LoRAs</span>
+          <div className="lora-tray">
+            {form.extraLoras.map((l, i) => {
+              const info = loraInfo(l.name)
+              return (
+                <div key={l.name} className="lora-chip">
+                  <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
+                  <div className="lora-chip-body">
+                    <span className="lora-chip-name" title={l.name}>
+                      {info?.civitai?.name || loraTitle(l.name)}
+                    </span>
+                    <div className="lora-chip-strength">
+                      <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ extraLoras: form.extraLoras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                      <span className="mono small">{Number(l.strength).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button className="lora-chip-x" title="Take it out of the shot" onClick={() => set({ extraLoras: form.extraLoras.filter((_, j) => j !== i) })}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+            <button className="lora-add" onClick={() => setPicking(true)}>
+              + Add LoRA
+            </button>
+          </div>
+        </div>
+        {picking && <LoraPicker notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
         <PromptWriter
           context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
           current={form.prompt}
@@ -414,28 +467,6 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                   </div>
                 )}
                 <p className="dim small">Saved references: a character's look or voice, a place, a style. Best with References mode.</p>
-              </div>
-            </div>
-            <div className="row">
-              <span className="row-label">Extra LoRAs</span>
-              <div>
-                <div className="chips">
-                  {form.extraLoras.map((l, i) => (
-                    <span key={i} className="chip">
-                      {base(l.name)}
-                      <input className="mini" type="number" min={0} max={1.5} step={0.1} value={l.strength} onChange={(e) => set({ extraLoras: form.extraLoras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
-                      <button onClick={() => set({ extraLoras: form.extraLoras.filter((_, j) => j !== i) })}>×</button>
-                    </span>
-                  ))}
-                </div>
-                <select value="" onChange={(e) => e.target.value && set({ extraLoras: [...form.extraLoras, { name: e.target.value, strength: 1 }] })}>
-                  <option value="">+ Add a style LoRA…</option>
-                  {(setup?.loras || []).filter((l) => /minimax|h3/i.test(l)).map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
           </div>

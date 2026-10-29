@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LoraPicker, loraTitle } from './Loras'
 import { ask } from './Confirm'
 import Hero from './Hero'
 import TileDelete from './TileDelete'
@@ -27,8 +28,10 @@ const src = (file) => (file?.url ? media(file.url) : file?.path ? fileUrl(file.p
 
 // Every character in one place: the ones you can use now (presets), ready-made ones to download, and
 // characters you're designing or training.
-export function CharacterList({ openCharacter, notify, characters, setCharacters }) {
+export function CharacterList({ openCharacter, notify, characters, setCharacters, go }) {
   const [list, setList] = useState(null)
+  // which character's LoRA the picker is choosing ('new' adds a character)
+  const [pickFor, setPickFor] = useState(null)
   const [ready, setReady] = useState([])
   const [loras, setLoras] = useState([])
   const [progress, setProgress] = useState({})
@@ -112,7 +115,12 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
                     </div>
                     <div className="row tight">
                       <span className="row-label">LoRA</span>
-                      <input list="iv-loras" value={c.lora} onChange={(e) => saveCharacter(c.id, { lora: e.target.value })} />
+                      <div className="lora-field">
+                        <input list="iv-loras" value={c.lora} onChange={(e) => saveCharacter(c.id, { lora: e.target.value })} />
+                        <button className="btn btn-small" onClick={() => setPickFor(c.id)}>
+                          Choose
+                        </button>
+                      </div>
                     </div>
                     <div className="row tight">
                       <span className="row-label">Voice</span>
@@ -139,9 +147,22 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
               )
             })}
           </div>
-          <button className="btn btn-small" onClick={async () => setCharacters(await C.save([...characters, { id: `char${Date.now().toString(36)}`, name: 'New character', lora: '', strength: 0.8, trigger: 'n4m3' }]))}>
-            + Add one from a LoRA you have
+          <button className="btn btn-small" onClick={() => setPickFor('new')}>
+            + Add one from a LoRA
           </button>
+          {pickFor && (
+            <LoraPicker
+              notify={notify}
+              go={go}
+              onClose={() => setPickFor(null)}
+              onPick={async ({ name, words = [], title }) => {
+                // a new character from the LoRA, or another LoRA for an existing one
+                if (pickFor === 'new') setCharacters(await C.save([...characters, { id: `char${Date.now().toString(36)}`, name: title || loraTitle(name), lora: name, strength: 0.8, trigger: words[0] || 'n4m3' }]))
+                else await saveCharacter(pickFor, { lora: name, ...(words[0] ? { trigger: words[0] } : {}) })
+                setPickFor(null)
+              }}
+            />
+          )}
         </div>
       </section>
 

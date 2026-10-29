@@ -31,6 +31,9 @@ cloud.
   prompt), hunt one to three quick previews, pick one and finish it at 1 to 2 MP with DLSS, an RTX 2×
   upscale and frame generation. Four modes: text, reference pictures, video and audio, first and last
   frame, and continuing a video.
+- **LoRAs.** Browse Civitai's MiniMax H3 LoRAs as cards whose clips play on hover, and download one
+  straight into ComfyUI. Your own LoRAs show as pictures too, and Create's LoRA tray adds them to a shot
+  with a strength slider.
 - **Characters.** Recurring actors as trained H3 LoRAs with a trigger word. Use the ready-made Tess and
   Theo, add a LoRA you have, or design, clip and train your own on your Modal account.
 - **Voices.** Give each character a voice: design one from a description, or save one from a recording.
@@ -47,7 +50,7 @@ cloud.
   stay. **Shinobi** lets an agent cut a whole edit in code.
 - **Library.** Every shot, sequence, export, song and spoken line in one place, ready to drop onto an
   edit or into a shot.
-- **Agents.** A local MCP server with 86 tools gives Claude Code or any MCP client nearly everything a
+- **Agents.** A local MCP server with 91 tools gives Claude Code or any MCP client nearly everything a
   person can do in the window.
 
 <table>
@@ -169,6 +172,24 @@ character goes. On the **Characters** page:
   **Likeness:** with InsightFace's face models (a one-time 289 MB download; non-commercial licence), IV
   Studio scores every still and clip against the picked face and can keep the closest of each scene.
 
+## LoRAs
+
+**LoRAs** (in the Video menu) changes how H3 looks and moves: styles, motion, camera, speed.
+
+- **Discover** searches [Civitai](https://civitai.com)'s MiniMax H3 LoRAs: cards with clips that play on
+  hover, filters (style, concept, cinematic, motion, camera, effect, speed, tool) and sorting. Open one for
+  its example clips, versions, trigger words, licence (whether commercial use is allowed) and the maker's
+  notes, then **Download**: the file goes into ComfyUI's `loras\Civitai\<model>\` folder, checked against the
+  SHA-256 Civitai publishes. Downloading needs your own free Civitai API key (**Settings → Civitai**; it's
+  stored encrypted on your PC). Searching doesn't.
+- **Yours** shows the LoRAs already in ComfyUI, grouped by folder, H3 ones first. **Find on Civitai** looks
+  each one up by its file's SHA-256 for its name, trigger words and a preview. Star your favourites.
+- **Create's LoRA tray** shows the LoRAs in a shot as pictures with a strength slider; **+ Add LoRA** opens
+  the same browser. A LoRA's trigger words go into the prompt when you add it.
+- **Mature LoRAs** are off. **Settings → Civitai → Show mature LoRAs (18+)** switches to civitai.red, with
+  previews blurred until clicked. LoRAs of real people and anything involving minors are never shown, in
+  either mode.
+
 ## Voices
 
 **Audio → Voices** keeps a voice for every character, and **Audio → Lines** says anything in any of them.
@@ -273,7 +294,7 @@ your PC.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 86 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 91 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, speak lines, make
 music, cut them together and export. **Settings → Agents (MCP)** has the command for your install, a
 message to paste into any agent, and a button that adds the IV Studio skill to Claude Code. For a
@@ -305,6 +326,8 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
   `delete_voice`, `speak_line`, `list_lines`, `delete_line`, `release_voice_engine`.
 - **Music:** `music_status`, `make_music`, `list_music`, `get_music`, `cancel_music`, `rename_music`,
   `delete_music`.
+- **LoRAs:** `search_loras`, `get_lora`, `download_lora` (needs `CIVITAI_API_KEY` in the server's
+  environment), `list_my_loras`, `identify_lora`.
 - **Characters:** `list_ready_characters`, `install_ready_character`, `save_character`, `delete_character`,
   `list_choices` (LoRAs and RefMods).
 - **Character training:** `list_character_trainings`, `get_character_training`,
@@ -355,6 +378,8 @@ Tests are in `test/`:
   model and character tool, and an agent's edit reloading in an open dev window.
 - `mcp-voices.mjs`: every voice tool against a set-up voice engine (pass its folder).
 - `mcp-music.mjs`: every music tool against the local ComfyUI (`--minimax` adds a MiniMax song).
+- `mcp-loras.mjs`: the LoRA tools against live Civitai and the local ComfyUI (downloads nothing).
+- `civitai-download.mjs`: Civitai downloads against a mock Civitai (checksum, missing key, real-person refusal).
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
 - `replace.mjs`, `shinobi.mjs`, `training-local.mjs`, `sequence-graphs.mjs`: Replace, Shinobi, character
   design and sequences on real hardware (the last one queues GPU renders).

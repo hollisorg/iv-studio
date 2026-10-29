@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
+import { ask } from './Confirm'
 
 const WRITER_MODEL = 'qwen3-vl:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -69,6 +70,61 @@ function ModelSettings({ settings, setSettings, notify }) {
 }
 
 // Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
+// Civitai: the person's own API key (for downloading LoRAs) and the opt-in for mature LoRAs.
+function CivitaiSettings({ settings, setSettings, notify }) {
+  const [key, setKey] = useState('')
+  async function saveKey(k) {
+    try {
+      setSettings(await window.ivstudio.settings.setCivitaiKey(k))
+      setKey('')
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  async function mature(on) {
+    if (on && !(await ask({ title: 'Show mature LoRAs?', message: 'Only if you are 18 or over. LoRAs then come from civitai.red, Civitai’s unrestricted address, and adult LoRAs and previews can appear (previews stay blurred until you click them). LoRAs of real people and anything involving minors are never shown.', confirm: 'I’m 18 or over, show them' }))) return
+    setSettings(await window.ivstudio.settings.set({ civitaiMature: on }))
+  }
+  return (
+    <section className="group">
+      <div className="group-head">
+        <h2>Civitai</h2>
+        <p className="dim small">Where the LoRAs page finds LoRAs to download.</p>
+      </div>
+      <div className="group-body">
+        {settings.hasCivitaiKey ? (
+          <p className="small">
+            A Civitai API key is saved (encrypted on this PC).{' '}
+            <button className="link-btn" onClick={() => saveKey('')}>
+              Remove it
+            </button>
+          </p>
+        ) : (
+          <>
+            <div className="key-form">
+              <input type="password" value={key} placeholder="Civitai API key" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+              <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
+                Save
+              </button>
+            </div>
+            <p className="small dim">
+              Searching works without one; downloading needs it. It’s free: on{' '}
+              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://civitai.com/user/account')}>
+                civitai.com
+              </button>{' '}
+              open Account settings, then API keys, and add one. The key stays on this PC.
+            </p>
+          </>
+        )}
+        <label className="consent">
+          <input type="checkbox" checked={!!settings.civitaiMature} onChange={(e) => mature(e.target.checked)} />
+          <span>Show mature LoRAs (18+). Off by default.</span>
+        </label>
+      </div>
+    </section>
+  )
+}
+
 function WriterSettings({ settings, setSettings, notify }) {
   const [status, setStatus] = useState(null)
   const [key, setKey] = useState('')
@@ -345,6 +401,8 @@ export default function Settings({ info, recheck, notify, go }) {
       <ModelSettings settings={settings} setSettings={setSettings} notify={notify} />
 
       <WriterSettings settings={settings} setSettings={setSettings} notify={notify} />
+
+      <CivitaiSettings settings={settings} setSettings={setSettings} notify={notify} />
 
       <section className="group">
         <div className="group-head">

@@ -14,6 +14,7 @@ import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
+import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
@@ -27,6 +28,7 @@ const SECTIONS = {
     ['edits', 'Edit'],
     ['workflows', 'Workflows'],
     ['characters', 'Characters'],
+    ['loras', 'LoRAs'],
     ['setup', 'Setup'],
     ['cloud', 'Cloud'],
     ['settings', 'Settings']
@@ -53,6 +55,8 @@ export default function App() {
   const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'create'))
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
+  // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
+  const [loraForCreate, setLoraForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
@@ -124,6 +128,11 @@ export default function App() {
     switchSection('video')
     setPage('edit')
   }
+  const addLoraToCreate = (lora) => {
+    setLoraForCreate(lora)
+    switchSection('video')
+    setPage('create')
+  }
   const sendToCreate = (line) => {
     setLineForCreate(line)
     switchSection('video')
@@ -131,7 +140,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -174,7 +183,8 @@ export default function App() {
         </div>
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
-        {page === 'create' && <Create {...ctx} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} />}
+        {page === 'create' && <Create {...ctx} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} />}
+        {page === 'loras' && <LorasPage {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}
         {page === 'music' && <MusicPage {...ctx} />}

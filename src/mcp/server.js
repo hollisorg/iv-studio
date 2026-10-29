@@ -23,6 +23,8 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
+import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
+import { Comfy } from '../service/comfy'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -615,6 +617,22 @@ tool('get_music', 'One song, brought up to date: status (queued, running, succes
 tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
 tool('rename_music', 'Rename a song.', { songId: z.string(), name: z.string().min(1) }, ({ songId, name }) => music.rename(songId, name))
 tool('delete_music', "Delete a song and its file in IV Studio's music folder (ComfyUI's own output copy stays). Ask the person first.", { songId: z.string() }, ({ songId }) => music.delete(songId))
+
+// ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
+// Downloads use CIVITAI_API_KEY from this server's environment (the app keeps its own key encrypted).
+// Mature LoRAs only when the person has turned them on in the app (Settings > Civitai).
+const civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(DATA).comfyUrl), key: () => process.env.CIVITAI_API_KEY || null, mature: () => !!readSettings(DATA).civitaiMature })
+tool('search_loras', `Search Civitai for MiniMax H3 LoRAs (styles, looks, motion, speed). Returns cards: name, file size, downloads, trigger words, preview clip URLs and whether it's installed. tag: ${LORA_TAGS.filter(([t]) => t).map(([t]) => t).join(', ')}. Real-person LoRAs are never returned; mature ones only if the person turned them on in the app.`, {
+  query: z.string().optional(),
+  tag: z.string().optional(),
+  sort: z.enum(LORA_SORTS).default(LORA_SORTS[0]),
+  cursor: z.string().optional().describe('next from the previous page'),
+  limit: z.number().int().min(1).max(50).default(12)
+}, (a) => civitai.search(a))
+tool('get_lora', 'One Civitai LoRA in full: versions (each with its file, trigger words and preview clips), licence (commercial use, credit) and the maker’s notes.', { modelId: z.number().int() }, ({ modelId }) => civitai.model(modelId))
+tool('download_lora', 'Download a Civitai LoRA version into ComfyUI’s loras folder (Civitai/<model>/), checked against Civitai’s SHA-256. Needs CIVITAI_API_KEY in this server’s environment; ask the person first, and check the licence (get_lora) for commercial work. Returns the LoRA name to use in generate_previews extraLoras, and its trigger words.', { modelId: z.number().int(), versionId: z.number().int().optional() }, (a) => civitai.download(a))
+tool('list_my_loras', 'The LoRAs ComfyUI can load, with what IV Studio knows about each: H3 or not, Civitai name, trigger words, preview, and the person’s favourite and default strength.', { h3Only: z.boolean().default(true) }, async ({ h3Only }) => ({ items: (await civitai.yours()).filter((x) => !h3Only || x.h3) }))
+tool('identify_lora', 'Find an installed LoRA on Civitai by its file’s SHA-256 (name from list_my_loras): its Civitai name, base model, trigger words and a preview. Takes a few seconds per GB.', { name: z.string() }, ({ name }) => civitai.identify(name))
 
 const catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir() })
 tool('list_ready_characters', "IV Studio's ready-made characters (Tess, Theo…): who they are, their face picture's path, and whether they're downloaded and usable.", {}, () => catalog.list())
