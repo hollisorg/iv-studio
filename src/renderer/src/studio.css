@@ -1058,3 +1058,18 @@ input.mini {
 .model-pick select {
   max-width: 560px;
 }
+.nav-foot {
+  display: grid;
+  gap: 6px;
+}
+.nav-site {
+  justify-self: start;
+  color: var(--cream);
+  text-shadow: 0 1px 6px #000, 0 0 2px #000;
+}
+.nav-site:hover {
+  color: var(--pink);
+}
+.cloud-support {
+  color: var(--pink);
+}

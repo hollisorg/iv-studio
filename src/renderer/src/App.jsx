@@ -96,7 +96,12 @@ export default function App() {
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
           </button>
         ))}
-        <div className="nav-foot mono dim">v{info?.version}</div>
+        <div className="nav-foot mono">
+          <span>v{info?.version}</span>
+          <button className="link-btn mono nav-site" onClick={() => window.ivstudio.links.open(info?.links?.website || 'https://infinitevariance.ai')}>
+            infinitevariance.ai ↗
+          </button>
+        </div>
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'create' && <Create {...ctx} />}

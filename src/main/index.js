@@ -173,7 +173,14 @@ app.whenReady().then(() => {
     return fetch(`${studio.comfy.url}/view${u.search}`, { headers: studio.comfy.headers(range ? { Range: range } : {}) })
   })
 
-  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY }))
+  const links = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'links.json'), 'utf8'))
+    } catch {
+      return { website: 'https://infinitevariance.ai', modalSignup: null }
+    }
+  })()
+  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, links }))
   // The window never sees the Comfy.org key, only whether one is saved.
   const publicSettings = (s) => {
     const { comfyApiKey, cloudToken, ...rest } = s

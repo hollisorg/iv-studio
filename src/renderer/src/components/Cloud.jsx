@@ -23,7 +23,7 @@ function Step({ n, title, done, children }) {
 }
 
 // Cloud mode on the user's own Modal account: install the tools, sign in, set up, then switch.
-export default function Cloud({ notify, recheck, setup }) {
+export default function Cloud({ notify, recheck, setup, info }) {
   const [st, setSt] = useState(null)
   const [gpu, setGpu] = useState('L40S')
   const [idle, setIdle] = useState(300)
@@ -124,9 +124,15 @@ export default function Cloud({ notify, recheck, setup }) {
           <>
             <p className="small dim">
               Opens Modal's sign-in page in your browser. New to Modal? Signing up is free.{' '}
-              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://modal.com/signup')}>
+              <button className="link-btn" onClick={() => window.ivstudio.links.open(info?.links?.modalSignup || 'https://modal.com/signup')}>
                 Create an account
               </button>
+              {info?.links?.modalSignup && (
+                <span className="cloud-support">
+                  {' '}
+                  This is IV Studio's referral link: signing up through it supports the app, and costs you nothing extra.
+                </span>
+              )}
             </p>
             <button className="btn btn-small" disabled={!!busy || !st.toolkit} onClick={() => run('Waiting for Modal sign-in', () => window.ivstudio.cloud.signIn())}>
               Sign in with Modal

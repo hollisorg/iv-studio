@@ -1,0 +1,5 @@
+{
+  "_note": "Links the app shows. modalSignup: set to the Modal referral/affiliate link once Matt has one; while it is null the Cloud page uses Modal's normal sign-up page and does not mention supporting IV Studio.",
+  "website": "https://infinitevariance.ai",
+  "modalSignup": null
+}
