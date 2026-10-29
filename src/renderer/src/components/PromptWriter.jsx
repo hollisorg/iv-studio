@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ask } from './Confirm'
 
 // "Write it for me": a plain-words idea in, a finished H3 prompt out. context carries what the writer
 // should respect (mode, seconds, aspect, character, media, sequence, previous shot).
@@ -80,7 +81,7 @@ export function StoryWriter({ character, shotSeconds, existing, onShots, notify 
   const [busy, setBusy] = useState(false)
 
   async function write() {
-    if (existing && !window.confirm('Replace the shots you have with new ones written from the story?')) return
+    if (existing && !(await ask({ title: 'Replace your shots?', message: 'The shots you have are replaced with new ones written from the story.', confirm: 'Write new shots', danger: true }))) return
     setBusy(true)
     try {
       onShots(await window.ivstudio.prompts.story({ story, shots: count, seconds: shotSeconds, character }))

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
+import { ConfirmHost } from './components/Confirm'
 import Library from './components/Library'
 import Cloud from './components/Cloud'
 import { EditEditor, EditList } from './components/Edit'
@@ -139,6 +140,7 @@ export default function App() {
         {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}
       </main>
+      <ConfirmHost />
       {toast && (
         <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>
           {toast.text}

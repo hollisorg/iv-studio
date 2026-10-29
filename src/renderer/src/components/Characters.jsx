@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ask } from './Confirm'
 import Hero from './Hero'
 import TileDelete from './TileDelete'
 import { MediaEditor, MediaTile } from './MediaEditor'
@@ -464,8 +465,20 @@ function Train({ t, act, meta, log, go, trainingId, next }) {
   const p = t.train?.progress
   const ready = cloud?.toolkit && cloud?.workspace
 
-  function start() {
-    if (!window.confirm(`Train ${t.name} on a ${gpu} in your Modal workspace "${cloud.workspace}"?\n\nAbout ${est.minutes} minutes, about $${est.dollars} of Modal time (${est.steps} steps). New Modal accounts get $30 of free compute a month.`)) return
+  async function start() {
+    const yes = await ask({
+      kicker: 'Uses your Modal account',
+      title: `Train ${t.name}?`,
+      message: 'Modal bills by the second and stops the GPU when training ends. New accounts get $30 of free compute a month.',
+      details: [
+        ['GPU', gpu],
+        ['Workspace', cloud.workspace],
+        ['Time', `about ${est.minutes} minutes (${est.steps} steps)`],
+        ['Cost', `about $${est.dollars}`]
+      ],
+      confirm: 'Start training'
+    })
+    if (!yes) return
     act('Starting', () => T.start(trainingId, { gpu, epochs }))
   }
   return (
@@ -533,7 +546,7 @@ function Train({ t, act, meta, log, go, trainingId, next }) {
           {t.train.error && <p className="small pink">{t.train.error}</p>}
           {st === 'training' && <p className="small dim">It keeps training on Modal if you close IV Studio; come back here to see how far it got.</p>}
           {running && (
-            <button className="link-btn mono" onClick={() => window.confirm('Stop training? Epochs saved so far stay in your Modal storage.') && act('Stopping', () => T.stop(trainingId))}>
+            <button className="link-btn mono" onClick={async () => (await ask({ title: 'Stop training?', message: 'Billing stops at once. The epochs saved so far stay in your Modal storage.', confirm: 'Stop training', danger: true })) && act('Stopping', () => T.stop(trainingId))}>
               Stop training
             </button>
           )}

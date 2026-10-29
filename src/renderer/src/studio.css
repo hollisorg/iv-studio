@@ -1687,3 +1687,72 @@ input.mini {
   border-color: var(--red);
   color: var(--red);
 }
+
+/* ---------- confirmation dialog (Confirm.jsx) ---------- */
+.modal.confirm {
+  width: min(480px, 100%);
+  gap: 10px;
+  padding: 24px 26px 20px;
+  border-top: 3px solid var(--pink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  animation: confirm-in 0.14s ease-out;
+}
+.modal.confirm.danger {
+  border-top-color: var(--red);
+}
+.modal.confirm h2 {
+  margin: 0;
+  font: 700 30px / 1.05 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.confirm-message {
+  margin: 0;
+  color: var(--paper-dim);
+  line-height: 1.5;
+}
+.confirm-details {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.confirm-details div {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+}
+.confirm-details dt {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.confirm-details dd {
+  margin: 0;
+}
+.modal.confirm .modal-foot {
+  margin-top: 10px;
+}
+.btn.btn-danger {
+  background: var(--red);
+  border: 1px solid var(--red);
+  color: var(--ink);
+}
+.btn.btn-danger:hover {
+  background: var(--pink);
+  border-color: var(--pink);
+}
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal.confirm {
+    animation: none;
+  }
+}

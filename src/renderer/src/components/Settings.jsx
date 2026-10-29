@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ask } from './Confirm'
 import Hero from './Hero'
 
 const WRITER_MODEL = 'qwen3-vl:8b-instruct'
@@ -329,7 +330,7 @@ export default function Settings({ info, recheck, notify, characters, setCharact
 
   // Shots already made with a character keep working: their finish uses the saved plan, not this list.
   async function deleteCharacter(i) {
-    if (!window.confirm(`Delete ${characters[i].name}? Its LoRA file stays in ComfyUI; only the preset is removed.`)) return
+    if (!(await ask({ title: `Delete ${characters[i].name}?`, message: 'Only the preset goes; its LoRA file stays in ComfyUI.', confirm: 'Delete', danger: true }))) return
     setCharacters(await window.ivstudio.characters.save(characters.filter((_, j) => j !== i)))
   }
 
