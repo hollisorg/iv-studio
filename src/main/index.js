@@ -12,6 +12,7 @@ import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
+import { Shinobi } from '../service/shinobi'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -195,7 +196,41 @@ app.whenReady().then(() => {
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- characters: design, clips, training on Modal, pick ----------
+  // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
+  const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })
+  const briefFile = (id) => path.join(shinobi.projectDir(id), 'iv-brief.md')
+  handle('shinobi:status', () => shinobi.status())
+  handle('shinobi:install', () => shinobi.install())
+  handle('shinobi:faceModels', () => shinobi.installFaceModels((p) => send('shinobi:faceProgress', p)))
+  handle('shinobi:projects', () => shinobi.projects())
+  handle('shinobi:project', (id) => ({ ...shinobi.project(id), brief: fs.existsSync(briefFile(id)) ? fs.readFileSync(briefFile(id), 'utf8') : '' }))
+  handle('shinobi:create', (name) => shinobi.call('create_project', { name: name || 'Untitled film' }))
+  handle('shinobi:saveBrief', (id, text) => fs.writeFileSync(briefFile(id), String(text)))
+  // Files from a dialog, or IV Studio renders (library items); clips over 64 MB import fine through the engine.
+  handle('shinobi:importFiles', async (id) => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'wav', 'mp3', 'm4a', 'flac', 'ogg', 'png', 'jpg', 'jpeg', 'webp'] }] })
+    for (const f of r.canceled ? [] : r.filePaths) await shinobi.call('import_media', { project_id: id, source: f, audio_only: false })
+    return shinobi.project(id)
+  })
+  handle('shinobi:importRender', async (id, item) => {
+    await shinobi.call('import_media', { project_id: id, source: await localCopy(item.file) })
+    return shinobi.project(id)
+  })
+  handle('shinobi:importAudioOf', async (id, file) => {
+    await shinobi.call('import_media', { project_id: id, source: file, audio_only: true })
+    return shinobi.project(id)
+  })
+  handle('shinobi:presets', async () => (await shinobi.call('get_capabilities')).presets)
+  handle('shinobi:call', (tool, args) => shinobi.call(tool, args))
+  handle('shinobi:tools', () => shinobi.tools())
+  handle('shinobi:addToEdit', async (video, name) => {
+    const e = edits.create(name || 'Shinobi cut')
+    const m = await edits.addMedia(video, { type: 'shinobi', label: name })
+    return edits.save(e.id, { media: { [m.id]: m }, clips: [{ id: 'c1', track: 'V1', media: m.id, start: 0, in: 0, out: m.duration || 4, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }] })
+  })
+
   trainings = new Trainings({
+    shinobi,
     dataDir: DATA,
     resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')),
     studio,
@@ -227,6 +262,7 @@ app.whenReady().then(() => {
   handle('training:removeItem', (id, kind, itemId) => trainings.removeItem(id, kind, itemId))
   handle('training:makeClips', (id, opts) => trainings.makeClips(id, opts))
   handle('training:remakeClips', (id, clipIds) => trainings.remakeClips(id, clipIds))
+  handle('training:rank', (id, opts) => trainings.rank(id, opts))
   handle('training:keepClip', (id, clipId, keep) => trainings.keepClip(id, clipId, keep))
   handle('training:estimate', (id, opts) => trainings.estimateFor(trainings.get(id), opts))
   handle('training:buildDataset', (id) => trainings.buildDataset(id))

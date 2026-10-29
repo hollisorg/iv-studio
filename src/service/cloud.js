@@ -45,6 +45,17 @@ export class Cloud {
   // uv (checked against its published SHA-256), then a Python with Modal's client, all inside app data.
   async installToolkit() {
     if (this.toolkitReady()) return true
+    await this.ensureUv()
+    this.onLog('Setting up Python and Modal’s client…')
+    const env = this.uvEnv()
+    await this.exec(this.uvExe, ['venv', path.join(this.dir, 'venv'), '--python', '3.12'], { env })
+    await this.exec(this.uvExe, ['pip', 'install', '--python', path.join(this.dir, 'venv'), `modal==${MODAL_VERSION}`], { env })
+    return this.toolkitReady()
+  }
+
+  // uv and its Python downloads live in the cloud folder; Shinobi's engine shares them.
+  uvEnv = () => ({ UV_PYTHON_INSTALL_DIR: path.join(this.dir, 'python'), UV_CACHE_DIR: path.join(this.dir, 'uv-cache') })
+  async ensureUv() {
     fs.mkdirSync(path.join(this.dir, 'uv'), { recursive: true })
     if (!fs.existsSync(this.uvExe)) {
       this.onLog('Downloading uv (Python manager)…')
@@ -62,11 +73,7 @@ export class Cloud {
       await this.exec(tar, ['-xf', zip, '-C', path.join(this.dir, 'uv')])
       fs.rmSync(zip, { force: true })
     }
-    this.onLog('Setting up Python and Modal’s client…')
-    const env = { UV_PYTHON_INSTALL_DIR: path.join(this.dir, 'python'), UV_CACHE_DIR: path.join(this.dir, 'uv-cache') }
-    await this.exec(this.uvExe, ['venv', path.join(this.dir, 'venv'), '--python', '3.12'], { env })
-    await this.exec(this.uvExe, ['pip', 'install', '--python', path.join(this.dir, 'venv'), `modal==${MODAL_VERSION}`], { env })
-    return this.toolkitReady()
+    return this.uvExe
   }
 
   // The Modal workspace the client is signed in to, or null.

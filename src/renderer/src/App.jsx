@@ -6,6 +6,7 @@ import Cloud from './components/Cloud'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
+import { ShinobiList, ShinobiProject } from './components/Shinobi'
 import Setup from './components/Setup'
 import Shot from './components/Shot'
 
@@ -14,6 +15,7 @@ const PAGES = [
   ['library', 'Shots'],
   ['sequences', 'Sequences'],
   ['edits', 'Edit'],
+  ['shinobi', 'Shinobi'],
   ['characters', 'Characters'],
   ['setup', 'Setup'],
   ['cloud', 'Cloud'],
@@ -26,6 +28,7 @@ export default function App() {
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
   const [trainingId, setTrainingId] = useState(null)
+  const [shinobiId, setShinobiId] = useState(null)
   const [setup, setSetup] = useState(null)
   const [checking, setChecking] = useState(false)
   const [characters, setCharacters] = useState([])
@@ -68,6 +71,11 @@ export default function App() {
     setPage('sequence')
   }
 
+  const openShinobi = (id) => {
+    setShinobiId(id)
+    setPage('shinobi-film')
+  }
+
   const openCharacter = (id) => {
     setTrainingId(id)
     setPage('character')
@@ -79,7 +87,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, jobs, setJobs, info, go: setPage }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   return (
@@ -98,7 +106,7 @@ export default function App() {
       </header>
       <nav className="nav">
         {PAGES.map(([id, label], i) => (
-          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') ? 'on' : ''}`} onClick={() => setPage(id)}>
+          <button key={id} className={`nav-item ${page === id || (id === 'library' && page === 'shot') || (id === 'sequences' && page === 'sequence') || (id === 'edits' && page === 'edit') || (id === 'characters' && page === 'character') || (id === 'shinobi' && page === 'shinobi-film') ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'setup' && missing > 0 && <span className="nav-dot" />}
@@ -119,6 +127,8 @@ export default function App() {
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'edits' && <EditList {...ctx} />}
         {page === 'edit' && editId && <EditEditor key={editId} editId={editId} {...ctx} />}
+        {page === 'shinobi' && <ShinobiList {...ctx} />}
+        {page === 'shinobi-film' && shinobiId && <ShinobiProject key={shinobiId} projectId={shinobiId} {...ctx} />}
         {page === 'characters' && <CharacterList {...ctx} />}
         {page === 'character' && trainingId && <CharacterTrainer key={trainingId} trainingId={trainingId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}

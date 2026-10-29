@@ -131,7 +131,9 @@ non_diegetic_music: N/A`
 
 export class Trainings {
   // studio: the Studio service (renders, characters). onLog(line, trainingId) gets Modal's output.
-  constructor({ dataDir, resourcesDir, studio, ffmpeg, ffprobe, onLog, onChange }) {
+  // shinobi (optional): Shinobi's engine, whose Python runs face likeness (rank).
+  constructor({ dataDir, resourcesDir, studio, ffmpeg, ffprobe, onLog, onChange, shinobi = null }) {
+    this.shinobi = shinobi
     this.dir = path.join(dataDir, 'trainings')
     this.dataDir = dataDir
     this.resourcesDir = resourcesDir
@@ -404,6 +406,46 @@ export class Trainings {
     if (!t.consent) throw new Error('Confirm the clips are of an invented person, or of someone who agreed to this.')
     for (const p of paths) t.clips.push({ id: randomUUID().slice(0, 6), source: 'upload', caption: `${t.trigger}, ${t.who}${caption ? `, ${caption}` : ''}`, keep: true, file: { path: p } })
     return this.write(t)
+  }
+
+  // ---------- likeness (InsightFace ArcFace through Shinobi's Python) ----------
+  // Scores every rendered scene candidate and clip against the picked face; with pick, keeps the closest
+  // candidate of each generated scene. Returns {stills: [{id, best, score}], clips: [{id, score}]}.
+  async rank(id, { pick = false } = {}) {
+    if (!this.shinobi) throw new Error('Likeness needs Shinobi’s engine.')
+    const v = await this.refresh(id)
+    if (!v.face?.file) throw new Error('Pick a face first: the stills and clips are compared with it.')
+    const dir = path.join(this.folder(id), 'candidates')
+    const ref = await this.studio.localCopy(v.face.file, dir)
+    const items = [] // {file, set}
+    for (const s of v.stills) {
+      if (s.source === 'upload') items.push({ file: s.file.path, set: (score) => (s.score = score) })
+      for (const c of s.candidates) {
+        const out = v.jobs[c.jobId]?.outputs?.find((o) => o.kind === 'image')
+        if (out) items.push({ file: await this.studio.localCopy(out, dir), set: (score) => (c.score = score) })
+      }
+    }
+    for (const c of v.clips) if (c.file) items.push({ file: c.file.path ? c.file.path : await this.studio.localCopy(c.file, dir), set: (score) => (c.score = score) })
+    const scores = await this.shinobi.likeness(ref, items.map((i) => i.file))
+    scores.forEach((r, k) => items[k].set(r.score))
+    const t = this.get(id)
+    t.stills = v.stills.map((s) => {
+      const keep = t.stills.find((x) => x.id === s.id) || s
+      keep.score = s.score
+      keep.candidates = s.candidates
+      if (pick && s.source === 'generated') {
+        const best = s.candidates.reduce((b, c, k) => (c.score != null && (b == null || c.score > s.candidates[b].score) ? k : b), null)
+        if (best != null) Object.assign(keep, { pick: best, file: v.jobs[s.candidates[best].jobId].outputs.find((o) => o.kind === 'image') })
+      }
+      return keep
+    })
+    t.clips = t.clips.map((c) => ({ ...c, score: v.clips.find((x) => x.id === c.id)?.score ?? c.score }))
+    t.rankedAt = new Date().toISOString()
+    this.write(t)
+    return {
+      stills: t.stills.map((s) => ({ id: s.id, scene: s.scene, pick: s.pick, score: s.source === 'upload' ? s.score : s.candidates[s.pick]?.score ?? null, best: Math.max(...s.candidates.map((c) => c.score ?? -1), s.score ?? -1) })),
+      clips: t.clips.map((c) => ({ id: c.id, score: c.score ?? null }))
+    }
   }
 
   // ---------- the dataset (Fizgig's flat folder) ----------

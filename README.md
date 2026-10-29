@@ -92,6 +92,23 @@ suits realism or animation can be used where it fits. Text, First / last frame a
 fl2va-type model; References and Sequences need a ref2va-type model, and Settings warns when they
 don't match.
 
+## Shinobi
+
+**Shinobi** is IV Studio's agent-driven editor. Where **Edit** is a timeline you cut by hand, Shinobi
+lets an agent (or a one-click recipe) author the whole edit in code: cuts on the beat, speed ramps,
+punch-ins and camera moves, typography, masks and effects, captions from speech and sound cues, even 3D
+scenes. It renders on your PC with the Edge or Chrome you already have and IV Studio's ffmpeg.
+
+- **Set up** once from the Shinobi page (about 440 MB, under a minute, inside IV Studio's own folder).
+- **A film:** write a brief, add files or any IV Studio render, and either build a first cut from one of
+  12 styles (beat montage, noir portrait, speed ramp and freeze, lyric type…) or copy the brief to your agent.
+- **Agents** reach every Shinobi tool through IV Studio's MCP (`shinobi_tools`, `shinobi`), and get
+  preview frames back as pictures. Finished renders go into Edit with one click.
+
+Shinobi's engine is [OpenKatana](https://github.com/rk0neki/OpenKatana) by its contributors (Apache-2.0),
+installed unmodified at commit `f24f60a`; its licence and notice are in `resources/licenses/`. Shinobi is not
+affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
+
 ## Characters
 
 A character is a trained MiniMax H3 LoRA plus its trigger word. Write `{char}` in the prompt where
@@ -108,6 +125,11 @@ the character goes. Add characters under **Settings**.
 3. **Train:** Fizgig on your own Modal account (`resources/cloud/train_app.py`, B200 or H200), with the
    minutes and dollars shown first; Tess took 29 minutes and $3.80. It keeps training if IV Studio
    closes. Or open the dataset folder and train in Fizgig yourself.
+**Likeness:** with InsightFace's face models (downloaded once from the Characters page, 289 MB; the
+models are for non-commercial research use), IV Studio scores every still and clip against the picked
+face (`resources/python/likeness.py`: InsightFace's SCRFD and ArcFace through ONNX Runtime, the same
+numbers as InsightFace's own pipeline) and can keep the closest candidate of each scene.
+
 4. **Pick:** chosen checkpoints are downloaded into ComfyUI's `loras\MiniMax H3\<name>\` and rendered on
    one seed side by side; the one you choose becomes a character at strength 0.8.
 
@@ -167,8 +189,10 @@ Tools:
   moment, so an agent can check its cut), `export_edit`, `get_edit_export`, `cancel_edit_export`.
 - **Character training:** `list_character_trainings`, `get_character_training`, `create_character_training`,
   `update_character_training`, `design_faces`, `pick_face`, `design_scenes`, `pick_still`, `make_training_clips`,
-  `set_training_item`, `add_training_files`, `estimate_training`, `start_training` (paid: needs the person's OK and
+  `set_training_item`, `add_training_files`, `rank_likeness`, `estimate_training`, `start_training` (paid: needs the person's OK and
   `confirm_cost`), `stop_training`, `test_checkpoints`, `adopt_checkpoint`.
+- **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi` (any of its 72 tools; pictures come
+  back as images), `shinobi_project`.
 - **Models and characters:** `list_h3_models`, `set_workflow_model`, `list_choices` (LoRAs and RefMods),
   `save_character`, `delete_character`.
 
@@ -195,6 +219,8 @@ Tests are in `test/`:
 - `mcp-tools.mjs`: drives every editor, library, model and character tool over stdio (temporary data).
 - `mcp-live.mjs`: an agent's edit reloads in an open dev window and undoes cleanly.
 - `edit-export.mjs`: exports a five-clip edit with the bundled ffmpeg.
+- `shinobi.mjs`: installs the pinned engine, builds a beat-cut from a recipe, renders it with Edge, and scores
+  likeness against InsightFace's own numbers.
 - `training-local.mjs`: designs faces and scenes, renders talking clips and builds a dataset that fits Fizgig's rules
   (local GPU, nothing on Modal).
 - `media-prepare.mjs`: crops a picture, trims a video frame-exact and trims a sound.

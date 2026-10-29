@@ -1523,3 +1523,91 @@ input.mini {
 .characters > .btn {
   justify-self: start;
 }
+
+/* ---------- shinobi ---------- */
+.shinobi .block > .btn,
+.shinobi .group-body > .btn {
+  justify-self: start;
+}
+.shinobi-cover {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--ink-3);
+}
+.shinobi-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.shinobi-presets .mode-card {
+  min-height: 0;
+  gap: 6px;
+}
+.shinobi-previews {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.shinobi-previews img {
+  width: 100%;
+  background: #000;
+}
+.shinobi-brief {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.shinobi-lib {
+  max-height: 280px;
+  overflow: auto;
+}
+.shinobi-tools {
+  display: grid;
+  gap: 8px;
+}
+.shinobi-tools[open] {
+  padding-top: 6px;
+}
+.shinobi-tool {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.char-img,
+.char-video-wrap {
+  position: relative;
+}
+.char-score {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  font: 600 11px/1.4 var(--mono);
+  background: rgba(16, 12, 14, 0.82);
+  color: var(--paper);
+  pointer-events: none;
+}
+.char-score.good {
+  color: #7fe0a8;
+}
+.char-score.ok {
+  color: var(--cream);
+}
+.char-score.low {
+  color: var(--red);
+}
+.char-likeness {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}

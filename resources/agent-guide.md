@@ -72,15 +72,34 @@ cropped to the shot's aspect, because they're stretched to fit).
   others animation). `null` goes back to the default.
 - `list_choices` lists the LoRAs and RefMods ComfyUI has; `save_character` adds a preset.
 
+## Shinobi: edits you cut as an agent
+
+Shinobi is IV Studio's agent-driven editor (its engine is OpenKatana). Where Edit is a hand-made timeline,
+Shinobi lets you author a whole edit in code: cuts on the beat, speed ramps, punch-ins and camera moves,
+typography, masks and effects, captions from speech, sound cues, even 3D scenes, rendered on this PC.
+
+1. `shinobi_status`; if it isn't set up, ask the person, then `shinobi_setup` (about 440 MB, once).
+2. `shinobi_tools` lists every tool. Call one with `shinobi` {tool, arguments}. Read the engine's guides
+   first: `shinobi` read_guide with topic agent, timeline and effects. Don't guess timeline fields.
+3. `create_project` (or use one from the Shinobi page: `shinobi_project` shows its media, saved edit,
+   renders and the person's brief), then `import_media` with IV Studio render paths (`list_renders`) or files.
+4. Look before cutting: `preview_source` and `source_contact_sheet` return pictures. For music,
+   `analyze_audio` and `plan_music_edit`; `build_recipe` gives a starting point in one of 12 styles.
+5. `save_timeline` with the revision from `get_project`, then `preview_timeline` (pictures) at the opening,
+   cuts and titles. `start_render` with a new request id, then poll `get_render`.
+6. Tell the person; the render shows on the Shinobi page, where it can go into Edit.
+
 ## Train a new character
 
 The Characters page (and these tools) turn an invented person into a character preset:
 1. `create_character_training` (name, who), then `design_faces` with a face description (age, face
    shape, eyes, skin, hair). Look at the four candidates and `pick_face`.
-2. `design_scenes` renders that face in eight places and outfits; `pick_still` the most alike in each
-   (or leave one out). Captions never describe the face, so the face binds to the trigger word.
+2. `design_scenes` renders that face in eight places and outfits (four candidates each); `pick_still` the
+   most alike in each (or leave one out), or let `rank_likeness` with pick do it by face score. Captions never
+   describe the face, so the face binds to the trigger word.
 3. Optionally set a voice sample (`update_character_training` voice), then `make_training_clips`:
-   H3 talking clips from the stills. Drop any where the face drifts (`set_training_item` keep false).
+   H3 talking clips from the face and the stills. `rank_likeness` scores them; render weak ones again
+   (`make_training_clips` redo) or drop them (`set_training_item` keep false). Aim for 0.45+.
 4. `estimate_training`, tell the person the minutes and dollars, and `start_training` only after they
    agree (it bills their Modal account; Tess took 29 minutes and $3.80 on a B200).
 5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the

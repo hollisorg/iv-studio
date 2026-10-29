@@ -18,6 +18,24 @@ contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey') },
   // pathFor: the path of a file dropped on the window.
+  shinobi: {
+    status: call('shinobi:status'),
+    install: call('shinobi:install'),
+    faceModels: call('shinobi:faceModels'),
+    projects: call('shinobi:projects'),
+    project: call('shinobi:project'),
+    create: call('shinobi:create'),
+    saveBrief: call('shinobi:saveBrief'),
+    importFiles: call('shinobi:importFiles'),
+    importRender: call('shinobi:importRender'),
+    importAudioOf: call('shinobi:importAudioOf'),
+    presets: call('shinobi:presets'),
+    call: call('shinobi:call'),
+    tools: call('shinobi:tools'),
+    addToEdit: call('shinobi:addToEdit'),
+    onLog: on('shinobi:log'),
+    onFaceProgress: on('shinobi:faceProgress')
+  },
   training: {
     meta: call('training:meta'),
     list: call('training:list'),
@@ -37,6 +55,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     makeClips: call('training:makeClips'),
     keepClip: call('training:keepClip'),
     remakeClips: call('training:remakeClips'),
+    rank: call('training:rank'),
     estimate: call('training:estimate'),
     openDataset: call('training:openDataset'),
     start: call('training:start'),

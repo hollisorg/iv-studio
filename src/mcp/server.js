@@ -18,6 +18,7 @@ import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 import { applyOps, clipEnd } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
+import { Shinobi } from '../service/shinobi'
 
 const DATA = dataDir()
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
@@ -299,7 +300,47 @@ tool('get_edit_export', 'Progress of an export started with export_edit (state r
 tool('cancel_edit_export', 'Stop an export started with export_edit.', { editId: z.string() }, ({ editId }) => ({ cancelled: edits.cancelExport(editId) }))
 
 // ---------- character training ----------
-const trainings = new Trainings({ dataDir: DATA, resourcesDir: resourcesDir(), studio, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
+// ---------- Shinobi: the agent-driven editor (OpenKatana engine) ----------
+const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpegDir: path.dirname(edits.ffmpeg) })
+// Pictures a Shinobi tool made (preview frames, contact sheets), as small JPEGs for the agent to look at.
+async function picturesOf(result, max = 4) {
+  const paths = []
+  const walk = (v) => {
+    if (paths.length >= max) return
+    if (typeof v === 'string' && /\.(png|jpe?g)$/i.test(v) && fs.existsSync(v)) paths.push(v)
+    else if (Array.isArray(v)) v.forEach(walk)
+    else if (v && typeof v === 'object') Object.values(v).forEach(walk)
+  }
+  walk(result)
+  const out = []
+  for (const p of paths) {
+    const jpg = path.join(os.tmpdir(), `shinobi-${path.basename(p)}-${Date.now()}.jpg`)
+    await new Promise((res) => spawn(edits.ffmpeg, ['-v', 'error', '-y', '-i', p, '-vf', 'scale=768:-2', '-q:v', '4', jpg], { windowsHide: true }).on('close', res))
+    if (fs.existsSync(jpg)) out.push({ type: 'image', data: fs.readFileSync(jpg).toString('base64'), mimeType: 'image/jpeg' }), fs.rmSync(jpg, { force: true })
+  }
+  return out
+}
+tool('shinobi_status', "Is Shinobi (IV Studio's agent-driven editor, built on OpenKatana) set up on this PC, which browser it renders with, and its projects folder.", {}, () => ({ ...shinobi.status(), projects: shinobi.status().installed ? shinobi.projects() : [] }))
+tool('shinobi_setup', "Install Shinobi's engine into IV Studio's folder (about 440 MB, under a minute; nothing else on the PC changes). Ask the person first.", {}, () => shinobi.install())
+tool('shinobi_tools', 'Every Shinobi tool with its parameters: media inspection, timeline authoring, beat analysis, captions, effects, 3D, rendering and review. Call them with the shinobi tool. Start with read_guide (agent, timeline, effects).', {}, () => shinobi.tools())
+server.registerTool('shinobi', {
+  description: "Call one Shinobi tool (see shinobi_tools) with its arguments. Projects live in IV Studio's Shinobi workspace and show on the Shinobi page. Typical flow: create_project, import_media (any IV Studio render path or file), preview_source, save_timeline (with the revision from get_project), preview_timeline, start_render, get_render. Preview pictures come back as images. Never call paid or hosted model tools without the person's OK.",
+  inputSchema: { tool: z.string(), arguments: z.record(z.any()).default({}) }
+}, async ({ tool: name, arguments: args }) => {
+  try {
+    const result = await shinobi.call(name, args)
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }, ...(await picturesOf(result))] }
+  } catch (err) {
+    return fail(err)
+  }
+})
+tool('shinobi_project', "A Shinobi project as IV Studio sees it: media with file paths, the saved edit's length and shape, renders with their video files, and the person's brief.", { projectId: z.string() }, ({ projectId }) => {
+  const p = shinobi.project(projectId)
+  const brief = path.join(p.dir, 'iv-brief.md')
+  return { ...p, brief: fs.existsSync(brief) ? fs.readFileSync(brief, 'utf8') : '' }
+})
+
+const trainings = new Trainings({ dataDir: DATA, resourcesDir: resourcesDir(), studio, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, shinobi })
 // A training with each render's state; pictures and clips as file paths/URLs rather than the raw jobs.
 async function trainingView(id) {
   const t = await trainings.refresh(id)
@@ -422,6 +463,10 @@ tool('test_checkpoints', "After training: download the chosen epochs into ComfyU
   await trainings.testCheckpoints(trainingId, { epochs, prompt })
   return trainingView(trainingId)
 })
+tool('rank_likeness', 'Score every scene candidate and clip against the picked face with InsightFace ArcFace (0.6+ the same person, 0.4-0.6 a family resemblance, under 0.4 someone else); pick: keep the closest candidate of each scene. Needs the face models (the person downloads them on the Characters page; non-commercial licence).', {
+  trainingId: z.string(),
+  pick: z.boolean().default(false)
+}, ({ trainingId, pick }) => trainings.rank(trainingId, { pick }))
 tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, ({ trainingId, epoch }) => trainingView(trainings.adopt(trainingId, epoch).id))
 
 // ---------- models and characters ----------

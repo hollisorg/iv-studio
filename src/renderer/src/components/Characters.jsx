@@ -180,7 +180,44 @@ function stepOf(t) {
 }
 
 // A render's picture or video, or how far it has got.
-function Render({ j, kind = 'image', onClick, picked }) {
+// A likeness score as a small badge: ArcFace cosine similarity with the picked face.
+function Score({ value }) {
+  if (value == null) return null
+  const tone = value >= 0.5 ? 'good' : value >= 0.4 ? 'ok' : 'low'
+  return <span className={`char-score ${tone}`} title="Face likeness with the picked face (InsightFace ArcFace): 0.6+ the same person, 0.4-0.6 a family resemblance, under 0.4 someone else">{value.toFixed(2)}</span>
+}
+
+// Scoring stills and clips against the picked face, after a one-time download of InsightFace's models.
+function Likeness({ t, act, trainingId, pick }) {
+  const [st, setSt] = useState(null)
+  const [progress, setProgress] = useState(null)
+  useEffect(() => {
+    window.ivstudio.shinobi.status().then(setSt)
+    return window.ivstudio.shinobi.onFaceProgress(setProgress)
+  }, [])
+  if (!st || !t.face) return null
+  if (!st.faceModels)
+    return (
+      <div className="char-likeness">
+        <p className="small">
+          <span className="pink">Rank by likeness.</span> IV Studio can score every still and clip against the picked face and keep the closest, the way Tess's set was chosen. It uses InsightFace's face models (289 MB, downloaded once from InsightFace's release{st.installed ? '' : ', with Shinobi’s engine, about 440 MB'}). {st.faceLicence}
+        </p>
+        <button className="btn btn-small" onClick={() => act('Downloading the face models', () => window.ivstudio.shinobi.faceModels()).then(() => window.ivstudio.shinobi.status().then(setSt))}>
+          {progress != null && progress < 1 ? `Downloading… ${Math.round(progress * 100)}%` : 'Download the face models'}
+        </button>
+      </div>
+    )
+  return (
+    <div className="char-likeness">
+      <button className="btn btn-small" onClick={() => act('Scoring likeness', () => window.ivstudio.training.rank(trainingId, { pick }))}>
+        {pick ? 'Score and keep the closest of each scene' : 'Score against the face'}
+      </button>
+      {t.rankedAt && <span className="mono small dim">Scored {new Date(t.rankedAt).toLocaleTimeString()}. 0.5+ good · 0.4–0.5 fair · under 0.4 another face</span>}
+    </div>
+  )
+}
+
+function Render({ j, kind = 'image', onClick, picked, score }) {
   if (!j || !DONE.includes(j.status))
     return <div className="char-pending mono small dim">{j?.status === 'running' ? `Rendering${j.progress?.max ? ` ${Math.round((100 * j.progress.value) / j.progress.max)}%` : '…'}` : j?.queuePosition ? `Queued · ${j.queuePosition}` : 'Queued'}</div>
   if (j.status !== 'success') return <div className="char-pending mono small pink">{j.error || j.status}</div>
@@ -189,9 +226,13 @@ function Render({ j, kind = 'image', onClick, picked }) {
   return kind === 'image' ? (
     <button className={`char-img ${picked ? 'picked' : ''}`} onClick={() => onClick?.(out)}>
       <img src={media(out.url)} alt="" />
+      <Score value={score} />
     </button>
   ) : (
-    <video className="char-video" src={media(out.url)} controls preload="metadata" />
+    <div className="char-video-wrap">
+      <video className="char-video" src={media(out.url)} controls preload="metadata" />
+      <Score value={score} />
+    </div>
   )
 }
 
@@ -233,6 +274,7 @@ function Design({ t, job, act, save, trainingId }) {
       <section className="block">
         <p className="mono label">02 · Scenes</p>
         <p className="small dim">Eight stills in different places, clothes and light, so none of them welds to the trigger. Each scene has four candidates: pick the one that looks most like your face ("Two more" if none do), or leave the scene out. A weak still teaches the LoRA a blend.</p>
+        {t.stills.length > 0 && <Likeness t={t} act={act} trainingId={trainingId} pick />}
         {t.face && !t.stills.some((s) => s.source === 'generated') && (
           <button className="btn btn-primary" onClick={() => act('Making the scenes', () => T.designScenes(trainingId))}>
             Make the scene stills
@@ -246,7 +288,7 @@ function Design({ t, job, act, save, trainingId }) {
                   <img src={src(s.file)} alt="" />
                 </span>
               ) : (
-                s.candidates.map((c, k) => <Render key={c.jobId} j={job(c.jobId)} picked={s.pick === k} onClick={(file) => act('Picking', () => T.pickStill(trainingId, s.id, { pick: k, file }))} />)
+                s.candidates.map((c, k) => <Render key={c.jobId} j={job(c.jobId)} picked={s.pick === k} score={c.score} onClick={(file) => act('Picking', () => T.pickStill(trainingId, s.id, { pick: k, file }))} />)
               )}
             </div>
             <div className="char-still-side">
@@ -351,7 +393,7 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
         <div className="char-clips">
           {t.clips.map((c) => (
             <div key={c.id} className={`char-clip ${c.keep ? '' : 'left-out'}`}>
-              {c.source === 'upload' ? <video className="char-video" src={src(c.file)} controls preload="metadata" /> : <Render j={job(c.jobId)} kind="video" />}
+              {c.source === 'upload' ? <video className="char-video" src={src(c.file)} controls preload="metadata" /> : <Render j={job(c.jobId)} kind="video" score={c.score} />}
               <input className="small" defaultValue={c.caption} onBlur={(e) => e.target.value !== c.caption && act('Saving', () => T.setCaption(trainingId, 'clip', c.id, e.target.value))} />
               <div className="row-actions">
                 <label className="me-snap small">
@@ -372,6 +414,7 @@ function Clips({ t, job, act, save, trainingId, meta, notify, next }) {
             </div>
           ))}
         </div>
+        {t.clips.some((c) => c.file) && <Likeness t={t} act={act} trainingId={trainingId} />}
         <p className="small dim">If the face drifts or the mouth smears, render that clip again or leave it out. Every clip uses the picked face as its main reference.</p>
       </section>
 

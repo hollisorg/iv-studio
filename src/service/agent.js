@@ -7,7 +7,7 @@ import path from 'node:path'
 export const readGuide = (resourcesDir) => fs.readFileSync(path.join(resourcesDir, 'agent-guide.md'), 'utf8')
 
 export const INSTRUCTIONS = `IV Studio renders MiniMax H3 video shots and continuous sequences with recurring characters on a local ComfyUI, and cuts them together on its own timeline. It shares projects, renders and edits with the IV Studio window the person sees.
-Start with check_setup and list_characters, and call get_guide once for the full workflow (shots, prompts, sequences, timeline edits) and the house rules.
+Start with check_setup and list_characters, and call get_guide once for the full workflow (shots, prompts, sequences, timeline edits, Shinobi agent-driven edits, character training) and the house rules.
 Prompts write {char} where the character goes. Renders take GPU minutes: poll get_job every 20-30 s. Ask the person before deleting anything or using the paid Context IR writer, and only cancel jobs you started.`
 
 // mcp: { command, args } of this install, or null for the copy hosted on GitHub.
