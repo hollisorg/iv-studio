@@ -206,16 +206,10 @@ app.whenReady().then(() => {
   })
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
-  // ---------- Audio: voices (VoiceStudio does the speaking, IV Studio keeps the voices) ----------
-  voices = new Voices({ dataDir: DATA, url: readSettings(DATA).voiceUrl, ffmpeg: edits.ffmpeg })
-  const voiceStudioExe = path.join(process.env.LOCALAPPDATA || '', 'Programs', 'VoiceStudio', 'VoiceStudio.exe')
-  handle('voices:status', async () => ({ ...(await voices.status()), installed: fs.existsSync(voiceStudioExe) }))
-  handle('voices:start', async () => {
-    if (!fs.existsSync(voiceStudioExe)) throw new Error("VoiceStudio isn't installed on this PC yet.")
-    const err = await shell.openPath(voiceStudioExe)
-    if (err) throw new Error(err)
-    return true
-  })
+  // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------
+  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(DATA).target === 'cloud' ? null : studio.comfy) })
+  handle('voices:status', () => voices.status())
+  handle('voices:setup', () => voices.setup())
   handle('voices:list', async () => (await catalog?.attachVoices().catch(() => {}), voices.list()))
   handle('voices:design', (opts) => voices.design(opts))
   handle('voices:create', (opts) => voices.create(opts))
@@ -501,7 +495,6 @@ app.whenReady().then(() => {
     const s = publicSettings(writeSettings(safe, DATA))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
-    if ('voiceUrl' in (patch || {})) voices.url = String(s.voiceUrl || '').replace(/\/$/, '')
     return s
   })
   handle('setup:check', () => studio.checkSetup())
@@ -606,3 +599,5 @@ app.on('second-instance', () => {
   }
 })
 app.on('window-all-closed', () => app.quit())
+// the voice engine is a Python process of ours: stop it with the app
+app.on('will-quit', () => voices?.release())

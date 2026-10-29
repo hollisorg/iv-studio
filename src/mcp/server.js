@@ -548,10 +548,11 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   studio.saveCharacters(old ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return next
 })
-// ---------- Audio: voices and spoken lines (VoiceStudio on this PC does the speaking) ----------
-const voices = new Voices({ dataDir: DATA, url: readSettings(DATA).voiceUrl, ffmpeg: edits.ffmpeg })
-const ENGINE = z.enum(VOICE_ENGINES.map((e) => e.id))
-tool('voice_status', 'Whether VoiceStudio (the free local app IV Studio speaks through) is running, and whether its VoxCPM2 and CosyVoice 3 engines are ready. If it is not running, ask the person to start it.', {}, () => voices.status())
+// ---------- Audio: voices and spoken lines (IV Studio's own engine: VoxCPM2 and Whisper) ----------
+const voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpeg: edits.ffmpeg, comfy: studio.comfy })
+process.on('exit', () => voices.release())
+tool('voice_status', `Whether IV Studio's voice engine is set up (${VOICE_ENGINES.map((e) => `${e.label}: ${e.note}`).join(' ')} Whisper large-v3 turbo, MIT, reads the words in recordings). installed false: ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.`, {}, () => voices.status())
+tool('setup_voices', "Set up IV Studio's voice engine once: a Python environment with PyTorch and VoxCPM, plus the VoxCPM2 and Whisper models, about 12 GB of free downloads into IV Studio's data folder (roughly 5-15 minutes). Ask the person first. Returns when done.", {}, () => voices.setup())
 tool('list_voices', 'Every saved voice: id, name, kind (designed, clone, ready), engine, seed, reference recording and its words, and which characters use it.', {}, async () => {
   await catalog.attachVoices().catch(() => {})
   const chars = studio.characters()
@@ -570,29 +571,27 @@ tool('create_voice', 'Save a voice from a recording: a design_voice candidate (k
   text: z.string().optional(),
   description: z.string().optional(),
   seed: z.number().int().nullable().optional(),
-  engine: ENGINE.default('voxcpm2'),
   consent: z.boolean().default(false)
 }, (a) => voices.create(a))
-tool('update_voice', 'Rename a voice or change its default engine, seed, words or description.', { id: z.string(), name: z.string().optional(), engine: ENGINE.optional(), seed: z.number().int().nullable().optional(), text: z.string().optional(), description: z.string().optional() }, ({ id, ...patch }) => voices.update(id, patch))
+tool('update_voice', 'Rename a voice or change its default seed, words or description.', { id: z.string(), name: z.string().optional(), seed: z.number().int().nullable().optional(), text: z.string().optional(), description: z.string().optional() }, ({ id, ...patch }) => voices.update(id, patch))
 tool('delete_voice', 'Delete a voice and the lines spoken in it; characters using it lose their voice. Ask the person first.', { id: z.string() }, ({ id }) => {
   const r = voices.delete(id)
   studio.saveCharacters(studio.characters().map((c) => (c.voiceId === id ? { ...c, voiceId: null } : c)))
   return r
 })
-tool('speak_line', `Say a line in a voice (or a character's voice) and get a WAV: use it as voiceLine in generate_previews so H3 lip-syncs to it, with the same words inside the prompt's <d>[English] …</d>. About 10 s a line; the same words, voice, engine and seed come back from the cache.`, {
+tool('speak_line', `Say a line in a voice (or a character's voice) and get a WAV: use it as voiceLine in generate_previews so H3 lip-syncs to it, with the same words inside the prompt's <d>[English] …</d>. About 5 s a line once the engine is warm (the first after a pause loads the model, about 25 s); the same words, voice and seed come back from the cache.`, {
   text: z.string().min(1).max(600),
   voiceId: z.string().optional(),
   character: z.string().optional().describe('A character id with a voice (save_character voiceId); used when voiceId is left out'),
-  engine: ENGINE.optional(),
   seed: z.number().int().optional()
-}, ({ text, voiceId, character, engine, seed }) => {
+}, ({ text, voiceId, character, seed }) => {
   const id = voiceId || studio.characters().find((c) => c.id === character)?.voiceId
   if (!id) throw new Error(character ? `${character} has no voice yet: give them one with save_character voiceId.` : 'Give voiceId or character.')
-  return voices.speak({ voiceId: id, text, engine, seed })
+  return voices.speak({ voiceId: id, text, seed })
 })
-tool('list_lines', 'Lines spoken so far, newest first (optionally for one voice): text, file, duration, engine, seed.', { voiceId: z.string().optional() }, ({ voiceId }) => ({ items: voices.lines(voiceId) }))
+tool('list_lines', 'Lines spoken so far, newest first (optionally for one voice): text, file, duration, seed.', { voiceId: z.string().optional() }, ({ voiceId }) => ({ items: voices.lines(voiceId) }))
 tool('delete_line', 'Delete a spoken line and its file.', { id: z.string() }, ({ id }) => voices.deleteLine(id))
-tool('release_voice_engine', 'Ask VoiceStudio to unload its voice models so the GPU memory goes back to ComfyUI (IV Studio also does this before a render, and ten minutes after the last line).', {}, async () => (await voices.release(), { released: true }))
+tool('release_voice_engine', 'Stop the voice engine so its GPU memory goes back to ComfyUI (IV Studio also does this before a render, and ten minutes after the last line).', {}, async () => (await voices.release(), { released: true }))
 
 // ---------- Audio: music (MiniMax Music 3 and ACE-Step 1.5 on this PC's ComfyUI) ----------
 const music = new Music({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })

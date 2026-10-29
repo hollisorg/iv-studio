@@ -76,17 +76,20 @@ cropped to the shot's aspect, because they're stretched to fit).
 
 ## Voices and spoken lines (Audio)
 
-IV Studio keeps a voice per character and speaks lines in it through VoiceStudio, a free app on this PC
-(VoxCPM2 and CosyVoice 3, both Apache-2.0). A spoken line is the shot's voice line: H3 lip-syncs to it.
-1. `voice_status`; if VoiceStudio isn't running, ask the person to start it.
+IV Studio keeps a voice per character and speaks lines in it with its own voice engine on this PC:
+VoxCPM2 (OpenBMB, Apache-2.0) speaks, designs and clones, and Whisper large-v3 turbo (MIT) reads the words in
+a recording. A spoken line is the shot's voice line: H3 lip-syncs to it.
+1. `voice_status`; if installed is false, the engine needs a one-time setup (about 12 GB of free
+   downloads): ask the person to press Set up voices on Audio > Voices, or run `setup_voices` with their OK.
 2. `list_voices` shows the voices and which characters use them. Make one with `design_voice` (a
-   description; three candidates) and `create_voice` kind designed with the chosen file, seed and
+   description; up to four candidates) and `create_voice` kind designed with the chosen file, seed and
    description, or `create_voice` kind clone from a recording (only with the person's confirmation that it
    is their voice, an invented one, or someone who agreed: `consent` true). `save_character` voiceId gives
    a character the voice.
 3. `speak_line` with character (or voiceId) and the words returns a WAV. Pass it as `voiceLine` to
    `generate_previews` and write the same words in the prompt's `<d>[English] …</d>`.
-4. A different `seed` gives another read of the same words; `list_lines` shows what was said before.
+4. A different `seed` gives another read of the same words; `list_lines` shows what was said before. The
+   first line after a pause takes about 25 s while the model loads, later ones about 5 s.
 
 ## Music (Audio)
 

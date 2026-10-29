@@ -9,64 +9,64 @@ const KIND = { designed: 'Designed', clone: 'Your recording', ready: 'Ready-made
 const ENGINE_LABEL = { voxcpm2: 'VoxCPM2', cosyvoice: 'CosyVoice 3' }
 const DESIGN_EXAMPLE = 'A woman in her forties from Glasgow. Low, warm and a little gravelly; quick, dry and kind. Close, natural recording in a small room.'
 
-// VoiceStudio's state, with Start or Get when it isn't running. Shared by Voices, Lines and Create.
+// IV Studio's voice engine (VoxCPM2 and Whisper in its own folder), with Set up the first time. Shared by
+// Voices, Lines and Create.
 export function useVoiceEngine() {
   const [status, setStatus] = useState(null)
-  const check = () => V().status().then(setStatus, () => setStatus({ running: false, engines: [] }))
+  const check = () => V().status().then(setStatus, () => setStatus({ ready: false, engines: [] }))
   useEffect(() => {
     check()
   }, [])
   return [status, check]
 }
 
+const GB = (b) => `${Math.round(b / 1024 ** 3)} GB`
+
 export function EngineStatus({ status, check, notify }) {
-  const [starting, setStarting] = useState(false)
-  async function start() {
-    setStarting(true)
+  const [busy, setBusy] = useState(false)
+  const [log, setLog] = useState('')
+  useEffect(() => V().onLog((line) => setLog(String(line).slice(0, 200))), [])
+  // a setup started elsewhere (another page, an agent) shows here until it finishes
+  useEffect(() => {
+    if (!status?.installing) return
+    const t = setInterval(check, 3000)
+    return () => clearInterval(t)
+  }, [status?.installing])
+  async function setup() {
+    setBusy(true)
     try {
-      await V().start()
-      // VoiceStudio takes 20-40 s to answer after it opens
-      for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 3000))
-        const s = await V().status()
-        if (s.running) break
-      }
+      await V().setup()
     } catch (err) {
       notify(err.message)
     } finally {
-      setStarting(false)
+      setBusy(false)
       check()
     }
   }
-  if (!status) return <p className="voice-engine mono dim">Looking for VoiceStudio…</p>
-  if (status.running)
+  if (!status) return <p className="voice-engine mono dim">Checking the voice engine…</p>
+  if (status.ready)
     return (
       <p className="voice-engine mono">
-        <span className="cloud-ok">● VoiceStudio running</span>
-        {status.engines.map((e) => (
-          <span key={e.id} className={e.available ? '' : 'dim'} title={e.available ? e.note : e.reason}>
-            {e.label} {e.available ? '✓' : '✗'}
+        <span className="cloud-ok">● Voice engine ready</span>
+        {status.setup?.models.map((m) => (
+          <span key={m.name} className="dim" title={`${m.by}, ${m.licence}`}>
+            {m.name}
           </span>
         ))}
       </p>
     )
+  const working = busy || status.installing
   return (
     <div className="voice-engine off">
-      <p className="mono pink">● VoiceStudio isn't running</p>
-      <p className="small dim">IV Studio speaks through VoiceStudio, a free app that runs on this PC. It uses VoiceStudio's VoxCPM2 and CosyVoice 3 engines (both Apache-2.0, fine for published work).</p>
+      <p className="mono pink">● Voices need a one-time setup</p>
+      <p className="small dim">
+        IV Studio speaks with {status.setup?.models.map((m) => `${m.name} (${m.by}, ${m.licence})`).join(' and ')}, running on this PC. Setup downloads about {GB(status.setup?.size || 0)} into IV Studio's folder, once.
+      </p>
       <div className="row-actions">
-        {status.installed ? (
-          <button className="btn btn-small btn-primary" disabled={starting} onClick={start}>
-            {starting ? 'Starting VoiceStudio…' : 'Start VoiceStudio'}
-          </button>
-        ) : (
-          <button className="btn btn-small btn-primary" onClick={() => window.ivstudio.links.open(status.get?.url)}>
-            Get VoiceStudio ↗
-          </button>
-        )}
-        <button className="link-btn mono" onClick={check}>
-          Check again
+        <button className="btn btn-small btn-primary" disabled={working} onClick={setup}>
+          {working ? 'Setting up…' : `Set up voices · ${GB(status.setup?.size || 0)}`}
         </button>
+        {working && <span className="mono small dim voice-log">{log}</span>}
       </div>
     </div>
   )
@@ -112,7 +112,7 @@ export function VoicesPage({ notify, characters, setCharacters }) {
                 <div className="voice-card-head">
                   <input className="preset-name" value={v.name} onChange={(e) => rename(v.id, e.target.value)} />
                   <span className="mono small dim">
-                    {KIND[v.kind] || v.kind} · {ENGINE_LABEL[v.engine] || v.engine}
+                    {KIND[v.kind] || v.kind}
                     {v.seed != null && ` · seed ${v.seed}`}
                   </span>
                 </div>
@@ -146,8 +146,8 @@ export function VoicesPage({ notify, characters, setCharacters }) {
         </div>
       </section>
 
-      <DesignVoice notify={notify} ready={status?.running} onSaved={load} />
-      <CloneVoice notify={notify} ready={status?.running} onSaved={load} />
+      <DesignVoice notify={notify} ready={status?.ready} onSaved={load} />
+      <CloneVoice notify={notify} ready={status?.ready} onSaved={load} />
     </div>
   )
 }
@@ -172,7 +172,7 @@ function DesignVoice({ notify, ready, onSaved }) {
   }
   async function keep(t) {
     try {
-      await V().create({ name: name || 'New voice', file: t.file, text: t.text, description: t.description, seed: t.seed, engine: 'voxcpm2', kind: 'designed' })
+      await V().create({ name: name || 'New voice', file: t.file, text: t.text, description: t.description, seed: t.seed, kind: 'designed' })
       notify(`Saved “${name || 'New voice'}”. Give it to a character above.`, 'info')
       setTakes([])
       setName('')
@@ -316,7 +316,6 @@ export function LinesPage({ notify, characters, sendToCreate }) {
   const [lines, setLines] = useState([])
   const [voiceId, setVoiceId] = useState(null)
   const [text, setText] = useState('')
-  const [engine, setEngine] = useState(null)
   const [seed, setSeed] = useState('')
   const [busy, setBusy] = useState(false)
   const loadLines = () => V().lines().then(setLines, () => {})
@@ -331,7 +330,7 @@ export function LinesPage({ notify, characters, sendToCreate }) {
   async function speak() {
     setBusy(true)
     try {
-      await V().speak({ voiceId, text, engine: engine || undefined, seed: seed === '' ? undefined : Number(seed) })
+      await V().speak({ voiceId, text, seed: seed === '' ? undefined : Number(seed) })
       loadLines()
     } catch (err) {
       notify(err.message)
@@ -369,21 +368,11 @@ export function LinesPage({ notify, characters, sendToCreate }) {
               </div>
               <textarea rows={3} value={text} placeholder="Okay, so I found the café. And it's closed. Of course it's closed." onChange={(e) => setText(e.target.value)} />
               <div className="row">
-                <span className="row-label">Engine</span>
-                <div className="segmented">
-                  {['voxcpm2', 'cosyvoice'].map((id) => (
-                    <button key={id} className={(engine || voice?.engine || 'voxcpm2') === id ? 'on' : ''} onClick={() => setEngine(id)}>
-                      {ENGINE_LABEL[id]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="row">
                 <span className="row-label">Seed</span>
                 <input className="mini" type="number" value={seed} placeholder={String(voice?.seed ?? 41)} onChange={(e) => setSeed(e.target.value)} />
               </div>
               <p className="dim small seed-note">A different seed gives a different read of the same words.</p>
-              <button className="btn btn-primary" disabled={!status?.running || busy || !text.trim()} onClick={speak}>
+              <button className="btn btn-primary" disabled={!status?.ready || busy || !text.trim()} onClick={speak}>
                 {busy ? 'Speaking… (up to a minute the first time)' : 'Speak'}
               </button>
             </>

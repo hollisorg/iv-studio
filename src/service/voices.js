@@ -1,23 +1,20 @@
 // Voices: a voice for each character, and lines spoken in it for H3 to lip-sync.
 // IV Studio keeps every voice itself, as a short reference recording plus the words in it (the data
-// folder's voices/<id>/), so a voice belongs to the person, not to an engine. The speaking is done by
-// VoiceStudio, a separate free app that runs on this PC (http://127.0.0.1:3900), with VoxCPM2 or
-// CosyVoice 3. Both are Apache-2.0. VoiceStudio's default, OmniVoice, has non-commercial weights, so IV
-// Studio never asks for it.
+// folder's voices/<id>/), so a voice belongs to the person, not to an engine. The speaking is done by IV
+// Studio's own voice engine (./voiceengine.js): VoxCPM2 (Apache-2.0) designs, clones and speaks, and Whisper
+// (MIT) reads the words in a recording. Voices made earlier with VoiceStudio keep working as they are.
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
+import { VOICE_SETUP, VoiceEngine } from './voiceengine.js'
 
-export const VOICE_ENGINES = [
-  { id: 'voxcpm2', label: 'VoxCPM2', design: true, maxRef: 30, note: 'Designs voices from a description and clones them. Apache-2.0.' },
-  { id: 'cosyvoice', label: 'CosyVoice 3', design: false, maxRef: 20, note: 'Clones only; a second opinion on the same voice. Apache-2.0.' }
-]
-export const VOICESTUDIO = { url: 'https://github.com/debpalash/VoiceStudio/releases', name: 'VoiceStudio' }
+export const VOICE_ENGINES = [{ id: 'voxcpm2', label: 'VoxCPM2', design: true, maxRef: 30, note: 'Designs voices from a description and clones them. Apache-2.0.' }]
 // A reference longer than this only slows every line down.
 const REF_SECONDS = 20
-// After this long without a line, VoiceStudio is asked to let go of the GPU (a render on this PC asks at
-// once). Loading VoxCPM2 again takes about 40 s, so not too eagerly.
+// After this long without a line, the engine stops and gives the GPU back (a render on this PC stops it at
+// once). Loading VoxCPM2 again takes a little while, so not too eagerly.
 const IDLE_RELEASE_MS = 10 * 60 * 1000
 
 const readJson = (file, fallback) => {
@@ -42,60 +39,34 @@ const WAV_SECONDS = (buf) => {
 }
 
 export class Voices {
-  constructor({ dataDir, url = 'http://127.0.0.1:3900', ffmpeg }) {
+  // comfy: this PC's ComfyUI. When its queue is empty, it is asked to unload its models before the voice
+  // model loads; VoxCPM2 next to a full GPU loads several times slower.
+  constructor({ dataDir, resourcesDir, ffmpeg, onLog, comfy = null }) {
     this.dir = path.join(dataDir, 'voices')
-    this.url = url.replace(/\/$/, '')
     this.ffmpeg = ffmpeg
+    this.comfy = comfy
+    this.engine = new VoiceEngine({ dataDir, resourcesDir, onLog, beforeLoad: () => this.makeRoom() })
     this.idle = null
   }
 
   // ---------- the engine ----------
-  async api(route, { method = 'GET', json, form, timeout = 300000 } = {}) {
-    let res
-    try {
-      res = await fetch(`${this.url}${route}`, {
-        method,
-        headers: json ? { 'Content-Type': 'application/json' } : undefined,
-        body: json ? JSON.stringify(json) : form,
-        signal: AbortSignal.timeout(timeout)
-      })
-    } catch {
-      throw new Error(`VoiceStudio isn't running at ${this.url}. Start it, then try again.`)
-    }
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      let detail = text
-      try {
-        detail = JSON.parse(text).detail || text
-      } catch {}
-      throw new Error(`VoiceStudio: ${typeof detail === 'string' ? detail.slice(0, 300) : JSON.stringify(detail).slice(0, 300)}`)
-    }
-    return res
+  // ready: set up and able to speak (the models load on the first line).
+  status() {
+    const e = this.engine.status()
+    return { ...e, ready: e.installed, engines: VOICE_ENGINES.map((x) => ({ ...x, available: e.installed })), setup: VOICE_SETUP }
+  }
+  setup = () => this.engine.install().then(() => this.status())
+  async makeRoom() {
+    const comfy = typeof this.comfy === 'function' ? this.comfy() : this.comfy
+    if (!comfy || comfy.remote) return
+    const q = await comfy.queue()
+    if (!q.queue_running.length && !q.queue_pending.length) await comfy.freeMemory()
   }
 
-  // Whether VoiceStudio answers, and which of the two Apache engines it has ready.
-  async status() {
-    try {
-      const engines = await (await this.api('/engines/tts', { timeout: 5000 })).json()
-      const by = Object.fromEntries((engines.backends || []).map((b) => [b.id, b]))
-      return {
-        running: true,
-        url: this.url,
-        engines: VOICE_ENGINES.map((e) => ({ ...e, available: !!by[e.id]?.available, reason: by[e.id]?.available ? null : by[e.id]?.reason || 'Not installed in VoiceStudio.' })),
-        get: VOICESTUDIO
-      }
-    } catch (err) {
-      return { running: false, url: this.url, error: err.message, engines: VOICE_ENGINES.map((e) => ({ ...e, available: false })), get: VOICESTUDIO }
-    }
-  }
-
-  // Unloads IV Studio's engines from VoiceStudio so the GPU's memory goes back to ComfyUI.
+  // Stops the engine so the GPU's memory goes back to ComfyUI.
   async release() {
     clearTimeout(this.idle)
-    try {
-      const loaded = await (await this.api('/model/loaded', { timeout: 5000 })).json()
-      for (const m of loaded.models || []) if (VOICE_ENGINES.some((e) => e.id === m.engine_id) && m.unloadable) await this.api(`/model/unload/${encodeURIComponent(m.id)}`, { method: 'POST', timeout: 30000 }).catch(() => {})
-    } catch {}
+    this.engine.release()
   }
   releaseSoon() {
     clearTimeout(this.idle)
@@ -103,12 +74,17 @@ export class Voices {
     this.idle.unref?.()
   }
 
+  // The words in a recording. Any format: it goes to the engine as a 16 kHz WAV.
   async transcribe(file) {
-    const form = new FormData()
-    form.append('file', new Blob([fs.readFileSync(file)]), path.basename(file))
-    form.append('model', 'whisper-1')
-    const out = await (await this.api('/v1/audio/transcriptions', { method: 'POST', form })).json()
-    return String(out.text || '').trim()
+    const wav = path.join(os.tmpdir(), `ivs-asr-${randomUUID().slice(0, 8)}.wav`)
+    try {
+      await this.ffmpegTo(file, wav, ['-ac', '1', '-ar', '16000'])
+      const out = await this.engine.call('transcribe', { file: wav })
+      this.releaseSoon()
+      return String(out.text || '').trim()
+    } finally {
+      fs.rmSync(wav, { force: true })
+    }
   }
 
   // ---------- the library ----------
@@ -154,8 +130,7 @@ export class Voices {
       const s = Number(seed) + i * 7
       const file = path.join(dir, `${hash(description, say, s)}.wav`)
       if (!fs.existsSync(file)) {
-        const res = await this.api('/v1/audio/speech', { method: 'POST', json: { model: 'voxcpm2', input: say, description, seed: s, response_format: 'wav' } })
-        fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()))
+        await this.engine.call('design', { text: say, description, out: file, seed: s })
       }
       out.push({ file, seed: s, text: say, description, duration: WAV_SECONDS(fs.readFileSync(file)) })
     }
@@ -165,23 +140,25 @@ export class Voices {
 
   // A voice from a recording: a design candidate, or someone's own recording (clone). The recording is cut
   // to its first 20 seconds, mono, as the voice's reference. Words: given, or read from it by Whisper.
-  async create({ name, file, text = '', description = '', seed = null, engine = 'voxcpm2', kind = 'clone', consent = false }) {
+  async create({ name, file, text = '', description = '', seed = null, kind = 'clone', consent = false }) {
     if (!name?.trim()) throw new Error('Give the voice a name.')
     if (!file || !fs.existsSync(file)) throw new Error('Pick the recording first.')
     if (kind === 'clone' && !consent) throw new Error("Only clone your own voice, an invented one, or someone who agreed to it: tick the box to confirm.")
-    if (!VOICE_ENGINES.some((e) => e.id === engine)) throw new Error(`Unknown voice engine ${engine}.`)
     const id = randomUUID().slice(0, 8)
     const ref = path.join(this.folder(id), 'reference.wav')
     fs.mkdirSync(path.dirname(ref), { recursive: true })
     await this.convert(file, ref)
     let words = String(text || '').trim()
     if (!words) words = await this.transcribe(ref).catch(() => '')
-    return this.write({ id, name: name.trim(), kind, engine, seed, description, text: words, reference: ref, source: file, duration: WAV_SECONDS(fs.readFileSync(ref)), createdAt: now() })
+    return this.write({ id, name: name.trim(), kind, engine: 'voxcpm2', seed, description, text: words, reference: ref, source: file, duration: WAV_SECONDS(fs.readFileSync(ref)), createdAt: now() })
   }
 
   convert(from, to) {
+    return this.ffmpegTo(from, to, ['-t', String(REF_SECONDS), '-ac', '1', '-ar', '24000'])
+  }
+  ffmpegTo(from, to, opts) {
     return new Promise((resolve, reject) => {
-      const p = spawn(this.ffmpeg, ['-y', '-v', 'error', '-i', from, '-t', String(REF_SECONDS), '-vn', '-ac', '1', '-ar', '24000', '-c:a', 'pcm_s16le', to], { windowsHide: true })
+      const p = spawn(this.ffmpeg, ['-y', '-v', 'error', '-i', from, ...opts, '-vn', '-c:a', 'pcm_s16le', to], { windowsHide: true })
       let err = ''
       p.stderr.on('data', (d) => (err += d))
       p.on('error', reject)
@@ -208,26 +185,15 @@ export class Voices {
 
   // `text` said in a voice: a WAV in voices/lines, kept in the history. The same words, voice, engine and
   // seed give back the same file without asking the engine again.
-  async speak({ voiceId, text, seed = null, engine = null }) {
+  async speak({ voiceId, text, seed = null }) {
     const say = String(text || '').trim()
     if (!say) throw new Error('Type the line first.')
     const v = this.get(voiceId)
-    const eng = engine || v.engine || 'voxcpm2'
+    const eng = 'voxcpm2'
     const s = seed ?? v.seed ?? 41
     if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
     const file = path.join(this.dir, 'lines', `${v.id}_${hash(say, eng, s, v.text)}.wav`)
-    if (!fs.existsSync(file)) {
-      const form = new FormData()
-      form.append('text', say)
-      form.append('ref_audio', new Blob([fs.readFileSync(v.reference)]), 'reference.wav')
-      form.append('ref_text', v.text)
-      form.append('engine', eng)
-      form.append('seed', String(s))
-      form.append('effect_preset', 'raw')
-      const res = await this.api('/generate', { method: 'POST', form })
-      fs.mkdirSync(path.dirname(file), { recursive: true })
-      fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()))
-    }
+    if (!fs.existsSync(file)) await this.engine.call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s })
     this.releaseSoon()
     const line = { id: randomUUID().slice(0, 8), voiceId: v.id, voice: v.name, text: say, engine: eng, seed: s, file, duration: WAV_SECONDS(fs.readFileSync(file)), createdAt: now() }
     writeJson(this.linesFile(), [line, ...this.allLines()].slice(0, 500))

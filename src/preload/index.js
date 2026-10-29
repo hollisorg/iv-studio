@@ -114,7 +114,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
   voices: {
     status: call('voices:status'),
-    start: call('voices:start'),
+    setup: call('voices:setup'),
+    onLog: on('voices:log'),
     list: call('voices:list'),
     design: call('voices:design'),
     create: call('voices:create'),

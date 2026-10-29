@@ -2170,3 +2170,10 @@ input.mini {
   flex: 1 1 110px;
   min-width: 0;
 }
+.voice-log {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

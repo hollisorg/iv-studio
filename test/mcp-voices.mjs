@@ -1,6 +1,8 @@
-// MCP voices test: voice tools over stdio on a temporary data folder, against the VoiceStudio running on
-// this PC (it speaks two short lines and designs one voice; about a minute on a 4090).
-//   node test/mcp-voices.mjs
+// MCP voices test: voice tools over stdio on a temporary data folder, with IV Studio's own voice engine
+// (VoxCPM2 + Whisper). Pass an engine folder that is already set up (a data folder's voiceengine/, about
+// 12 GB) so the test doesn't download it again; it is linked into the temporary folder, not copied. It
+// speaks three short lines, designs one voice and reads one recording (about a minute on a 4090).
+//   node test/mcp-voices.mjs "%APPDATA%\IV Studio\voiceengine"
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import fs from 'node:fs'
@@ -8,12 +10,18 @@ import os from 'node:os'
 import path from 'node:path'
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ivs-voices-'))
+const engineDir = process.argv[2]
+if (!engineDir || !fs.existsSync(path.join(engineDir, 'installed.json'))) {
+  console.log("Pass a set-up voice engine folder (a data folder's voiceengine/).")
+  process.exit(1)
+}
+fs.symlinkSync(path.resolve(engineDir), path.join(temp, 'voiceengine'), 'junction')
 let failures = 0
 const transport = new StdioClientTransport({ command: path.resolve('node_modules/electron/dist/electron.exe'), args: [path.resolve('out/main/mcp.js')], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', IV_STUDIO_DATA: temp } })
 const c = new Client({ name: 'voices-test', version: '1' })
 await c.connect(transport)
 const call = async (name, args = {}) => {
-  const r = await c.callTool({ name, arguments: args })
+  const r = await c.callTool({ name, arguments: args }, undefined, { timeout: 300000 }) // a cold voice model takes a while to load
   return { error: r.isError ? r.content[0].text : null, value: r.structuredContent }
 }
 const expect = (label, cond, detail = '') => {
@@ -22,8 +30,8 @@ const expect = (label, cond, detail = '') => {
 }
 
 const st = await call('voice_status')
-expect('voice_status', !st.error && st.value.running && st.value.engines.every((e) => e.available), JSON.stringify(st.value?.engines.map((e) => [e.id, e.available])))
-if (!st.value?.running) process.exit(1)
+expect('voice_status', !st.error && st.value.ready && st.value.engines.every((e) => e.available), JSON.stringify(st.value?.engines.map((e) => [e.id, e.available])))
+if (!st.value?.ready) process.exit(1)
 
 // a fresh data folder has Tess as a preset: her bundled voice joins and becomes hers
 const vs = await call('list_voices')
@@ -46,6 +54,8 @@ const noConsent = await call('create_voice', { name: 'Clone', file: d.value.item
 expect('create_voice clone needs consent', !!noConsent.error)
 const made = await call('create_voice', { name: 'Old Cork', file: d.value.items[0].file, kind: 'designed', seed: 3, text: d.value.items[0].text, description: d.value.items[0].description })
 expect('create_voice designed', !made.error && fs.existsSync(made.value.reference), made.error || made.value.id)
+const heard = await call('create_voice', { name: 'Heard', file: line.value.file, kind: 'designed' })
+expect('create_voice reads the words with Whisper', !heard.error && /kiln/i.test(heard.value.text), heard.error || heard.value.text)
 const given = await call('save_character', { id: 'tess', voiceId: made.value.id })
 expect('save_character voiceId', !given.error && given.value.voiceId === made.value.id)
 const bad = await call('save_character', { id: 'tess', voiceId: 'nope' })
