@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, scree
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { dataDir, incognitoDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
@@ -93,7 +93,7 @@ function makeStudio() {
   const s = readSettings(BASE)
   const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
-  studio.comfy.private = INCOGNITO
+  studio.comfy.folders = comfyFolders(s, INCOGNITO)
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
@@ -547,6 +547,8 @@ app.whenReady().then(() => {
     const s = publicSettings(writeSettings(safe, BASE))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
+    // the render folders apply to the next render
+    studio.comfy.folders = comfyFolders(readSettings(BASE), INCOGNITO)
     return s
   })
   handle('setup:check', () => studio.checkSetup())

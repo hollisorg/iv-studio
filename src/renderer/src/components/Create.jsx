@@ -37,7 +37,7 @@ const withLine = (prompt, text) => {
   return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
 }
 
-export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, kindSwitch }) {
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
@@ -208,6 +208,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   return (
     <div className="create">
       <Hero title="What if?" kicker="New shot" />
+      {kindSwitch}
 
       {blocked && (
         <p className="notice">

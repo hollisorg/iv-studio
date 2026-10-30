@@ -138,7 +138,7 @@ export default function Replace({ notify, characters }) {
             ))}
             {check.models.map((m) => (
               <p key={m.name} className="small">
-                Model {m.name}, in <span className="mono">models/{m.where}</span>: download it on the Setup page.
+                Model {m.name}, in <span className="mono">models/{m.where}</span>: download it in Settings → Setup.
               </p>
             ))}
           </div>

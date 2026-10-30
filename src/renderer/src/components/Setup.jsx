@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
+import { SettingsTabs } from './Settings'
 
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
 const GROUPS = [
@@ -39,7 +40,7 @@ function ModelAction({ item, dl }) {
   )
 }
 
-export default function Setup({ setup, recheck, checking, remote }) {
+export default function Setup({ setup, recheck, checking, remote, go }) {
   const [dl, setDl] = useState({})
   const items = setup?.items || []
 
@@ -57,7 +58,8 @@ export default function Setup({ setup, recheck, checking, remote }) {
 
   return (
     <div className="setup">
-      <Hero title="Setup" kicker="Infinite Variance" />
+      <Hero title="Settings" kicker="Infinite Variance" />
+      <SettingsTabs tab="setup" go={go} setup={setup} />
       <p className="lede">
         IV Studio drives your own ComfyUI. This checks it has everything the workflow needs.
         <span className="lede-small dim">Models download from their upstream hosts straight into ComfyUI's models folder and are checked against the SHA-256 the host publishes. A paused download picks up where it stopped. Node packs install from their GitHub pages.</span>

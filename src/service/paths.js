@@ -21,14 +21,33 @@ export function resourcesDir(hint) {
 // civitaiUnblur: with civitaiMature on, mature previews show without the blur (a second, separate opt-in).
 // target: 'local' (comfyUrl) or 'cloud' (cloud.url behind the gate, cloudToken; both set by the Cloud page).
 // incognito: the app works in its private set of everything made (see incognitoDir); switched by a restart.
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false }
+// outputFolder / privateFolder: the folder inside ComfyUI's output where renders save, normally and in
+// Incognito ('' = straight into output). Incognito uploads go into the same folder name under input.
+export const PRIVATE_FOLDER = 'IV Private'
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER }
+
+// A folder name as ComfyUI takes it: relative to its output (or input) folder, forward slashes, nothing
+// that climbs out of it or that Windows won't allow.
+export function cleanFolder(v) {
+  return String(v || '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .map((s) => s.replace(/[<>:"|?*\x00-\x1f]/g, '').trim())
+    .filter((s) => s && s !== '.' && s !== '..')
+    .join('/')
+}
+
+// The folders ComfyUI saves into for this mode: output (where renders go) and input (where uploads go;
+// only Incognito moves them).
+export function comfyFolders(s, incognito) {
+  return incognito ? { output: s.privateFolder, input: s.privateFolder } : { output: s.outputFolder, input: '' }
+}
 
 // ---------- Incognito ----------
 // A second, private set of everything made (projects and their renders, sequences, edits, songs, voices and
 // lines, characters, trainings, Shinobi films, sizzles, media) in <data>/incognito. Nothing made there shows
 // in the normal app, and nothing normal is made there. Settings and keys stay in <data>, and the big shared
-// tools are linked in rather than copied. ComfyUI writes Incognito renders into its output/IV Private folder.
-export const PRIVATE_FOLDER = 'IV Private'
+// tools are linked in rather than copied. ComfyUI writes Incognito renders into its own folder (privateFolder).
 const SHARED_DIRS = ['cloud', 'voiceengine', 'loras', path.join('shinobi', 'venv'), path.join('shinobi', 'models')]
 const SHARED_FILES = [path.join('shinobi', 'installed.json')]
 
@@ -69,11 +88,13 @@ export function incognitoDir(base = dataDir()) {
   return dir
 }
 
-// Points a graph's saved files into ComfyUI's private folder: literal file name prefixes and output
+// Points a graph's saved files into a folder inside ComfyUI's output: literal file name prefixes and output
 // directories, and the first part of a joined name that feeds a file name prefix (IV Studio's H3 graph
-// builds its names as "H3/hunt/" + the project's name).
-export function privateOutputs(graph) {
-  const under = (v) => (typeof v === 'string' && !v.startsWith(PRIVATE_FOLDER + '/') ? `${PRIVATE_FOLDER}/${v.replace(/^[\\/]+/, '')}` : v)
+// builds its names as "H3/hunt/" + the project's name). No folder: the graph is left as it is.
+export function outputsUnder(graph, folder) {
+  folder = cleanFolder(folder)
+  if (!folder) return graph
+  const under = (v) => (typeof v === 'string' && !v.startsWith(folder + '/') ? `${folder}/${v.replace(/^[\\/]+/, '')}` : v)
   for (const node of Object.values(graph)) {
     const inp = node?.inputs
     if (!inp) continue
@@ -94,6 +115,10 @@ export function readSettings(dir = dataDir()) {
 
 export function writeSettings(patch, dir = dataDir()) {
   const next = { ...readSettings(dir), ...Object.fromEntries(Object.entries(patch || {}).filter(([k]) => k in DEFAULT_SETTINGS)) }
+  next.outputFolder = cleanFolder(next.outputFolder)
+  // Incognito always has a folder of its own
+  next.privateFolder = cleanFolder(next.privateFolder) || PRIVATE_FOLDER
+  if (next.privateFolder.toLowerCase() === next.outputFolder.toLowerCase()) throw new Error('Pick a different folder for Incognito renders than for normal ones.')
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(next, null, 2))
   return next

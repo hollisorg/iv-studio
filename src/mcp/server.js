@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { MediaTools } from '../service/media'
-import { contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -32,7 +32,6 @@ const BASE = dataDir()
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = contentDir(BASE)
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
-studio.comfy.private = INCOGNITO
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
 const VIDEOS = INCOGNITO ? path.join(DATA, 'videos') : path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
@@ -50,7 +49,10 @@ const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try {
       // the app switched Incognito on or off after this server started: its data is somewhere else now
-      if (!!readSettings(BASE).incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
+      const s = readSettings(BASE)
+      // the folders the person picked in Settings, as they are now
+      studio.comfy.folders = comfyFolders(s, INCOGNITO)
+      if (!!s.incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
       return ok(await fn(args))
     } catch (err) {
       return fail(err)

@@ -17,12 +17,14 @@ import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
+import Images, { CreateKind } from './components/Images'
 import Shot from './components/Shot'
 import { UpdateButton } from './components/Update'
 import { SizzleList, SizzleProject } from './components/Sizzle'
 
-// The sidebar's two halves, switched at its foot. Characters and Settings are in both; the Library (everything
-// made, page 'media') sits above the switch and belongs to neither.
+// The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
+// Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
+// belongs to neither. Setup is a tab of Settings.
 const SECTIONS = {
   video: [
     ['create', 'Create'],
@@ -32,7 +34,6 @@ const SECTIONS = {
     ['workflows', 'Workflows'],
     ['characters', 'Characters'],
     ['loras', 'LoRAs'],
-    ['setup', 'Setup'],
     ['cloud', 'Cloud'],
     ['settings', 'Settings']
   ],
@@ -44,7 +45,7 @@ const SECTIONS = {
     ['settings', 'Settings']
   ]
 }
-const SUBPAGES = { library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace', 'sizzle', 'sizzle-project'] }
+const SUBPAGES = { settings: ['setup'], library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace', 'sizzle', 'sizzle-project'] }
 const savedSection = () => {
   try {
     return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
@@ -55,6 +56,20 @@ const savedSection = () => {
 
 export default function App() {
   const [section, setSection] = useState(savedSection)
+  // Create makes a video (a shot) or an image; the choice is remembered
+  const [createKind, setCreateKind] = useState(() => {
+    try {
+      return localStorage.getItem('iv.createKind') === 'image' ? 'image' : 'video'
+    } catch {
+      return 'video'
+    }
+  })
+  const pickCreateKind = (kind) => {
+    setCreateKind(kind)
+    try {
+      localStorage.setItem('iv.createKind', kind)
+    } catch {}
+  }
   const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'create'))
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
@@ -168,7 +183,7 @@ export default function App() {
     const ok = await ask(
       incognito
         ? { title: 'Leave Incognito?', message: 'IV Studio restarts into your normal shots, edits, songs and voices. Everything made in Incognito stays where it is, hidden, until you switch back. Its renders are also cleared from ComfyUI’s history.', confirm: 'Leave Incognito' }
-        : { title: 'Go Incognito?', message: 'IV Studio restarts into a separate, private space. Shots, sequences, edits, songs, voices, characters and exports made there never show in the normal app, and nothing normal shows there. Your characters and voices come along; settings and models are shared. Renders save into ComfyUI’s output\\IV Private folder.', confirm: 'Go Incognito' }
+        : { title: 'Go Incognito?', message: 'IV Studio restarts into a separate, private space. Shots, sequences, edits, songs, voices, characters and exports made there never show in the normal app, and nothing normal shows there. Your characters and voices come along; settings and models are shared. Renders save into the Incognito folder in Settings → Folders (output\\IV Private unless you change it).', confirm: 'Go Incognito' }
     )
     if (!ok) return
     try {
@@ -205,17 +220,17 @@ export default function App() {
           <button key={id} className={`nav-item ${page === id || SUBPAGES[id]?.includes(page) ? 'on' : ''}`} onClick={() => setPage(id)}>
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
-            {id === 'setup' && missing > 0 && <span className="nav-dot" />}
+            {id === 'settings' && missing > 0 && <span className="nav-dot" />}
           </button>
         ))}
         <div className="nav-foot mono">
           <button className={`nav-library ${page === 'media' ? 'on' : ''}`} onClick={() => setPage('media')}>
             Library
           </button>
-          <div className="section-switch" role="tablist" aria-label="Video or audio">
+          <div className="section-switch" role="tablist" aria-label="Visual or audio">
             {['video', 'audio'].map((id) => (
               <button key={id} role="tab" aria-selected={section === id} className={section === id ? 'on' : ''} onClick={() => switchSection(id)}>
-                {id === 'video' ? 'Video' : 'Audio'}
+                {id === 'video' ? 'Visual' : 'Audio'}
               </button>
             ))}
           </div>
@@ -226,7 +241,12 @@ export default function App() {
         </div>
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
-        {page === 'create' && <Create {...ctx} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} />}
+        {page === 'create' &&
+          (createKind === 'image' ? (
+            <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
+          ) : (
+            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} />
+          ))}
         {page === 'loras' && <LorasPage {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}

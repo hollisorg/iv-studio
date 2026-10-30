@@ -109,7 +109,7 @@ cloud.
    (about 180 MB).
 2. Run it. The installer isn't code-signed yet, so Windows may show **"Windows protected your PC"**.
    Click **More info → Run anyway**. It installs for your user only; no admin rights needed.
-3. Start ComfyUI, then IV Studio. The **Setup** page checks ComfyUI, your GPU, the node packs and every
+3. Start ComfyUI, then IV Studio. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
    model, downloads missing models straight into ComfyUI's models folder (each checked against the
    SHA-256 its host publishes) and links any node pack you still need.
 4. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
@@ -125,7 +125,7 @@ It waits while an edit is exporting or models are downloading. Coming from 0.2.0
 by hand once.
 
 <p align="center">
-  <img src="docs/images/setup.png" alt="The Setup page" width="100%">
+  <img src="docs/images/setup.png" alt="Settings → Setup" width="100%">
 </p>
 
 ## How a shot works
@@ -183,7 +183,7 @@ character goes. On the **Characters** page:
 
 ## LoRAs
 
-**LoRAs** (in the Video menu) changes how H3 looks and moves: styles, motion, camera, speed.
+**LoRAs** (on the Visual side) changes how H3 looks and moves: styles, motion, camera, speed.
 
 - **Discover** searches [Civitai](https://civitai.com)'s MiniMax H3 LoRAs: cards with clips that play on
   hover, filters (style, concept, cinematic, motion, camera, effect, speed, tool) and sorting. Open one for
@@ -275,7 +275,7 @@ at once with a strip saying what it did and a one-click Undo, and tracks you loc
 
 ## Library
 
-The **Library** button above the Video | Audio switch opens everything you've made: shot finals and
+The **Library** button above the Visual | Audio switch opens everything you've made: shot finals and
 previews, sequences, Replace runs, Edit exports, songs and spoken lines, newest first. Filter by type or
 search, then add any of them to an edit or use a sound as a shot's voice line.
 
@@ -288,6 +288,10 @@ never show in the normal app; nothing normal shows there. Your characters and sa
 settings, keys and models are shared. ComfyUI saves Incognito renders into its `output\IV Private` folder
 (uploads into `input\IV Private`), and leaving Incognito clears them from ComfyUI's history. Switch back
 the same way.
+
+**Settings → Folders** picks where in ComfyUI's output folder renders save, one folder for normal renders
+(straight into `output` unless you name one) and one for Incognito (`IV Private` unless you change it). They
+can't be the same folder, and they always stay inside ComfyUI's folders.
 
 Incognito keeps things out of IV Studio's normal views. It isn't encryption: the files are on your PC, in
 the folders above, and LoRAs trained in Incognito land in ComfyUI's LoRAs folder like any other.

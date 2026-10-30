@@ -2438,7 +2438,38 @@ body.resizing * {
   background-image: url('./assets/eye-closed.webp');
 }
 
-/* ---------- Audio: the Video | Audio switch, Voices and Lines ---------- */
+/* Settings -> Folders: a label, "output\" and the folder */
+.folder-row {
+  display: grid;
+  grid-template-columns: 150px auto minmax(0, 360px);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.folder-row input {
+  width: 100%;
+}
+
+/* Settings | Setup: the same square switch as Visual | Audio, under the page's banner */
+.settings-tabs {
+  width: 320px;
+  margin: 0 0 28px;
+}
+.settings-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.settings-tabs .tab-count {
+  font: 600 10px / 1 var(--mono);
+  letter-spacing: 0.08em;
+  padding: 3px 5px;
+  background: var(--red);
+  color: var(--ink);
+}
+
+/* ---------- Audio: the Visual | Audio switch, Voices and Lines ---------- */
 .section-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;

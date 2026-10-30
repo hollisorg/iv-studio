@@ -141,6 +141,51 @@ function CivitaiSettings({ settings, setSettings, notify }) {
   )
 }
 
+// Folders: where in ComfyUI's output folder renders save, normally and in Incognito.
+function FolderSettings({ settings, setSettings, notify, incognito }) {
+  const [normal, setNormal] = useState(settings.outputFolder || '')
+  const [hidden, setHidden] = useState(settings.privateFolder || '')
+  const changed = normal.trim() !== (settings.outputFolder || '') || hidden.trim() !== (settings.privateFolder || '')
+  async function save() {
+    try {
+      const s = await window.ivstudio.settings.set({ outputFolder: normal, privateFolder: hidden })
+      setSettings(s)
+      setNormal(s.outputFolder)
+      setHidden(s.privateFolder)
+      notify('Saved. The next render goes there.', 'info')
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  return (
+    <section className="group">
+      <div className="group-head">
+        <h2>Folders</h2>
+        <p className="dim small">Where in ComfyUI’s output folder renders save. The next render uses them; renders already made stay where they are.</p>
+      </div>
+      <div className="group-body">
+        <label className="folder-row">
+          <span>Normal renders</span>
+          <span className="mono dim">output\</span>
+          <input value={normal} placeholder="straight into output" onChange={(e) => setNormal(e.target.value)} />
+        </label>
+        <label className="folder-row">
+          <span>Incognito renders</span>
+          <span className="mono dim">output\</span>
+          <input value={hidden} placeholder="IV Private" onChange={(e) => setHidden(e.target.value)} />
+        </label>
+        <p className="small dim">
+          Incognito’s pictures, videos and sounds you add also go into input\{hidden.trim() || 'IV Private'}. Use a folder name, or a path such as
+          Studio\Private; it always stays inside ComfyUI’s folders.{incognito ? ' You’re in Incognito now.' : ''}
+        </p>
+        <button className="btn btn-small" disabled={!changed} onClick={save}>
+          Save folders
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function WriterSettings({ settings, setSettings, notify }) {
   const [status, setStatus] = useState(null)
   const [key, setKey] = useState('')
@@ -374,7 +419,25 @@ function AgentSettings({ mcp, notify }) {
   )
 }
 
-export default function Settings({ info, recheck, notify, go }) {
+// Settings and Setup (what ComfyUI has and needs) are two tabs of one page; Setup's dot shows what to fix.
+export function SettingsTabs({ tab, go, setup }) {
+  const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
+  return (
+    <div className="section-switch settings-tabs" role="tablist" aria-label="Settings or Setup">
+      {[
+        ['settings', 'Settings'],
+        ['setup', 'Setup']
+      ].map(([id, label]) => (
+        <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => go(id)}>
+          {label}
+          {id === 'setup' && missing > 0 && <span className="tab-count">{missing} to fix</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function Settings({ info, recheck, notify, go, setup }) {
   const [settings, setSettings] = useState(null)
   const [url, setUrl] = useState('')
 
@@ -398,6 +461,7 @@ export default function Settings({ info, recheck, notify, go }) {
   return (
     <div className="settings">
       <Hero title="Settings" kicker="Infinite Variance" />
+      <SettingsTabs tab="settings" go={go} setup={setup} />
 
       <section className="group">
         <div className="group-head">
@@ -413,6 +477,8 @@ export default function Settings({ info, recheck, notify, go }) {
           </div>
         </div>
       </section>
+
+      <FolderSettings settings={settings} setSettings={setSettings} notify={notify} incognito={!!info?.incognito} />
 
       <ModelSettings settings={settings} setSettings={setSettings} notify={notify} />
 

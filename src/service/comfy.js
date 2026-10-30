@@ -1,17 +1,18 @@
 // Minimal ComfyUI HTTP client: prompt submission, history, queue, targeted interrupt, uploads, schemas.
 import fs from 'node:fs'
 import path from 'node:path'
-import { PRIVATE_FOLDER, privateOutputs } from './paths.js'
+import { cleanFolder, outputsUnder } from './paths.js'
 
 export class Comfy {
   // token: a cloud ComfyUI sits behind IV Studio's gate (resources/cloud/gate.py), which wants it as a
   // Bearer header. A local ComfyUI has none.
-  // private (Incognito): what it saves goes into output/IV Private and what it uploads into input/IV Private.
+  // folders: where in ComfyUI's output what it saves goes, and where in input what it uploads goes
+  // (Settings -> Folders; see comfyFolders). '' = as the graph says.
   constructor(url = 'http://127.0.0.1:8188', clientId = 'iv-studio', token = null) {
     this.url = url.replace(/\/$/, '')
     this.clientId = clientId
     this.token = token
-    this.private = false
+    this.folders = { output: '', input: '' }
   }
 
   get remote() {
@@ -59,7 +60,7 @@ export class Comfy {
 
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
   async submit(prompt, extra = {}, { front = false } = {}) {
-    if (this.private) privateOutputs(prompt)
+    outputsUnder(prompt, this.folders.output)
     const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra, ...(front ? { front: true } : {}) } })
     return r.prompt_id
   }
@@ -91,7 +92,8 @@ export class Comfy {
 
   // Copies a local file into ComfyUI's input folder (any type) and returns its name relative to input.
   async upload(filePath, subfolder = 'iv_studio') {
-    if (this.private) subfolder = `${PRIVATE_FOLDER}/${subfolder}`
+    const into = cleanFolder(this.folders.input)
+    if (into) subfolder = `${into}/${subfolder}`
     const form = new FormData()
     const name = path.basename(filePath)
     form.append('image', new Blob([fs.readFileSync(filePath)]), name)
