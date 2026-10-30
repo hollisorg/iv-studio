@@ -5,10 +5,20 @@ description: Make MiniMax H3 videos with IV Studio through its MCP server - rend
 
 If the `iv-studio` MCP tools aren't available, IV Studio has to be installed and its server added: the exact command for an install is under Settings -> Agents (MCP) in the app. Download: https://github.com/hollisorg/iv-studio/releases
 
+# Using IV Studio from an agent
+
 IV Studio is a desktop app for MiniMax H3 video on a local ComfyUI: it renders shots and continuous
 sequences with recurring characters, and cuts them together on its own timeline. Its MCP server
 (`iv-studio`) uses the same projects, renders and edits as the app window, so what you make shows up
 there for the person, and the other way round.
+
+## Start menu
+
+When a chat starts with IV Studio and the person hasn't said what they want, offer the start menu: call
+`get_menu` and give its choices as one multiple-choice question (your app's question or options tool if it
+has one, otherwise a short numbered list), plus "something else". Each choice comes with what to do next.
+Apps that show MCP prompts also list them as slash commands (in Claude Code, `/mcp__iv-studio__start` and
+`/mcp__iv-studio__make_a_shot` and so on).
 
 ## First steps
 
@@ -118,6 +128,17 @@ track of the ones already in ComfyUI.
    and put its trigger words in the prompt.
 Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned them on in the app.
 
+## Images (Create -> Image)
+
+1. `list_image_models`: the image families on this PC (Flux.2 Klein 9B, Flux 3 Klein, Krea 2, Moss, Qwen Image
+   2.1, Z-Image Turbo), each with its checkpoints, whether it's ready, whether it can edit, and its licence.
+2. `make_image` with a checkpoint as `model`. mode `generate` makes pictures from the prompt; mode `edit` changes
+   `refs` (local picture paths) with the prompt as the instruction, only on families with `edit: true`. Add
+   LoRAs of the same family (`loras`), `aspect`, `megapixels`, `count` (1-4) and `seed`. Steps and CFG default
+   to each family's own settings.
+3. Poll `get_image` until `success`; its `files` are the pictures. Use one as a shot's first frame with
+   `generate_previews` mode `frames` and a picture in `media`.
+
 ## Music (Audio)
 
 IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
@@ -212,6 +233,12 @@ The Characters page (and these tools) turn an invented person into a character p
    agree (it bills their Modal account; Theo took 56 minutes and about $4.10 on an H200; Modal's Starter plan has no B200).
 5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the
    renders, and `adopt_checkpoint` the best. It's then a character like any other.
+
+## Incognito
+
+The person can switch IV Studio into Incognito (title bar), a separate private set of everything made; the
+app restarts to switch. This server works in whichever set was on when it started, and refuses tools after
+a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or move work between the two.
 
 ## House rules
 

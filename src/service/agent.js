@@ -3,7 +3,7 @@
 // pastes into their agent to set it all up.
 import fs from 'node:fs'
 import path from 'node:path'
-import { MENU_RULE } from './startmenu'
+import { MENU_RULE } from './startmenu.js'
 
 export const readGuide = (resourcesDir) => fs.readFileSync(path.join(resourcesDir, 'agent-guide.md'), 'utf8')
 
