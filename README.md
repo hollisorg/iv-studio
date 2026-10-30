@@ -16,24 +16,30 @@
 
 A free Infinite Variance desktop app for making short films with
 [MiniMax H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) on your own PC. Give a recurring actor a face
-and a voice, write a shot, hunt a few quick previews and finish the best one at full size. Then add
-music, cut it all together and export. IV Studio drives your own
+and a voice, write a shot, hunt a few quick previews and finish the best one at full size. Make
+pictures, songs and spoken lines, cut it all together and export. IV Studio drives your own
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI); nothing leaves your machine unless you choose the
-cloud.
+cloud. No strong graphics card? Shots can also render on a GPU in your own [Modal](https://modal.com)
+account, billed by the second (see [Cloud](#cloud)).
 
 <p align="center">
-  <img src="docs/images/candidates.png" alt="A shot of Tess at the potter's wheel with two preview takes to pick from" width="100%">
+  <img src="docs/images/hunt.png" alt="The shot Toast is done: three preview takes of Tess walking out of smoke, and the picked one finished at 3904×2176" width="100%">
 </p>
 
 ## What it does
 
+- **Dashboard.** IV Studio opens on one-click starts for everything it makes, your latest renders and
+  your cast. Every page has its own banner art.
 - **Shots.** Write a shot (or type the idea in plain words and let **Write it for me** write the H3
-  prompt), hunt one to three quick previews, pick one and finish it at 1 to 2 MP with DLSS, an RTX 2×
-  upscale and frame generation. Four modes: text, reference pictures, video and audio, first and last
-  frame, and continuing a video.
-- **LoRAs.** Browse Civitai's MiniMax H3 LoRAs as cards whose clips play on hover, and download one
-  straight into ComfyUI. Your own LoRAs show as pictures too, and Create's LoRA tray adds them to a shot
-  with a strength slider.
+  prompt; it looks at your reference pictures and videos first), hunt one to three quick previews, pick
+  one and finish it at 1 to 2 MP with DLSS, an RTX 2× upscale and frame generation. Four modes: text,
+  reference pictures, video and audio, first and last frame, and continuing a video.
+- **Images.** Create switches between **Video** and **Image**: make or edit pictures with six image
+  model families (Flux.2 Klein, Flux 3 Klein, Krea 2, Moss, Qwen Image 2.1 and Z-Image Turbo), then use
+  one as a shot's first frame.
+- **LoRAs.** Browse Civitai's MiniMax H3 LoRAs as tall picture cards whose clips play on hover, open one
+  for a full-size gallery of its examples, and download it straight into ComfyUI. Your own LoRAs show as
+  pictures too, and Create's LoRA tray adds them to a shot with a strength slider.
 - **Characters.** Recurring actors as trained H3 LoRAs with a trigger word. Use the ready-made Tess and
   Theo, add a LoRA you have, or design, clip and train your own on your Modal account.
 - **Voices.** Give each character a voice: design one from a description, or save one from a recording.
@@ -51,51 +57,73 @@ cloud.
   site, then H3 shots, pictures, music and the site's own screens are cut together on the beat. **Replace** swaps a
   person or an object in a video while the camera, motion and sound stay. **Shinobi** lets an agent cut a
   whole edit in code.
-- **Library.** Every shot, sequence, export, song and spoken line in one place, ready to drop onto an
-  edit or into a shot.
-- **Agents.** A local MCP server with 101 tools gives Claude Code or any MCP client nearly everything a
-  person can do in the window.
+- **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, with
+  each shot's versions grouped together. Above it, the render queue shows what's rendering and what waits.
+- **Cloud.** Render shots and sequences on your own Modal account instead of your PC, with a running time
+  and cost meter in the title bar and a **Shut down GPU** button.
+- **Incognito.** A private space whose work never shows in the normal app.
+- **Agents.** A local MCP server with 112 tools and a start menu gives Claude Code or any MCP client nearly
+  everything a person can do in the window.
+- **Updates.** IV Studio updates itself: one click installs a new version and reopens.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/create.png" alt="Create: Tess, a Write it for me idea and the H3 prompt"></td>
-    <td width="50%"><img src="docs/images/finish.png" alt="A finished 1 MP shot of Tess at the potter's wheel"></td>
+    <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: quick-start cards, recent shots grouped by version, and the cast"></td>
+    <td width="50%"><img src="docs/images/create.png" alt="Create: Tess picked, two LoRAs in the tray, a Write it for me idea and the H3 prompt"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Write the shot, or describe it and let it be written</sub></td>
-    <td align="center"><sub>Finish the take you like at full size</sub></td>
+    <td align="center"><sub>Start anything from the Dashboard</sub></td>
+    <td align="center"><sub>Describe the shot and let it be written, with LoRAs as pictures</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/characters.png" alt="Characters: Tess with her LoRA and voice, and the ready-made Theo"></td>
-    <td width="50%"><img src="docs/images/voices.png" alt="Voices: a designed voice and Tess's voice, each given to a character"></td>
+    <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate or Edit, and six image model families"></td>
+    <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: Civitai's cinematic MiniMax H3 LoRAs as tall picture cards"></td>
   </tr>
   <tr>
+    <td align="center"><sub>Pictures too: generate or edit on six model families</sub></td>
+    <td align="center"><sub>Find H3 LoRAs on Civitai</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/lora-details.png" alt="A LoRA's pop-up: its example clips, maker, trigger words, licence, file and tags"></td>
+    <td width="50%"><img src="docs/images/characters.png" alt="Characters: Tess and Theo, each with a LoRA, trigger and voice"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every LoRA's examples, trigger words and licence</sub></td>
     <td align="center"><sub>Recurring characters, ready-made or trained</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/voices.png" alt="Voices: Tess's and Theo's voices, each given to a character, and a voice designer"></td>
+    <td width="50%"><img src="docs/images/music.png" alt="Music: a film-score swell and two takes of a trailer score"></td>
+  </tr>
+  <tr>
     <td align="center"><sub>A voice for every character</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/music.png" alt="Music: an ACE-Step instrumental and a MiniMax Music 3 song"></td>
-    <td width="50%"><img src="docs/images/lines.png" alt="Lines: lines spoken in Tess's voice, ready to use in a shot"></td>
-  </tr>
-  <tr>
     <td align="center"><sub>Songs and scores, made on your PC</sub></td>
-    <td align="center"><sub>Say it in their voice</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/edit.png" alt="Edit in full screen: project bin, source and program monitors, effect controls, and a timeline with filmstrips, waveforms and markers"></td>
-    <td width="50%"><img src="docs/images/library.png" alt="Library: every shot, song and line in one place"></td>
+    <td width="50%"><img src="docs/images/library.png" alt="Library: shots grouped with their versions, filtered by videos, images, music and voice lines"></td>
   </tr>
   <tr>
     <td align="center"><sub>A Premiere-style editor, full screen, with your agent cutting alongside</sub></td>
     <td align="center"><sub>Everything you've made, in one place</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/sizzle.png" alt="Sizzle: infinitevariance.ai captured screen by screen, with its colours, fonts and logo"></td>
+    <td width="50%"><img src="docs/images/cloud.png" alt="Cloud: set up Modal, pick a GPU (L40S, A100 or H100) and when it shuts off"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A website, made into a promo film</sub></td>
+    <td align="center"><sub>No big GPU? Render on your own Modal account</sub></td>
   </tr>
 </table>
 
 ## What you need
 
 - **Windows 10 or 11** (64-bit).
-- **An NVIDIA GPU.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works with smaller
-  previews and finals. 64 GB of system RAM is recommended.
+- **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
+  with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
+  sequences can render on a cloud GPU in your own Modal account; pictures, music and voices still need a
+  local NVIDIA GPU (see [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings).
 - **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
@@ -134,12 +162,17 @@ IV Studio opens on the **Dashboard**: one-click starts for a shot, a picture, a 
 a voice line, a website film or a new character; your eight most recent renders; and your cast, each with
 their face, their voice, and **New shot** to start a shot with them already picked.
 
+Every page opens on its own banner, drawn in the Infinite Variance eye style: a clapperboard for Shots,
+scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on.
+
 ## How a shot works
 
 1. **Create.** Pick a mode, a character and write the shot.
    - **Text:** just the prompt.
    - **References:** pictures, videos or audio guide the shot (`<Picture 1>`, `<Video 1>`, `<Audio 1>`).
-     Click a reference to crop or trim it; videos snap to H3's lengths.
+     Click a reference to crop or trim it; videos snap to H3's lengths. **Size: Fit for H3** resizes a
+     picture or video to H3's own sizes (about 0.5, 1 or 2 MP, both sides on a 32-pixel grid, video at
+     24 fps), which some modes, like Retake, need.
    - **First / last frame:** the clip opens on a picture and can end on a second one.
    - **Continue a video:** carries a clip on from its last frames.
 
@@ -161,8 +194,13 @@ writer under **Settings → Prompt writer**:
 - **Local (free):** a model in Ollama on your PC with IV Studio's H3 rule sheet. The recommended model is
   `huihui_ai/qwen3-vl-abliterated:8b-instruct` (about 6 GB, one click to install), huihui-ai's uncensored
   copy of Qwen3-VL 8B Instruct (Apache-2.0), so it doesn't refuse mature ideas. Any other Ollama model works
-  too, including the original `qwen3-vl:8b-instruct`. It can look at your pictures, and while ComfyUI is
-  rendering it runs on the CPU, so it never takes H3's VRAM.
+  too, including the original `qwen3-vl:8b-instruct`. While ComfyUI is rendering it runs on the CPU, so it
+  never takes H3's VRAM.
+
+  **It looks before it writes.** Add your references first: the writer is shown your reference pictures,
+  two frames of each reference video, your first and last frames, and the last frame of a video you're
+  continuing (up to six images, labelled `<Picture 1>`, `<Video 1>` and so on), and writes what it sees.
+  It tells you what it will look at, or that the model you chose can't see pictures.
 - **MiniMax Context IR:** MiniMax's own prompt rewriter through ComfyUI, paid through your Comfy.org
   account (about $0.02 to $0.11 a prompt). Your API key is stored encrypted on your PC.
 
@@ -215,10 +253,12 @@ character goes. On the **Characters** page:
 
 **LoRAs** (on the Visual side) changes how H3 looks and moves: styles, motion, camera, speed.
 
-- **Discover** searches [Civitai](https://civitai.com)'s MiniMax H3 LoRAs: cards with clips that play on
-  hover, filters (style, concept, cinematic, motion, camera, effect, speed, tool) and sorting. Open one for
-  its example clips, versions, trigger words, licence (whether commercial use is allowed) and the maker's
-  notes, then **Download**: the file goes into ComfyUI's `loras\Civitai\<model>\` folder, checked against the
+- **Discover** searches [Civitai](https://civitai.com)'s MiniMax H3 LoRAs: tall cards whose preview fills
+  the card and plays on hover, filters (style, concept, cinematic, motion, camera, effect, speed, tool) and
+  sorting. Open one for a pop-up with a gallery of up to 16 examples (click one for a full-size view with
+  its generation prompt and settings, when Civitai has them), the maker, versions, trigger words to copy,
+  the licence (whether commercial use is allowed), tags and the maker's notes, then **Download**: the file
+  goes into ComfyUI's `loras\Civitai\<model>\` folder, checked against the
   SHA-256 Civitai publishes. Downloading needs your own free Civitai API key (**Settings → Civitai**; it's
   stored encrypted on your PC). Searching doesn't.
 - **Yours** shows the LoRAs already in ComfyUI, grouped by folder, H3 ones first. **Find on Civitai** looks
@@ -300,17 +340,33 @@ second) · ↑ ↓ previous / next edit · I O mark · , insert · . overwrite �
 Q W ripple trim to the playhead · Delete, Shift+Delete ripple delete · M marker, Shift+M next marker ·
 \ fit · = − zoom · Ctrl+Z / Ctrl+Y · F11 full screen, Esc back.
 
+**Make new footage on the timeline.** Right-click a clip or a gap:
+
+- **Extend…** carries a clip on 5, 10 or 15 seconds from its last frames.
+- **Bridge to the next clip…** makes a new shot from one clip's last frame to the next one's first.
+- **Fill this gap…** does the same across a gap.
+- **Retake this stretch…** redoes part of a clip: picture and sound, picture only, or sound only.
+
+Each one starts from the clip's own shot when IV Studio made it (its character, LoRAs and look), and
+**Write it for me** looks at the frames it starts from. A striped placeholder shows where the footage will
+land and how far it has got. Bridges and fills offer three takes to pick from; the result lands as a
+normal clip you can undo.
+
 **With an agent.** Your agent edits the same timeline through IV Studio's MCP server. Its changes appear
 at once with a strip saying what it did and a one-click Undo, and tracks you lock are off limits to it.
+It can make new footage on the timeline too.
 
 ## Library
 
 The **Library** button above the Visual | Audio switch opens everything you've made: shot finals and
-previews, sequences, Replace runs, Edit exports, songs and spoken lines, newest first. Filter by type or
+previews, sequences, Replace runs, pictures, Edit exports, songs and spoken lines, newest first. A shot's
+previews and finals are one tile with an "N versions" badge; click it to watch every version in a large
+viewer and step through them with the arrow keys. Filter by type (videos, images, music, voice lines) or
 search, then add any of them to an edit or use a sound as a shot's voice line.
 
 Above it, the **Queue** shows what ComfyUI is rendering and what waits, on every page: each render's name,
-its step and time, a click to open its page, and × to cancel one of IV Studio's own.
+its step and time, a click to open its page, and × to cancel one of IV Studio's own. Renders an agent
+started show as rendering with their time, without the step count.
 
 ## Incognito
 
@@ -382,21 +438,45 @@ Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspir
 
 ## Cloud
 
-The **Cloud** page renders on your own [Modal](https://modal.com) account instead of your PC: it installs
-Modal's client, signs you in on Modal's own page and deploys IV Studio's ComfyUI app there. GPUs bill by the
-second and stop on their own when idle (after 3, 5, 10 or 20 minutes), or at once with **Shut down GPU** on the
-Cloud page. While you render in the cloud, the top bar shows the GPU's time and estimated cost since IV Studio
-opened; click it for the Cloud page. New Modal accounts get free monthly credit. Cloud renders use a
-2× AI upscale and RIFE frame interpolation in place of DLSS, which is Windows-only. Voices and music run on
-your PC.
+No strong graphics card, or want your PC back while it renders? The **Cloud** page renders on a GPU in your
+own [Modal](https://modal.com) account instead: your account, billed to you by Modal.
+
+1. **Cloud tools.** IV Studio installs a private copy of Modal's client in its own folder (about 100 MB).
+2. **Modal account.** Sign in on Modal's own page; signing up is free. At the time of writing Modal gives
+   accounts $30 of free compute a month.
+3. **GPU and shut-off.** Pick an L40S (48 GB, recommended), A100 or H100 (80 GB), and how long it waits
+   with nothing to do before it switches off (3, 5, 10 or 20 minutes). The Cloud page shows each GPU's
+   hourly price; billing is by the second, only while the GPU is on.
+4. **Set up.** IV Studio deploys its ComfyUI app to your account and copies the H3 models into a Modal
+   volume (about 60 GB) once.
+
+Then switch **This PC / Cloud**. While you're on the cloud, the title bar shows **GPU on/off · time · $**:
+the GPU time and estimated cost since IV Studio opened, at the chosen GPU's list price. Click it for the
+Cloud page, where **Shut down GPU** stops it at once instead of waiting for the idle shut-off. The next
+render wakes it again (about 1 to 3 minutes). The Cloud page estimates a 10-second 2 MP shot at roughly 3 to
+5 minutes of GPU, about $0.13 on an L40S.
+
+**What runs in the cloud:** Create's video shots (hunting previews and finishing), Sequences, and the
+characters you already have. Finals use a 2× AI upscale (Real-ESRGAN) and RIFE frame interpolation (48, 72
+or 120 fps) in place of DLSS, which needs an NVIDIA card on Windows.
+
+**What still needs a local NVIDIA GPU:** Images, Music, Voices (and **Speak it**), designing a new
+character's stills and clips, and Replace. LoRAs you download from Civitai go into your local ComfyUI, so
+cloud renders don't see them yet. Training a character always runs on Modal, whichever you pick.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 101 tools. It uses the same projects, characters, voices
-and songs as the window, so Claude Code or any MCP client can render shots and sequences, speak lines, make
-music, cut them together and export. **Settings → Agents (MCP)** has the command for your install, a
-message to paste into any agent, and a button that adds the IV Studio skill to Claude Code. For a
-development checkout:
+IV Studio includes a local MCP server (stdio) with 112 tools. It uses the same projects, characters, voices
+and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
+speak lines, make music, cut them together and export. **Settings → Agents (MCP)** has the command for your
+install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
+
+**Start menu.** When a chat opens without a request, the agent offers IV Studio's menu as one
+multiple-choice question: a shot, a picture, a longer scene, a spoken line, music, an edit, a website film,
+a swap, a new character or a tour. Each choice comes with what to do next (`get_menu`). The same choices,
+plus `start`, are MCP prompts, so Claude Code lists them as slash commands (`/mcp__iv-studio__…`).
+
+For a development checkout:
 
 ```
 claude mcp add iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "<checkout>\node_modules\electron\dist\electron.exe" "<checkout>\out\main\mcp.js"
@@ -408,19 +488,22 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 <details>
 <summary>All tools</summary>
 
-- **Guide:** `get_guide`.
+- **Guide and start menu:** `get_guide`, `get_menu`.
+- **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
 - **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
   `finish_candidate`.
 - **Sequences:** `list_sequences`, `get_sequence`, `save_sequence`, `render_take`, `hunt_shot`,
   `finish_shot`, `retake`, `render_out`.
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
 - **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
-- **References:** `prepare_media` (crop a picture, trim and crop a video or sound).
+- **References:** `prepare_media` (crop a picture, trim and crop a video or sound, or fit it to H3's sizes).
 - **Library:** `list_renders`, `rename_project`, `delete_project`, `delete_sequence`.
 - **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`,
   `edit_timeline` (add, insert, overwrite, move, trim, split, ripple delete, fades, volume, titles, tracks
   and their hide/lock/mute/solo, markers, all checked before anything changes), `grab_frame`, `export_edit`,
   `get_edit_export`, `cancel_edit_export`.
+- **New footage on the timeline:** `generate_in_edit` (extend, bridge, fill or retake), `list_generations`,
+  `pick_generation`, `cancel_generation`.
 - **Voices:** `voice_status`, `setup_voices`, `list_voices`, `design_voice`, `create_voice`, `update_voice`,
   `delete_voice`, `speak_line`, `list_lines`, `delete_line`, `release_voice_engine`.
 - **Music:** `music_status`, `make_music`, `list_music`, `get_music`, `cancel_music`, `rename_music`,
@@ -494,4 +577,5 @@ IV Studio is MIT-licensed (see [LICENSE](LICENSE)); the Infinite Variance eye ar
 own and isn't covered by the MIT licence. Third-party notices are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The bundled FFmpeg build is GPL.
 
-Screenshots show Tess Marlow, an invented IV Studio character, in renders made with IV Studio.
+Screenshots show Tess Marlow and Theo Lindqvist, invented IV Studio characters, and other shots, pictures and
+songs made with IV Studio. The LoRA previews in the LoRAs screenshots are by their makers on Civitai.
