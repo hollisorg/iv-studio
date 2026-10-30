@@ -127,9 +127,10 @@ function Discover({ meta, onOpen, compact = false }) {
             <LoraThumb preview={m.previews[0]} label={m.name} mature={m.mature || m.previews[0]?.mature} />
             <span className="lora-card-body">
               <span className="lora-name">{m.name}</span>
-              <span className="mono small dim">
-                {[m.file && MB(m.file.size), `${K(m.downloads)} downloads`, m.creator].filter(Boolean).join(' · ')}
+              <span className="mono small dim lora-stats" title={`${m.downloads} downloads`}>
+                {[`↓ ${K(m.downloads)}`, m.file && MB(m.file.size)].filter(Boolean).join(' · ')}
               </span>
+              {m.creator && <span className="small dim lora-creator">{m.creator}</span>}
             </span>
             {m.installed && <span className="lora-badge mono">Installed</span>}
           </button>
