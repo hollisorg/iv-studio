@@ -7,6 +7,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import ffmpegStatic from 'ffmpeg-ffprobe-static'
+
+// The bundled ffmpeg, outside the asar in a packaged app (as in main and the MCP server).
+const unpacked = (p) => p && p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+const FFMPEG = unpacked(ffmpegStatic.ffmpegPath)
+const FFPROBE = unpacked(ffmpegStatic.ffprobePath)
 
 export const OLLAMA_URL = 'http://127.0.0.1:11434'
 export const DEFAULT_LOCAL_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
@@ -173,11 +179,62 @@ export async function ensureOllama() {
   throw new Error('Ollama did not start.')
 }
 
-async function imagesFor(media, mode) {
-  // Vision models get the actual pictures: the first/last frames, or the reference pictures (max 4).
-  const pics = media.filter((m) => m.kind === 'picture').slice(0, mode === 'frames' ? 2 : 4)
-  return pics.map((m) => m.file || m.path).filter((p) => p && fs.existsSync(p)).map((p) => fs.readFileSync(p).toString('base64'))
+// What a vision writer is shown, each with the label the prompt uses for it: reference pictures (<Picture N>), two
+// frames of each reference video (<Video N>), the first/last frame pictures, or the last frame of the video a
+// Continue shot carries on from. At most 6 images, each a JPEG of 1024 px or less (Ollama doesn't read every format).
+const MAX_IMAGES = 6
+export function imagePlan(media, mode) {
+  const plan = []
+  const n = { picture: 0, video: 0 }
+  for (const m of media) {
+    if (!(m.kind in n)) continue
+    const k = ++n[m.kind]
+    const file = m.file || m.path
+    if (!file || !fs.existsSync(file)) continue
+    if (m.kind === 'picture' && mode === 'frames' && k <= 2) plan.push({ file, label: k === 1 ? 'the first frame (the video opens exactly on it)' : 'the last frame (the video ends on it)' })
+    else if (m.kind === 'picture' && mode === 'reference') plan.push({ file, label: `<Picture ${k}>` })
+    else if (m.kind === 'video' && mode === 'reference') plan.push({ file, at: 0.15, label: `<Video ${k}>, a frame near its start` }, { file, at: 0.6, label: `<Video ${k}>, a frame later on` })
+    else if (m.kind === 'video' && mode === 'continue' && k === 1) plan.push({ file, at: 'end', label: 'the last frame of the video this shot continues' })
+  }
+  return plan.slice(0, MAX_IMAGES)
 }
+
+const run = (cmd, args) =>
+  new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { windowsHide: true })
+    const out = []
+    p.stdout.on('data', (d) => out.push(d))
+    p.on('error', reject)
+    p.on('close', (code) => (code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(`${path.basename(cmd)} exited ${code}`))))
+  })
+
+// One picture or video frame as base64 JPEG. at: a fraction of the video's length, 'end', or none for a picture.
+async function jpegOf({ file, at }) {
+  let seek = []
+  if (at === 'end') seek = ['-sseof', '-0.1']
+  else if (at != null) {
+    const length = parseFloat(String(await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]))) || 0
+    seek = ['-ss', (length * at).toFixed(2)]
+  }
+  const jpg = await run(FFMPEG, ['-v', 'error', ...seek, '-i', file, '-frames:v', '1', '-vf', "scale='min(1024,iw)':'min(1024,ih)':force_original_aspect_ratio=decrease", '-q:v', '4', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-'])
+  if (!jpg.length) throw new Error('no frame')
+  return jpg.toString('base64')
+}
+
+async function imagesFor(media, mode) {
+  const shown = []
+  for (const item of imagePlan(media, mode)) {
+    try {
+      shown.push({ label: item.label, data: await jpegOf(item) })
+    } catch {
+      // a picture ffmpeg can't read still goes over as it is; a video frame that fails is left out
+      if (item.at == null) shown.push({ label: item.label, data: fs.readFileSync(item.file).toString('base64') })
+    }
+  }
+  return shown
+}
+
+const LOOK_RULE = `The images attached to this message are the references, listed below. Look at them closely and write what you actually see into the shots: who is in them (face, hair, age, build, wardrobe), the objects, the place, the light and the colours. Refer to each reference by its label, and don't invent details that contradict them.`
 
 // cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM).
 export async function writeLocal({ idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [], model, cpu = false }) {
@@ -190,8 +247,11 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
   if (previous) user += `\n\nThe previous shot, which this one continues from:\n${withName(previous, character)}`
   const message = { role: 'user', content: user }
   if (info.vision) {
-    const images = await imagesFor(media, mode)
-    if (images.length) message.images = images
+    const shown = await imagesFor(media, mode)
+    if (shown.length) {
+      message.images = shown.map((s) => s.data)
+      message.content += `\n\n${LOOK_RULE}\n${shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
+    }
   }
   const r = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: 'POST',

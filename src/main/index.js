@@ -652,6 +652,15 @@ app.whenReady().then(() => {
     return true
   })
   handle('jobs:cancel', (id) => studio.cancelJob(id))
+  // The sidebar's render queue, and its cancel (only for IV Studio's own work, never someone else's).
+  handle('queue:list', () => studio.renderQueue())
+  handle('queue:cancel', async (promptId) => {
+    const { items } = await studio.renderQueue()
+    const item = items.find((i) => i.promptId === promptId)
+    if (!item) return 'already finished'
+    if (!item.ours) throw new Error("That render isn't IV Studio's, so it is left alone.")
+    return studio.cancelQueued(promptId)
+  })
   handle('files:pick', async (kind) => {
     const filters = {
       picture: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],

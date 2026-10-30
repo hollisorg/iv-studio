@@ -41,7 +41,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
-    character: characters[0]?.id || null,
+    character: 'none',
     prompt: '',
     aspect: '16:9',
     megapixels: 0.4,
@@ -63,8 +63,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
   useEffect(() => {
-    // characters arrive after the first render; default to the first one until the user picks
-    if (characters.length && form.character !== 'none' && !characters.some((c) => c.id === form.character)) set({ character: characters[0].id })
+    // a picked character that was deleted falls back to None (the default)
+    if (form.character !== 'none' && !characters.some((c) => c.id === form.character)) set({ character: 'none' })
   }, [characters])
 
   const request = useMemo(() => {
@@ -236,6 +236,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </button>
           ))}
         </div>
+        {form.mode !== 'text' && (
+          <p className="dim small mode-writer-hint">
+            ✦ Add your {form.mode === 'frames' ? 'frames' : form.mode === 'continue' ? 'video' : 'pictures and videos'} below first: <b>Write it for me</b> looks at {form.mode === 'continue' ? 'its last frame' : 'them'} and writes what it sees into the prompt.
+          </p>
+        )}
       </section>
 
       <section className="block">
@@ -286,23 +291,6 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           </div>
         </div>
         {picking && <LoraPicker notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
-        <PromptWriter
-          context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
-          current={form.prompt}
-          onWritten={(prompt) => set({ prompt })}
-          notify={notify}
-          go={go}
-        />
-        <div className="prompt-head">
-          <span className="row-label">
-            Prompt {char && <span className="dim small">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]} ({char.trigger})</span>}
-          </span>
-          <button className="link-btn mono" onClick={() => set({ prompt: form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
-            Insert template
-          </button>
-        </div>
-        <textarea className="prompt" rows={9} value={form.prompt} placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those." onChange={(e) => set({ prompt: e.target.value })} />
-
         {form.mode !== 'text' && (
           <div className={`media ${dragOver ? 'drag-over' : ''}`} onDragOver={(e) => (e.preventDefault(), setDragOver(true))} onDragLeave={() => setDragOver(false)} onDrop={dropMedia}>
             <div className="media-head">
@@ -348,6 +336,23 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             )}
           </div>
         )}
+
+        <PromptWriter
+          context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
+          current={form.prompt}
+          onWritten={(prompt) => set({ prompt })}
+          notify={notify}
+          go={go}
+        />
+        <div className="prompt-head">
+          <span className="row-label">
+            Prompt {char && <span className="dim small">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]} ({char.trigger})</span>}
+          </span>
+          <button className="link-btn mono" onClick={() => set({ prompt: form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
+            Insert template
+          </button>
+        </div>
+        <textarea className="prompt" rows={9} value={form.prompt} placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those." onChange={(e) => set({ prompt: e.target.value })} />
 
         <div className="row voice-row">
           <span className="row-label">Voice line</span>

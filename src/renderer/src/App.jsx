@@ -15,6 +15,7 @@ import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
+import RenderQueue from './components/RenderQueue'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
 import Images, { CreateKind } from './components/Images'
@@ -158,6 +159,24 @@ export default function App() {
     switchSection('video')
     setPage('sequence')
   }
+  // A render-queue item opens the page it belongs to.
+  const openQueued = (item) => {
+    if (item.sequenceId) return openSequence(item.sequenceId)
+    if (['previews', 'finish'].includes(item.kind) && item.projectId) return openShot(item.projectId)
+    if (item.kind?.startsWith('picture')) {
+      pickCreateKind('image')
+      switchSection('video')
+      return setPage('create')
+    }
+    if (item.kind === 'music') {
+      switchSection('audio')
+      return setPage('music')
+    }
+    if (item.kind === 'replace') {
+      switchSection('video')
+      return setPage('replace')
+    }
+  }
   const openEdit = (id) => {
     setEditId(id)
     switchSection('video')
@@ -233,6 +252,7 @@ export default function App() {
           </button>
         ))}
         <div className="nav-foot mono">
+          <RenderQueue remote={!!setup?.remote} notify={notify} open={openQueued} />
           <button className={`nav-library ${page === 'media' ? 'on' : ''}`} onClick={() => setPage('media')}>
             Library
           </button>

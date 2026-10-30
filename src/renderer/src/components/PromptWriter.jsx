@@ -22,6 +22,16 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
         ? 'The free writer needs Ollama.'
         : status.running && !status.models.some((m) => m.name === status.model) && `The writer model ${status.model} isn't installed yet.`)
 
+  // What the local writer will look at: pictures, frames from videos, or the clip a Continue shot carries on.
+  const visual = (context.media || []).filter((m) => m.kind === 'picture' || m.kind === 'video')
+  const sees = status?.models?.find((m) => m.name === status.model)?.vision
+  const seeing =
+    engine === 'local' && visual.length > 0 && status?.running
+      ? sees
+        ? `Looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
+        : `${status.model} can't see pictures; choose a model marked "sees pictures" in Settings to have it look at your references.`
+      : null
+
   async function write() {
     setBusy(true)
     try {
@@ -47,6 +57,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
           {busy ? 'Writing…' : current?.trim() ? 'Rewrite prompt' : 'Write my prompt'}
         </button>
       </div>
+      {seeing && !blocker && <p className={`small writer-note ${sees ? 'dim' : 'pink'}`}>✦ {seeing}</p>}
       {blocker && (
         <p className="small pink writer-note">
           {blocker}{' '}

@@ -3673,3 +3673,107 @@ button.nav-update:hover {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Create: under the mode cards, a reminder that the writer looks at the references */
+.mode-writer-hint {
+  margin: 12px 0 0;
+}
+.mode-writer-hint b {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+/* the render queue above Library: what ComfyUI is rendering and what waits, from any page */
+.render-queue {
+  margin-bottom: 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(16, 12, 14, 0.82);
+  text-shadow: none;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.render-queue.busy {
+  border-color: var(--red);
+}
+.render-queue-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--paper-dim);
+}
+.render-queue.busy .render-queue-head {
+  color: var(--cream);
+  border-bottom: 1px solid var(--line);
+}
+.render-queue-item {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--line);
+}
+.render-queue-item:first-of-type {
+  border-top: 0;
+}
+.render-queue-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--cream);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  cursor: pointer;
+}
+.render-queue-open:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.render-queue-open:disabled {
+  cursor: default;
+  color: var(--paper-dim);
+}
+.render-queue-name {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.render-queue-state {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+.render-queue-bar {
+  display: block;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.render-queue-bar span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.4s ease;
+}
+.render-queue-x {
+  width: 30px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper-dim);
+  font-size: 15px;
+  cursor: pointer;
+}
+.render-queue-x:hover {
+  color: var(--ink);
+  background: var(--red);
+}
+.render-queue-more {
+  padding: 5px 8px;
+  border-top: 1px solid var(--line);
+}

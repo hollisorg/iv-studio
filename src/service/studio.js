@@ -632,7 +632,74 @@ export class Studio {
     return ids.map((id) => readJson(this.jobFile(id), null)).filter(Boolean).map((j) => this.publicJob(j))
   }
 
-  // Live progress from ComfyUI's websocket (the studio window keeps one open; the MCP server polls).
+  // The render queue in the sidebar: everything running or waiting on ComfyUI, IV Studio's own work named from
+  // its job records (with live step progress from the websocket), anyone else's as "other". A cloud ComfyUI is
+  // only asked while IV Studio has a job in flight, so the queue never keeps a cloud GPU awake.
+  async renderQueue() {
+    const known = this.queueIndex()
+    if (this.comfy.remote && ![...known.values()].some((j) => j.open)) return { items: [] }
+    const q = await this.comfy.queue()
+    const seen = new Set()
+    const items = [
+      ...q.queue_running.map((i) => ['running', i]),
+      ...[...q.queue_pending].sort((a, b) => a[0] - b[0]).map((i) => ['queued', i])
+    ].map(([state, i], n) => {
+      const promptId = i[1]
+      const ours = i[3]?.iv_studio
+      const job = known.get(promptId)
+      seen.add(promptId)
+      if (state === 'running' && !this.runningSince.has(promptId)) this.runningSince.set(promptId, Date.now())
+      return {
+        promptId,
+        state,
+        position: n + 1,
+        ours: !!ours,
+        jobId: job?.id || null,
+        kind: job?.kind || ours?.kind || null,
+        name: job?.name || null,
+        projectId: job?.projectId || ours?.project || null,
+        sequenceId: job?.sequenceId || ours?.sequence || null,
+        startedAt: state === 'running' ? this.runningSince.get(promptId) : null,
+        progress: state === 'running' ? this.progress.get(promptId) || null : null
+      }
+    })
+    for (const id of this.runningSince.keys()) if (!seen.has(id)) this.runningSince.delete(id)
+    return { items }
+  }
+
+  // promptId -> the job's name, kind and links, from the job files; only files written since the last look are read.
+  queueIndex() {
+    this.jobIndex ||= new Map()
+    this.runningSince ||= new Map()
+    const dir = path.join(this.dataDir, 'jobs')
+    const since = this.jobIndexAt || 0
+    this.jobIndexAt = Date.now()
+    let files = []
+    try {
+      files = fs.readdirSync(dir)
+    } catch {
+      return this.jobIndex
+    }
+    for (const f of files) {
+      const file = path.join(dir, f)
+      try {
+        if (fs.statSync(file).mtimeMs < since - 2000) continue
+        const j = readJson(file, null)
+        if (j?.promptId) this.jobIndex.set(j.promptId, { id: j.id, name: j.name, kind: j.kind, projectId: j.projectId, sequenceId: j.sequenceId, open: !['success', 'error', 'cancelled'].includes(j.status) })
+      } catch {}
+    }
+    return this.jobIndex
+  }
+
+  // Cancels a queue item IV Studio started: through its job when there is one, else by prompt id.
+  async cancelQueued(promptId) {
+    const job = this.queueIndex().get(promptId)
+    if (job?.id) return this.cancelJob(job.id)
+    return this.comfy.cancel(promptId)
+  }
+
+  // Live progress from ComfyUI's websocket (the studio window keeps one open; the MCP server polls). ComfyUI sends
+  // step progress only to the client id that queued the prompt, so this listens as that same id.
   watch(onEvent) {
     // A cloud ComfyUI shuts down when idle; an open websocket would keep it (and its bill) running.
     if (this.comfy.remote) return () => {}
@@ -641,7 +708,7 @@ export class Studio {
     const connect = () => {
       if (stopped) return
       try {
-        ws = new WebSocket(`${this.comfy.url.replace(/^http/, 'ws')}/ws?clientId=${this.comfy.clientId}-watch`)
+        ws = new WebSocket(`${this.comfy.url.replace(/^http/, 'ws')}/ws?clientId=${this.comfy.clientId}`)
       } catch {
         return setTimeout(connect, 3000)
       }
