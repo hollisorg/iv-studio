@@ -23,7 +23,7 @@ left out.
 
 ## Each page's own banner (2026-10-29)
 
-Matthew asked for every page to have its own version of the eye art. Create keeps the eye; every other page swaps
+Matthew asked for every page to have its own version of the eye art. The dashboard (home) keeps the eye; every other page swaps
 the eye for its own subject in the same style (`src/renderer/src/assets/pages/<page>.webp`, chosen by `<Hero art>`).
 Incognito still shows the closed eye on every page.
 
@@ -35,5 +35,7 @@ Incognito still shows the closed eye on every page.
   photographs), voices 101 (lips), lines 202 (ribbon microphone), music 101 (record player).
 - Settings and Library were rendered a second time with new subjects; a dial knob and a stack of film cans didn't
   read at banner size.
+- Create (2026-10-30, when the dashboard took the eye): create 303, an open hand releasing a burst of sparks. A film
+  camera was also tried and dropped: Flux drew fake lettering on it.
 - The app copies are 1400 × 737 WebP (quality 86), the eye's own size. Raw outputs are in ComfyUI's
   `output\IV-Studio\page-art\`. `page-art-banners.jpg` shows every page's banner in the app.

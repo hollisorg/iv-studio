@@ -25,7 +25,8 @@ export const SUBJECTS = {
   library: 'a fan of overlapping instant photographs spread out like a hand of playing cards, their pictures blank',
   voices: 'a pair of full lips, slightly parted as if speaking',
   lines: 'a vintage ribbon microphone on a short stand',
-  music: 'a vinyl record with a tone arm resting on it'
+  music: 'a vinyl record with a tone arm resting on it',
+  create: 'an open hand releasing a bright burst of sparks and small stars'
 }
 
 const prompt = (subject) =>

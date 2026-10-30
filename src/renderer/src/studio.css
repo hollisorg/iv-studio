@@ -3777,3 +3777,107 @@ button.nav-update:hover {
   padding: 5px 8px;
   border-top: 1px solid var(--line);
 }
+
+/* ---------- dashboard (home) ---------- */
+.dash-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.quick-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+.quick-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: stretch;
+  min-height: 96px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  text-align: left;
+  color: var(--paper);
+  cursor: pointer;
+  overflow: hidden;
+}
+.quick-card:hover {
+  border-color: var(--red);
+}
+/* the middle of the page's banner, where its subject sits */
+.quick-art {
+  background-color: var(--ink-3);
+  background-size: 300% auto;
+  background-position: 50% 42%;
+  background-repeat: no-repeat;
+  transition: background-size 0.3s ease;
+}
+.quick-card:hover .quick-art {
+  background-size: 330% auto;
+}
+.quick-text {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 12px 14px;
+}
+.quick-title {
+  font: 800 22px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.dash-recent .lib-tile {
+  min-width: 0;
+}
+.cast-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.cast-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+}
+.cast-face {
+  display: grid;
+  place-items: center;
+  height: 112px;
+  background: var(--ink-3);
+  overflow: hidden;
+  font: 800 34px var(--display);
+}
+.cast-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cast-body {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+}
+.cast-name {
+  font: 800 22px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.cast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dash-recent {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+/* pictures in Library and dashboard tiles fill the tile (the viewer shows them whole) */
+.tile-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

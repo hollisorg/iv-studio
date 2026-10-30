@@ -15,6 +15,7 @@ import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
+import Dashboard from './components/Dashboard'
 import RenderQueue from './components/RenderQueue'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
@@ -28,6 +29,7 @@ import { SizzleList, SizzleProject } from './components/Sizzle'
 // belongs to neither. Setup is a tab of Settings.
 const SECTIONS = {
   video: [
+    ['home', 'Dashboard'],
     ['create', 'Create'],
     ['library', 'Shots'],
     ['sequences', 'Sequences'],
@@ -71,13 +73,15 @@ export default function App() {
       localStorage.setItem('iv.createKind', kind)
     } catch {}
   }
-  const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'create'))
+  const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'home'))
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
   const [loraForCreate, setLoraForCreate] = useState(null)
   // a picture from Create -> Image on its way to a shot's first frame (Use in a shot)
   const [pictureForCreate, setPictureForCreate] = useState(null)
+  // a character picked on the dashboard (New shot with them)
+  const [characterForCreate, setCharacterForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
@@ -158,6 +162,21 @@ export default function App() {
     setSequenceId(id)
     switchSection('video')
     setPage('sequence')
+  }
+  // The dashboard's quick-start cards, and "New shot" with one of the cast.
+  const startTool = (id) => {
+    const to = (sect, pg) => (switchSection(sect), setPage(pg))
+    if (id === 'shot' || id === 'picture') return (pickCreateKind(id === 'shot' ? 'video' : 'image'), to('video', 'create'))
+    if (id === 'music') return to('audio', 'music')
+    if (id === 'line') return to('audio', 'lines')
+    if (id === 'sequence') return to('video', 'sequences')
+    if (id === 'edit') return to('video', 'edits')
+    if (id === 'sizzle') return to('video', 'sizzle')
+    if (id === 'character') return to('video', 'characters')
+  }
+  const startShotWith = (characterId) => {
+    setCharacterForCreate(characterId)
+    startTool('shot')
   }
   // A render-queue item opens the page it belongs to.
   const openQueued = (item) => {
@@ -270,11 +289,12 @@ export default function App() {
         </div>
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
+        {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} />}
         {page === 'create' &&
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
           ) : (
-            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} />
+            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} />
           ))}
         {page === 'loras' && <LorasPage {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}

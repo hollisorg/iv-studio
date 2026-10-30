@@ -1,6 +1,6 @@
 // Each page's own banner art (assets/pages/<name>.webp): the eye's artwork with the eye swapped for the page's
-// subject, made the same way as the closed eye (docs/art/README.md). Create keeps the eye itself.
-const ART = Object.fromEntries(
+// subject, made the same way as the closed eye (docs/art/README.md). The dashboard keeps the eye itself.
+export const ART = Object.fromEntries(
   Object.entries(import.meta.glob('../assets/pages/*.webp', { eager: true, import: 'default' })).map(([file, url]) => [file.split('/').pop().replace('.webp', ''), url])
 )
 

@@ -128,6 +128,12 @@ by hand once.
   <img src="docs/images/setup.png" alt="Settings → Setup" width="100%">
 </p>
 
+## Dashboard
+
+IV Studio opens on the **Dashboard**: one-click starts for a shot, a picture, a longer scene, an edit, a song,
+a voice line, a website film or a new character; your eight most recent renders; and your cast, each with
+their face, their voice, and **New shot** to start a shot with them already picked.
+
 ## How a shot works
 
 1. **Create.** Pick a mode, a character and write the shot.
@@ -302,6 +308,9 @@ at once with a strip saying what it did and a one-click Undo, and tracks you loc
 The **Library** button above the Visual | Audio switch opens everything you've made: shot finals and
 previews, sequences, Replace runs, Edit exports, songs and spoken lines, newest first. Filter by type or
 search, then add any of them to an edit or use a sound as a shot's voice line.
+
+Above it, the **Queue** shows what ComfyUI is rendering and what waits, on every page: each render's name,
+its step and time, a click to open its page, and × to cancel one of IV Studio's own.
 
 ## Incognito
 

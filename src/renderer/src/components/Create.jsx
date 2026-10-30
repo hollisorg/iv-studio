@@ -37,7 +37,7 @@ const withLine = (prompt, text) => {
   return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
 }
 
-export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, kindSwitch }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, incomingCharacter, clearIncomingCharacter, kindSwitch }) {
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
@@ -130,6 +130,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     takeLine(incomingLine)
     clearIncomingLine?.()
   }, [incomingLine])
+  // "New shot" with a character from the dashboard
+  useEffect(() => {
+    if (!incomingCharacter) return
+    set({ character: incomingCharacter })
+    clearIncomingCharacter?.()
+  }, [incomingCharacter])
 
   // The LoRA tray: each LoRA as its picture with a strength slider. A LoRA's trigger words go into the
   // prompt when it's added (the shot's first description), unless the person turned that off for it.
@@ -214,7 +220,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   return (
     <div className="create">
-      <Hero title="What if?" kicker="New shot" />
+      <Hero art="create" title="Create" kicker="New shot" />
       {kindSwitch}
 
       {blocked && (

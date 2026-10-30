@@ -18,7 +18,7 @@ const secs = (d) => (d ? (d >= 60 ? `${Math.floor(d / 60)}:${String(Math.round(d
 const day = (at) => (at ? new Date(at).toLocaleDateString() : '')
 
 // Items grouped into sets (a shot, a sequence, an edit), best version first, newest set first.
-function toSets(items) {
+export function toSets(items) {
   const map = new Map()
   for (const i of items) {
     const k = i.set || i.key
@@ -48,7 +48,7 @@ function Player({ item }) {
 
 // The pop-up: one version big, every version of the set underneath, and the next or previous set a click
 // (or an arrow key) away.
-function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, pictureToShot, openEdit, openShot, openSequence }) {
+export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, pictureToShot, openEdit, openShot, openSequence }) {
   const [si, ii] = at
   const set = sets[si]
   const item = set?.items[ii]
@@ -161,7 +161,7 @@ function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, picture
   )
 }
 
-function Tile({ set, onOpen }) {
+export function Tile({ set, onOpen }) {
   const c = set.cover
   const ref = useRef(null)
   const count = set.items.length

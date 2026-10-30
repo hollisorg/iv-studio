@@ -143,7 +143,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const blocked = !fam || !form.model || (editMode && !form.refs.length)
   return (
     <div className="images-page">
-      <Hero title="What if?" kicker="New image" />
+      <Hero art="create" title="Create" kicker="New image" />
       {kindSwitch}
       {status?.remote && <p className="notice">Pictures render on this PC’s ComfyUI. Switch to “This PC” on the Cloud page to make them.</p>}
       {status?.error && <p className="notice">{status.error}</p>}
