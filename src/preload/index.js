@@ -124,6 +124,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     uploadCharacters: call('cloud:uploadCharacters'),
     use: call('cloud:use'),
     wake: call('cloud:wake'),
+    stop: call('cloud:stop'),
     onLog: on('cloud:log')
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
@@ -154,6 +155,15 @@ contextBridge.exposeInMainWorld('ivstudio', {
     cancel: call('music:cancel'),
     delete: call('music:delete'),
     toEdit: call('music:toEdit')
+  },
+  images: {
+    status: call('images:status'),
+    create: call('images:create'),
+    list: call('images:list'),
+    get: call('images:get'),
+    cancel: call('images:cancel'),
+    delete: call('images:delete'),
+    toEdit: call('images:toEdit')
   },
   library: { all: call('library:all'), toEdit: call('library:toEdit') },
   loras: {

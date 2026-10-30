@@ -3,12 +3,13 @@ import { media } from '../media'
 import Hero from './Hero'
 import { fileUrl } from './edit/model'
 
-// Everything made in IV Studio in one place: shot, sequence and Replace renders, Edit exports, songs and
-// voice lines. The takes of one shot (its previews and finals), of one sequence or of one edit are a single
+// Everything made in IV Studio in one place: shot, sequence and Replace renders, Edit exports, pictures
+// (Create -> Image), songs and voice lines. The takes of one shot (its previews and finals), of one sequence or of one edit are a single
 // tile; clicking it opens a viewer that plays them big and steps through every version.
 const FILTERS = [
   ['all', 'All'],
   ['video', 'Videos'],
+  ['image', 'Images'],
   ['music', 'Music'],
   ['voice', 'Voice lines']
 ]
@@ -35,6 +36,7 @@ function toSets(items) {
 
 function Player({ item }) {
   if (item.type === 'video') return <video key={item.key} className="viewer-media" src={src(item.file)} controls autoPlay playsInline />
+  if (item.type === 'image') return <img key={item.key} className="viewer-media" src={src(item.file)} alt={item.label} />
   return (
     <div className="viewer-sound">
       <div className="viewer-sound-art mono">{item.type === 'music' ? '♪' : '“ ”'}</div>
@@ -46,7 +48,7 @@ function Player({ item }) {
 
 // The pop-up: one version big, every version of the set underneath, and the next or previous set a click
 // (or an arrow key) away.
-function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, openEdit, openShot, openSequence }) {
+function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, pictureToShot, openEdit, openShot, openSequence }) {
   const [si, ii] = at
   const set = sets[si]
   const item = set?.items[ii]
@@ -111,13 +113,18 @@ function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, openEdi
           <div className="viewer-strip">
             {set.items.map((x, k) => (
               <button key={x.key} className={`viewer-thumb ${k === ii ? 'on' : ''}`} onClick={() => setAt([si, k])}>
-                {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
+                {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : x.type === 'image' ? <img src={src(x.file)} alt="" loading="lazy" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
                 <span className="mono small">{x.variant || x.label}</span>
               </button>
             ))}
           </div>
         )}
         <div className="viewer-actions">
+          {item.type === 'image' && (
+            <button className="btn btn-small btn-primary" onClick={() => (onClose(), pictureToShot(item.file.path))}>
+              Use in a shot
+            </button>
+          )}
           {sound && (
             <button className="btn btn-small btn-primary" onClick={() => sendToCreate({ kind: item.type === 'music' ? 'music' : 'line', file: item.file.path, text: item.type === 'voice' ? item.label : '', name: set.name })}>
               Use in a shot
@@ -159,7 +166,7 @@ function Tile({ set, onOpen }) {
   const ref = useRef(null)
   const count = set.items.length
   return (
-    <button className={`lib-item lib-tile ${c.type !== 'video' ? 'lib-sound' : ''}`} onClick={onOpen} onMouseEnter={() => ref.current?.play?.().catch(() => {})} onMouseLeave={() => ref.current?.pause?.()}>
+    <button className={`lib-item lib-tile ${c.type !== 'video' && c.type !== 'image' ? 'lib-sound' : ''}`} onClick={onOpen} onMouseEnter={() => ref.current?.play?.().catch(() => {})} onMouseLeave={() => ref.current?.pause?.()}>
       {c.type === 'video' ? (
         <div className="tile-media">
           <video ref={ref} src={`${src(c.file)}#t=0.3`} muted loop playsInline preload="metadata" />
@@ -167,10 +174,14 @@ function Tile({ set, onOpen }) {
             ▶
           </span>
         </div>
+      ) : c.type === 'image' ? (
+        <div className="tile-media">
+          <img src={src(c.file)} alt="" loading="lazy" />
+        </div>
       ) : (
         <div className="lib-wave mono">{c.type === 'music' ? '♪' : '“ ”'}</div>
       )}
-      {count > 1 && <span className="lib-count mono">{count} versions</span>}
+      {count > 1 && <span className="lib-count mono">{count} {c.type === 'image' ? 'pictures' : 'versions'}</span>}
       <span className="tile-body">
         <span className="tile-name" title={set.name}>
           {set.name}

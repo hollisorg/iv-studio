@@ -129,6 +129,23 @@ export class Cloud {
     return this.modal(['volume', 'put', 'iv-studio-models', localFile, remotePath, '--force'])
   }
 
+  // The containers running IV Studio's cloud app right now (each holds a GPU while it's up).
+  async containers() {
+    const out = await this.modal(['container', 'list', '--json'], { quiet: true })
+    const list = JSON.parse(out.slice(out.indexOf('[')) || '[]')
+    return list.filter((c) => c.app_name === APP_NAME).map((c) => ({ id: c.container_id, startedAt: c.start_time }))
+  }
+
+  // Shuts the cloud GPU down now instead of waiting for the idle timer. Returns how many were stopped.
+  async stopGpu() {
+    const running = await this.containers()
+    for (const c of running) {
+      this.onLog(`Shutting down cloud GPU ${c.id}…`)
+      await this.modal(['container', 'stop', c.id], { quiet: true })
+    }
+    return { stopped: running.length }
+  }
+
   modal(args, { env = {}, quiet = false, secret = false } = {}) {
     return this.exec(this.modalExe, args, { cwd: this.deployDir, env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...env }, quiet, secret })
   }

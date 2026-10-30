@@ -113,6 +113,17 @@ track of the ones already in ComfyUI.
    and put its trigger words in the prompt.
 Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned them on in the app.
 
+## Images (Create -> Image)
+
+1. `list_image_models`: the image families on this PC (Flux.2 Klein 9B, Flux 3 Klein, Krea 2, Moss, Qwen Image
+   2.1, Z-Image Turbo), each with its checkpoints, whether it's ready, whether it can edit, and its licence.
+2. `make_image` with a checkpoint as `model`. mode `generate` makes pictures from the prompt; mode `edit` changes
+   `refs` (local picture paths) with the prompt as the instruction, only on families with `edit: true`. Add
+   LoRAs of the same family (`loras`), `aspect`, `megapixels`, `count` (1-4) and `seed`. Steps and CFG default
+   to each family's own settings.
+3. Poll `get_image` until `success`; its `files` are the pictures. Use one as a shot's first frame with
+   `generate_previews` mode `frames` and a picture in `media`.
+
 ## Music (Audio)
 
 IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:

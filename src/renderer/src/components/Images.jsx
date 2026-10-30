@@ -1,4 +1,8 @@
+import { useEffect, useMemo, useState } from 'react'
 import Hero from './Hero'
+import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+import { fileUrl } from './edit/model'
+import { ask } from './Confirm'
 
 // Create makes a video (a shot, Create.jsx) or an image (below); this switch sits under Create's banner on
 // both. Its look is Settings | Setup's.
@@ -17,16 +21,413 @@ export function CreateKind({ kind, onKind }) {
   )
 }
 
-// Create -> Image: making and editing pictures. A placeholder until its first tools are built.
-export default function Images({ kindSwitch }) {
+const I = () => window.ivstudio.images
+const MODES = [
+  ['generate', 'Generate', 'Make pictures from a prompt.'],
+  ['edit', 'Edit', 'Change a picture with an instruction. Only models that can edit.']
+]
+const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9']
+const SIZES = [0.5, 1, 1.5, 2]
+const DONE = ['success', 'error', 'cancelled']
+const FORM_KEY = 'iv.imageForm'
+const fresh = () => ({ mode: 'generate', family: null, model: null, prompt: '', negative: '', loras: [], aspect: '1:1', megapixels: 1, count: 1, seed: '', steps: '', cfg: '', refs: [] })
+const savedForm = () => {
+  try {
+    return { ...fresh(), ...JSON.parse(localStorage.getItem(FORM_KEY) || '{}') }
+  } catch {
+    return fresh()
+  }
+}
+const shortName = (model) => String(model).split(/[\\/]/).pop().replace(/\.(safetensors|gguf)$/i, '')
+const sizeOf = (aspect, mp) => {
+  const ar = { '1:1': 1, '16:9': 16 / 9, '9:16': 9 / 16, '4:3': 4 / 3, '3:4': 3 / 4, '3:2': 3 / 2, '2:3': 2 / 3, '21:9': 21 / 9 }[aspect] || 1
+  const px = mp * 1024 * 1024
+  return [Math.round(Math.sqrt(px * ar) / 32) * 32, Math.round(Math.sqrt(px / ar) / 32) * 32]
+}
+
+// Create -> Image: Generate and Edit with the person's own image models, their LoRAs, and a gallery.
+export default function Images({ kindSwitch, notify, go, pictureToShot }) {
+  const [status, setStatus] = useState(null)
+  const [form, setForm] = useState(savedForm)
+  const [sets, setSets] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [viewing, setViewing] = useState(null) // { set, i }
+  const [more, setMore] = useState(false)
+  const [yours, , reloadYours] = useYours()
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }))
+
+  useEffect(() => {
+    I().status().then(setStatus, (err) => setStatus({ error: err.message, families: [] }))
+    I().list().then(setSets, () => {})
+  }, [])
+  useEffect(() => {
+    try {
+      localStorage.setItem(FORM_KEY, JSON.stringify({ ...form, refs: [] }))
+    } catch {}
+  }, [form])
+  // while a set is being made, keep it up to date
+  const running = sets.some((s) => !DONE.includes(s.status))
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => I().list().then(setSets, () => {}), 2000)
+    return () => clearInterval(t)
+  }, [running])
+
+  const families = status?.families || []
+  const usable = families.filter((f) => f.ready && (form.mode !== 'edit' || f.edit))
+  const fam = families.find((f) => f.id === form.family && f.ready) || null
+  // keep a family and checkpoint that fit the mode
+  useEffect(() => {
+    if (!status) return
+    let f = fam && (form.mode !== 'edit' || fam.edit) ? fam : usable[0]
+    if (!f) return
+    const model = f.models.includes(form.model) ? form.model : f.models[0]
+    if (f.id !== form.family || model !== form.model) set({ family: f.id, model, loras: f.id === form.family ? form.loras : [] })
+  }, [status, form.mode, form.family])
+
+  const loraInfo = (name) => yours?.find((x) => x.name === name)
+  const familyFilter = useMemo(() => (fam ? { label: fam.label, test: (name) => new RegExp(fam.loraPattern, 'i').test(name) } : null), [fam])
+  function addLora({ name, words = [], title }) {
+    if (form.loras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already on.`, 'info')
+    const info = loraInfo(name)
+    const add = info?.prefs?.autoTrigger !== false ? words.filter((w) => w && !form.prompt.includes(w)) : []
+    set({ loras: [...form.loras, { name, strength: info?.prefs?.strength ?? 1 }], prompt: add.length ? `${add.join(', ')}. ${form.prompt}` : form.prompt })
+    if (add.length) notify(`Added ${title || loraTitle(name)} and its trigger words (${add.join(', ')}).`, 'info')
+    setPicking(false)
+    reloadYours()
+  }
+  async function addRefs(paths) {
+    const max = fam?.maxRefs || 6
+    const next = [...form.refs, ...paths].slice(0, max)
+    if (form.refs.length + paths.length > max) notify(`${fam?.label || 'This model'} takes up to ${max} picture${max > 1 ? 's' : ''}.`, 'info')
+    set({ refs: next })
+  }
+  function drop(e) {
+    e.preventDefault()
+    const files = [...(e.dataTransfer?.files || [])].map((f) => window.ivstudio.media.pathFor(f)).filter((p) => /\.(png|jpe?g|webp|bmp)$/i.test(p || ''))
+    if (files.length) addRefs(files)
+  }
+
+  async function make() {
+    setBusy(true)
+    try {
+      const rec = await I().create({ ...form, seed: form.seed === '' ? null : Number(form.seed), steps: form.steps === '' ? null : Number(form.steps), cfg: form.cfg === '' ? null : Number(form.cfg) })
+      setSets((all) => [rec, ...all])
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  function editThis(file) {
+    const f = fam?.edit ? fam : families.find((x) => x.ready && x.edit)
+    if (!f) return notify('None of your image models can edit pictures yet.')
+    set({ mode: 'edit', family: f.id, model: f.models.includes(form.model) ? form.model : f.models[0], refs: [file], prompt: '' })
+    setViewing(null)
+    document.querySelector('.images-page')?.scrollIntoView({ behavior: 'smooth' })
+  }
+  async function remove(s) {
+    if (!(await ask({ title: 'Delete these pictures?', message: `“${s.name}” and its ${s.files?.length || 0} picture${s.files?.length === 1 ? '' : 's'} leave IV Studio. ComfyUI's own copies stay in its output folder.`, confirm: 'Delete' }))) return
+    try {
+      await I().delete(s.id)
+      setSets((all) => all.filter((x) => x.id !== s.id))
+      setViewing(null)
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+
+  const [w, h] = sizeOf(form.aspect, form.megapixels)
+  const editMode = form.mode === 'edit'
+  const blocked = !fam || !form.model || (editMode && !form.refs.length)
   return (
     <div className="images-page">
       <Hero title="What if?" kicker="New image" />
       {kindSwitch}
-      <p className="lede">
-        Make and edit pictures, right next to your shots.
-        <span className="lede-small dim">Coming next: this is where IV Studio’s picture tools will live.</span>
-      </p>
+      {status?.remote && <p className="notice">Pictures render on this PC’s ComfyUI. Switch to “This PC” on the Cloud page to make them.</p>}
+      {status?.error && <p className="notice">{status.error}</p>}
+
+      <section className="block">
+        <p className="mono label">01 · Mode</p>
+        <div className="mode-cards">
+          {MODES.map(([id, label, hint]) => (
+            <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id })}>
+              <span className="mode-name">{label}</span>
+              <span className="dim small">{hint}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="block">
+        <p className="mono label">02 · Model</p>
+        <div className="row">
+          <span className="row-label">Family</span>
+          <div className="segmented wrap">
+            {families.map((f) => {
+              const off = !f.ready || (editMode && !f.edit)
+              const why = !f.models.length ? 'No checkpoints for it in ComfyUI.' : f.missing.length ? `Needs ${f.missing.join(', ')}.` : editMode && !f.edit ? f.editNote : f.note
+              return (
+                <button key={f.id} className={form.family === f.id ? 'on' : ''} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [] })}>
+                  {f.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {fam && (
+          <>
+            <div className="row">
+              <span className="row-label">Checkpoint</span>
+              <select value={form.model || ''} onChange={(e) => set({ model: e.target.value })}>
+                {fam.models.map((m) => (
+                  <option key={m} value={m}>
+                    {shortName(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="small dim image-family-note">
+              {fam.note} <span className="mono">Licence: {fam.licence}</span>
+            </p>
+          </>
+        )}
+        <div className="row lora-tray-row">
+          <span className="row-label">LoRAs</span>
+          <div className="lora-tray">
+            {form.loras.map((l, i) => {
+              const info = loraInfo(l.name)
+              return (
+                <div key={l.name} className="lora-chip">
+                  <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
+                  <div className="lora-chip-body">
+                    <span className="lora-chip-name" title={l.name}>
+                      {info?.civitai?.name || loraTitle(l.name)}
+                    </span>
+                    <div className="lora-chip-strength">
+                      <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ loras: form.loras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                      <span className="mono small">{Number(l.strength).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button className="lora-chip-x" title="Take it off" onClick={() => set({ loras: form.loras.filter((_, j) => j !== i) })}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+            <button className="lora-add" disabled={!fam} onClick={() => setPicking(true)}>
+              + Add LoRA
+            </button>
+          </div>
+        </div>
+        {picking && <LoraPicker family={familyFilter} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
+      </section>
+
+      {editMode && (
+        <section className="block">
+          <p className="mono label">03 · Picture to edit</p>
+          <div className="image-refs" onDragOver={(e) => e.preventDefault()} onDrop={drop}>
+            {form.refs.map((r, i) => (
+              <div key={r + i} className="image-ref">
+                <img src={fileUrl(r)} alt="" />
+                <span className="mono small">{form.refs.length > 1 ? `Picture ${i + 1}` : 'The picture'}</span>
+                <button className="lora-chip-x" title="Take it out" onClick={() => set({ refs: form.refs.filter((_, j) => j !== i) })}>
+                  ×
+                </button>
+              </div>
+            ))}
+            {form.refs.length < (fam?.maxRefs || 6) && (
+              <button className="image-ref add" onClick={async () => addRefs(await window.ivstudio.files.pick('picture'))}>
+                <span>+ Picture</span>
+                <span className="small dim">or drop one here</span>
+              </button>
+            )}
+          </div>
+          {(fam?.maxRefs || 0) > 1 && <p className="small dim">Add more pictures to bring things in from them, e.g. “put the jacket from picture 2 on her”.</p>}
+        </section>
+      )}
+
+      <section className="block">
+        <p className="mono label">{editMode ? '04' : '03'} · {editMode ? 'What to change' : 'Prompt'}</p>
+        <textarea className="prompt image-prompt" value={form.prompt} placeholder={editMode ? 'Say what to change, and what to keep. E.g. “Make it night, keep her face and pose.”' : 'Describe the picture: subject, place, light, style.'} onChange={(e) => set({ prompt: e.target.value })} />
+        <button className="link-btn small" onClick={() => setMore(!more)}>
+          {more ? '− Less' : '+ More: negative prompt, steps, CFG'}
+        </button>
+        {more && (
+          <div className="image-more">
+            <div className="row">
+              <span className="row-label">Negative</span>
+              <input value={form.negative} placeholder="What to keep out (used when CFG is above 1)" onChange={(e) => set({ negative: e.target.value })} />
+            </div>
+            <div className="row">
+              <span className="row-label">Steps</span>
+              <input type="number" min={1} max={100} value={form.steps} placeholder={fam ? `${fam.steps} (its own)` : ''} onChange={(e) => set({ steps: e.target.value })} />
+              <span className="row-label">CFG</span>
+              <input type="number" min={0} max={20} step={0.1} value={form.cfg} placeholder={fam ? `${fam.cfg} (its own)` : ''} onChange={(e) => set({ cfg: e.target.value })} />
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="block">
+        <p className="mono label">{editMode ? '05' : '04'} · Picture</p>
+        {!editMode && (
+          <div className="row">
+            <span className="row-label">Aspect</span>
+            <div className="segmented">
+              {ASPECTS.map((a) => (
+                <button key={a} className={form.aspect === a ? 'on' : ''} onClick={() => set({ aspect: a })}>
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="row">
+          <span className="row-label">Size</span>
+          <div className="segmented">
+            {SIZES.map((m) => (
+              <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
+                {m} MP
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="row">
+          <span className="row-label">How many</span>
+          <div className="segmented">
+            {[1, 2, 3, 4].map((n) => (
+              <button key={n} className={form.count === n ? 'on' : ''} onClick={() => set({ count: n })}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="row">
+          <span className="row-label">Seed</span>
+          <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} />
+          <button className="btn btn-small" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })}>
+            🎲 New seed
+          </button>
+        </div>
+      </section>
+
+      {sets.length > 0 && (
+        <section className="block">
+          <p className="mono label">Your pictures</p>
+          <div className="image-sets">
+            {sets.map((s) => (
+              <div key={s.id} className="image-set">
+                <div className="image-set-head">
+                  <span className="image-set-name" title={s.prompt}>
+                    {s.name}
+                  </span>
+                  <span className="mono small dim">
+                    {s.familyLabel} · {s.mode === 'edit' ? 'edit' : 'generate'} · seed {s.seed}
+                  </span>
+                  <button className="link-btn small" onClick={() => remove(s)}>
+                    Delete
+                  </button>
+                </div>
+                {s.status === 'success' ? (
+                  <div className="image-thumbs">
+                    {s.files.map((f, i) => (
+                      <button key={f} className="image-thumb" onClick={() => setViewing({ set: s, i })}>
+                        <img src={fileUrl(f)} alt={`${s.name}, picture ${i + 1}`} loading="lazy" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="char-pending mono small dim">
+                    {s.status === 'error' ? s.error : s.status === 'running' ? `Making it${s.progress?.max ? ` · ${Math.round((100 * s.progress.value) / s.progress.max)}%` : '…'}` : s.status === 'cancelled' ? 'Stopped' : `Queued${s.queuePosition ? ` · ${s.queuePosition}` : ''}`}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Stays at the bottom of the window while the form scrolls: what will be made, and the button. */}
+      <section className="go-dock">
+        <div className="go-info">
+          <span className="mono">{fam ? `${form.count} picture${form.count > 1 ? 's' : ''} · ${editMode ? `about ${form.megapixels} MP, the picture's shape` : `${w} × ${h}`} · ${fam.label}` : status ? 'No image model is ready' : 'Checking your image models…'}</span>
+          {fam && <span className="mono dim">{shortName(form.model)}{form.loras.length ? ` · ${form.loras.length} LoRA${form.loras.length > 1 ? 's' : ''}` : ''}</span>}
+        </div>
+        <button className="btn btn-primary" disabled={busy || blocked || !form.prompt.trim()} onClick={make}>
+          {busy ? 'Starting…' : editMode ? `Edit${form.count > 1 ? ` · ${form.count} versions` : ''}` : `Make ${form.count} picture${form.count > 1 ? 's' : ''}`}
+        </button>
+      </section>
+
+      {viewing && (
+        <ImageViewer
+          set={viewing.set}
+          index={viewing.i}
+          onIndex={(i) => setViewing({ ...viewing, i })}
+          onClose={() => setViewing(null)}
+          onEdit={editThis}
+          onShot={(f) => (setViewing(null), pictureToShot?.(f))}
+          onEditTimeline={async (f) => {
+            try {
+              const e = await I().toEdit(f, viewing.set.name)
+              notify(`Added to the edit “${e.name}”.`, 'info')
+            } catch (err) {
+              notify(err.message)
+            }
+          }}
+          onAgain={() => (set({ mode: viewing.set.mode, family: viewing.set.family, model: viewing.set.model, prompt: viewing.set.prompt, negative: viewing.set.negative || '', loras: viewing.set.loras || [], aspect: viewing.set.aspect, megapixels: viewing.set.megapixels, count: viewing.set.count, seed: '', refs: viewing.set.refs || [] }), setViewing(null))}
+        />
+      )}
+    </div>
+  )
+}
+
+// A picture large, with what to do next. ← → move through the set, Esc closes.
+function ImageViewer({ set, index, onIndex, onClose, onEdit, onShot, onEditTimeline, onAgain }) {
+  const file = set.files[index]
+  useEffect(() => {
+    const key = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowRight') onIndex((index + 1) % set.files.length)
+      if (e.key === 'ArrowLeft') onIndex((index + set.files.length - 1) % set.files.length)
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [index, set])
+  return (
+    <div className="lora-picker-backdrop" onClick={onClose}>
+      <div className="image-viewer" onClick={(e) => e.stopPropagation()}>
+        <img src={fileUrl(file)} alt={set.name} />
+        <div className="image-viewer-side">
+          <p className="image-set-name">{set.name}</p>
+          <p className="small dim">{set.prompt}</p>
+          <p className="mono small dim">
+            {set.familyLabel} · {shortName(set.model)} · seed {set.seed}
+            {set.files.length > 1 ? ` · ${index + 1} of ${set.files.length}` : ''}
+          </p>
+          <div className="image-viewer-actions">
+            <button className="btn btn-primary" onClick={() => onShot(file)}>
+              Use in a shot
+            </button>
+            <button className="btn" onClick={() => onEdit(file)}>
+              Edit this
+            </button>
+            <button className="btn" onClick={() => onEditTimeline(file)}>
+              Add to edit
+            </button>
+            <button className="btn" onClick={onAgain}>
+              Make more like this
+            </button>
+            <button className="btn" onClick={() => window.ivstudio.files.reveal({ path: file })}>
+              Show file
+            </button>
+            <button className="link-btn mono" onClick={onClose}>
+              Close ×
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

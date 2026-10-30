@@ -275,14 +275,16 @@ export function useYours() {
   return [items, setItems, reload]
 }
 
-function Yours({ items, setItems, onPick, onOpenCivitai, compact = false, notify }) {
+// family: { label, test(name) } narrows the list to one image family's LoRAs (Create -> Image) instead of H3's.
+function Yours({ items, setItems, onPick, onOpenCivitai, compact = false, notify, family = null }) {
   const [all, setAll] = useState(false)
   const [q, setQ] = useState('')
   const [looking, setLooking] = useState(null)
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean)
-    return (items || []).filter((x) => (all || x.h3) && words.every((w) => `${x.name} ${x.civitai?.name || ''}`.toLowerCase().includes(w)))
-  }, [items, all, q])
+    const mine = (x) => (family ? family.test(x.name) : x.h3)
+    return (items || []).filter((x) => (all || mine(x)) && words.every((w) => `${x.name} ${x.civitai?.name || ''}`.toLowerCase().includes(w)))
+  }, [items, all, q, family])
   const groups = useMemo(() => {
     const map = new Map()
     for (const x of [...shown].sort((a, b) => (b.prefs.favourite ? 1 : 0) - (a.prefs.favourite ? 1 : 0))) {
@@ -315,7 +317,7 @@ function Yours({ items, setItems, onPick, onOpenCivitai, compact = false, notify
         <input className="lora-search" value={q} placeholder="Search your LoRAs" onChange={(e) => setQ(e.target.value)} />
         <div className="segmented">
           <button className={all ? '' : 'on'} onClick={() => setAll(false)}>
-            H3 · {(items || []).filter((x) => x.h3).length}
+            {family ? family.label : 'H3'} · {(items || []).filter((x) => (family ? family.test(x.name) : x.h3)).length}
           </button>
           <button className={all ? 'on' : ''} onClick={() => setAll(true)}>
             All · {(items || []).length}
@@ -411,7 +413,8 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
 }
 
 // The same in a dialog: Yours first, Discover a tab away. onPick({name, words, title}).
-export function LoraPicker({ onPick, onClose, notify, go }) {
+// family (Create -> Image): only this PC's LoRAs, narrowed to the family; Civitai's tab searches H3's.
+export function LoraPicker({ onPick, onClose, notify, go, family = null }) {
   const [tab, setTab] = useState('yours')
   const [meta, setMeta] = useState(null)
   const [open, setOpen] = useState(null)
@@ -430,9 +433,11 @@ export function LoraPicker({ onPick, onClose, notify, go }) {
             <button className={tab === 'yours' ? 'on' : ''} onClick={() => (setTab('yours'), reload())}>
               Your LoRAs
             </button>
-            <button className={tab === 'discover' ? 'on' : ''} onClick={() => setTab('discover')}>
-              Find on Civitai
-            </button>
+            {!family && (
+              <button className={tab === 'discover' ? 'on' : ''} onClick={() => setTab('discover')}>
+                Find on Civitai
+              </button>
+            )}
           </div>
           <button className="link-btn mono" onClick={onClose}>
             Close ×
@@ -441,7 +446,7 @@ export function LoraPicker({ onPick, onClose, notify, go }) {
         <div className={`lora-layout ${open ? 'with-details' : ''}`}>
           <div>
             {tab === 'yours' ? (
-              <Yours compact items={items} setItems={setItems} notify={notify} onOpenCivitai={(id) => setOpen(id)} onPick={(x) => onPick({ name: x.name, words: x.prefs.triggers || x.civitai?.trainedWords || [], title: x.civitai?.name || loraTitle(x.name) })} />
+              <Yours compact family={family} items={items} setItems={setItems} notify={notify} onOpenCivitai={(id) => setOpen(id)} onPick={(x) => onPick({ name: x.name, words: x.prefs.triggers || x.civitai?.trainedWords || [], title: x.civitai?.name || loraTitle(x.name) })} />
             ) : (
               <Discover compact meta={meta} onOpen={(m) => setOpen(m.id)} />
             )}

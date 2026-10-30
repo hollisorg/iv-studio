@@ -23,6 +23,7 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
+import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
 import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
@@ -638,6 +639,29 @@ tool('get_music', 'One song, brought up to date: status (queued, running, succes
 tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
 tool('rename_music', 'Rename a song.', { songId: z.string(), name: z.string().min(1) }, ({ songId, name }) => music.rename(songId, name))
 tool('delete_music', "Delete a song and its file in IV Studio's music folder (ComfyUI's own output copy stays). Ask the person first.", { songId: z.string() }, ({ songId }) => music.delete(songId))
+
+// ---------- Create -> Image: pictures from the person's own image models on this PC ----------
+const images = new Images({ studio, dataDir: DATA })
+tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, and its licence.`, {}, () => images.status())
+tool('make_image', "Make pictures on this PC (free, local). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
+  mode: z.enum(['generate', 'edit']).default('generate'),
+  model: z.string().describe('A checkpoint from list_image_models'),
+  prompt: z.string().describe('generate: describe the picture. edit: what to change, and what to keep.'),
+  negative: z.string().optional(),
+  refs: z.array(z.string()).optional().describe('edit: absolute paths of the pictures to edit (Qwen Image 2.1: up to 3; Krea 2: 1; Flux: up to 6)'),
+  loras: z.array(z.object({ name: z.string(), strength: z.number().min(0).max(2).default(1) })).optional(),
+  aspect: z.enum(Object.keys(IMAGE_ASPECTS)).default('1:1'),
+  megapixels: z.number().min(0.25).max(4).default(1),
+  count: z.number().int().min(1).max(4).default(1),
+  seed: z.number().int().min(0).optional(),
+  steps: z.number().int().min(1).max(100).optional().describe("Leave out for the family's own setting"),
+  cfg: z.number().min(0).max(20).optional(),
+  name: z.string().optional()
+}, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), images.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('list_images', 'Every picture set made in IV Studio, newest first, with status, files (once finished), model, prompt and seed.', {}, () => images.list())
+tool('get_image', 'One picture set, brought up to date: status (queued, running, success, error), progress, and its files once finished.', { imageId: z.string() }, ({ imageId }) => images.get(imageId))
+tool('cancel_image', 'Stop a picture set that is still being made. Never touches other ComfyUI work.', { imageId: z.string() }, ({ imageId }) => images.cancel(imageId))
+tool('delete_image', "Delete a picture set and its files in IV Studio's images folder (ComfyUI's own output copies stay). Ask the person first.", { imageId: z.string() }, ({ imageId }) => images.delete(imageId))
 
 // ---------- Website sizzle: a web address in, a promo film out ----------
 const sizzles = new Sizzles({ dataDir: DATA, studio, music, voices, trainings, shinobi })

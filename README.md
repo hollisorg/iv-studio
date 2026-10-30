@@ -158,6 +158,28 @@ writer under **Settings → Prompt writer**:
 - **MiniMax Context IR:** MiniMax's own prompt rewriter through ComfyUI, paid through your Comfy.org
   account (about $0.02 to $0.11 a prompt). Your API key is stored encrypted on your PC.
 
+## Images
+
+**Create** switches between **Video** (a shot) and **Image** at the top. Image makes pictures on your PC with
+the image models you have in ComfyUI:
+
+| Family | Generate | Edit | Licence |
+|---|---|---|---|
+| Flux.2 Klein 9B | ✓ | ✓ several reference pictures | FLUX Non-Commercial (9B) |
+| Flux 3 Klein | ✓ | ✓ | FLUX Kommunity |
+| Krea 2 | ✓ | ✓ with the Krea 2 Identity Edit LoRA and the comfyui-krea2edit nodes | see Krea 2's model page |
+| Moss | ✓ | needs a newer ComfyUI | Apache-2.0 |
+| Qwen Image 2.1 | ✓ | ✓ up to three references | Apache-2.0 |
+| Z-Image Turbo | ✓ | ✗ | Apache-2.0 |
+
+Pick **Generate** or **Edit**; Edit lists only the families that can. Pick a family and one of its
+checkpoints (your fine-tunes are there too), add that family's LoRAs from the same picker as Video's, then
+the size, how many (1 to 4) and a seed. Each graph follows ComfyUI's official template for its model.
+
+Finished pictures appear under the form and in the **Library**. Open one to **Use in a shot** (it becomes the
+shot's first frame), **Edit this**, **Add to edit**, **Make more like this** or **Show file**. Agents use
+`list_image_models` and `make_image`.
+
 ## Characters
 
 A character is a trained MiniMax H3 LoRA plus its trigger word; write `{char}` in the prompt where the
@@ -351,7 +373,8 @@ Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspir
 
 The **Cloud** page renders on your own [Modal](https://modal.com) account instead of your PC: it installs
 Modal's client, signs you in on Modal's own page and deploys IV Studio's ComfyUI app there. GPUs bill by the
-second and stop on their own when idle, and new Modal accounts get free monthly credit. Cloud renders use a
+second and stop on their own when idle (after 3, 5, 10 or 20 minutes), or at once with **Shut down GPU** in the
+top bar or on the Cloud page. New Modal accounts get free monthly credit. Cloud renders use a
 2× AI upscale and RIFE frame interpolation in place of DLSS, which is Windows-only. Voices and music run on
 your PC.
 

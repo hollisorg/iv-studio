@@ -19,8 +19,9 @@ const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
 // The model family a job loads. Before a job, ComfyUI drops what a job of another family left loaded, so two
 // big models never share the GPU (Z-Image or MiniMax Music next to H3 overflows a 24 GB card and 64 GB of RAM).
 // Jobs of the same family keep their models: a finish reuses its preview's cached latent.
+// Create -> Image jobs are 'picture:<family>' (see images.js), so switching image models unloads too.
 const FAMILIES = { music: 'music', still: 'image' }
-const familyOf = (kind) => FAMILIES[kind] || 'h3'
+const familyOf = (kind) => FAMILIES[kind] || (String(kind).startsWith('picture:') ? String(kind) : 'h3')
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
 export const MODEL_NODES = { text: '101', frames: '201', reference: '301', continue: '601' }
 

@@ -20,6 +20,7 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
+import { Images } from '../service/images'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 
@@ -70,6 +71,7 @@ let replace = null
 let catalog = null
 let voices = null
 let music = null
+let images = null
 let civitai = null
 const pending = new Set() // job ids the window is waiting on
 
@@ -98,6 +100,7 @@ function makeStudio() {
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
   if (music) music.studio = studio
+  if (images) images.studio = studio
   // LoRAs live on this PC's ComfyUI, also when renders go to the cloud
   if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
   // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
@@ -272,6 +275,18 @@ app.whenReady().then(() => {
     if (!song.file) throw new Error('That song has not finished yet.')
     return putOnEdit(song.file, song.name, editId, 'music')
   })
+  // ---------- Create -> Image: pictures from the person's own image models ----------
+  images = new Images({ studio, dataDir: DATA })
+  handle('images:status', () => images.status())
+  handle('images:create', async (opts) => {
+    await voices.release()
+    return images.create(opts)
+  })
+  handle('images:list', () => images.list())
+  handle('images:get', (id) => images.get(id))
+  handle('images:cancel', (id) => images.cancel(id))
+  handle('images:delete', (id) => images.delete(id))
+  handle('images:toEdit', async (file, name, editId = null) => putOnEdit(file, name, editId, 'iv'))
   // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
   civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => unseal(readSettings(BASE).civitaiKey), mature: () => !!readSettings(BASE).civitaiMature, onProgress: (u) => send('loras:progress', u) })
   handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(BASE).civitaiMature, hasKey: !!readSettings(BASE).civitaiKey }))
@@ -289,6 +304,7 @@ app.whenReady().then(() => {
       for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} · ${x.fps || ''} fps`, rank: 0, editId: e.id })
     }
     for (const s of music.all()) if (s.file && fs.existsSync(s.file)) items.push({ key: `music:${s.id}`, type: 'music', group: 'Music', label: s.name, detail: `${s.engine === 'minimax' ? 'MiniMax Music 3' : 'ACE-Step 1.5'}${s.instrumental ? ' · instrumental' : ''}`, duration: s.duration, at: s.finishedAt || s.createdAt, file: { path: s.file }, set: `music:${s.id}`, setName: s.name, variant: 'Song', rank: 0 })
+    for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} · ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
     for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file }, set: `line:${l.id}`, setName: l.text, variant: `Seed ${l.seed}`, rank: 0 })
     return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
   })
@@ -520,6 +536,12 @@ app.whenReady().then(() => {
     writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, BASE)
     makeStudio()
     return target
+  })
+  // Stops the cloud GPU now (the "Shut down GPU" button). A render running there is lost.
+  handle('cloud:stop', () => {
+    if (!cloud.toolkitReady()) throw new Error('The cloud tools are not installed.')
+    if (cloudBusy) throw new Error(`Still busy: ${cloudBusy}.`)
+    return cloud.stopGpu()
   })
   // Wakes the cloud GPU (a cold start loads ComfyUI; Modal holds the request until it is up).
   handle('cloud:wake', async () => {

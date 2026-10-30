@@ -5,7 +5,7 @@ import ivMark from './assets/iv-mark.png'
 import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
 import Library from './components/Library'
-import Cloud from './components/Cloud'
+import Cloud, { ShutDownGpu } from './components/Cloud'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
@@ -75,6 +75,8 @@ export default function App() {
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
   const [loraForCreate, setLoraForCreate] = useState(null)
+  // a picture from Create -> Image on its way to a shot's first frame (Use in a shot)
+  const [pictureForCreate, setPictureForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [editId, setEditId] = useState(null)
@@ -161,6 +163,12 @@ export default function App() {
     switchSection('video')
     setPage('edit')
   }
+  const pictureToShot = (file) => {
+    setPictureForCreate(file)
+    pickCreateKind('video')
+    switchSection('video')
+    setPage('create')
+  }
   const addLoraToCreate = (lora) => {
     setLoraForCreate(lora)
     switchSection('video')
@@ -173,7 +181,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, focus, setFocus, openSizzle }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
@@ -213,6 +221,7 @@ export default function App() {
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
+          {setup?.remote && <ShutDownGpu notify={notify} className="mono gpu-off" />}
         </div>
       </header>
       <nav className="nav">
@@ -245,7 +254,7 @@ export default function App() {
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
           ) : (
-            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} />
+            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} />
           ))}
         {page === 'loras' && <LorasPage {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}

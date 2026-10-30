@@ -1,5 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
+import { ask } from './Confirm'
+
+// Shuts the cloud GPU down now, on top of the idle timer. On the title bar and the Cloud page.
+export function ShutDownGpu({ notify, className = 'btn btn-small' }) {
+  const [stopping, setStopping] = useState(false)
+  async function stop() {
+    const ok = await ask({
+      title: 'Shut down the cloud GPU?',
+      message: 'Modal stops it now, so billing stops now too. A render running in the cloud is lost. The next render wakes the GPU again (about 1–3 minutes).',
+      confirm: 'Shut down GPU'
+    })
+    if (!ok) return
+    setStopping(true)
+    try {
+      const { stopped } = await window.ivstudio.cloud.stop()
+      notify(stopped ? 'Cloud GPU shut down. Billing has stopped.' : 'The cloud GPU was already off.')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setStopping(false)
+    }
+  }
+  return (
+    <button className={className} disabled={stopping} onClick={stop} title="Stop the cloud GPU now instead of waiting for it to idle off">
+      {stopping ? 'Shutting down…' : 'Shut down GPU'}
+    </button>
+  )
+}
 
 const IDLE = [
   [180, '3 min'],
@@ -104,6 +132,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
           </button>
         </div>
         <span className="mono small dim">{busy ? `${busy}…` : onCloud ? wake || 'Rendering in the cloud.' : 'Rendering on this PC.'}</span>
+        {setUpDone && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
       </div>
 
       <Step n={1} title="Cloud tools" done={st.toolkit}>
@@ -162,7 +191,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
           </div>
         </div>
         <p className="small dim">
-          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
+          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. Shut down GPU (top bar, or above) switches it off at once. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
           {chosen && ` A 10-second 2 MP shot takes roughly 3–5 minutes of GPU, about $${((chosen.perHour * 4) / 60).toFixed(2)}.`}
         </p>
       </Step>

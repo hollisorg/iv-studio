@@ -37,7 +37,7 @@ const withLine = (prompt, text) => {
   return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
 }
 
-export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, kindSwitch }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, kindSwitch }) {
   const [form, setForm] = useState({
     projectName: '',
     mode: 'text',
@@ -153,6 +153,13 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     addLora(incomingLora)
     clearIncomingLora?.()
   }, [incomingLora])
+  // a picture from Create -> Image (Use in a shot): the shot opens on it, as its first frame
+  useEffect(() => {
+    if (!incomingPicture) return
+    set({ mode: 'frames', media: [] })
+    addFiles([{ kind: 'picture', path: incomingPicture }])
+    clearIncomingPicture?.()
+  }, [incomingPicture])
 
   async function pickVoice() {
     const [file] = await window.ivstudio.files.pick('audio')
