@@ -223,7 +223,7 @@ export default function MediaLibrary(ctx) {
 
   return (
     <div className="media-library">
-      <Hero title="Library" kicker="Everything you've made" />
+      <Hero art="library" title="Library" kicker="Everything you've made" />
       <p className="lede">
         Every video, song and line in one place.
         <span className="lede-small dim">A shot's previews and finals, a sequence's takes and an edit's exports are one tile. Click it to watch every version and step through them.</span>

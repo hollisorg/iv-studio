@@ -12,7 +12,7 @@ export default function Library({ openShot, go, notify }) {
 
   return (
     <div className="library">
-      <Hero title="Shots" kicker="Infinite Variance" />
+      <Hero art="shots" title="Shots" kicker="Infinite Variance" />
       <p className="lede">
         Every shot you've made.
         <span className="lede-small dim">Open one to watch its previews, pick the best, finish it at full size, or try again from the same settings.</span>

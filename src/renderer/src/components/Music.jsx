@@ -212,7 +212,7 @@ export function MusicPage({ notify, sendToCreate, openEdit }) {
 
   return (
     <div className="voices music" ref={top}>
-      <Hero title="Music" kicker="Audio" />
+      <Hero art="music" title="Music" kicker="Audio" />
       <p className="lede">
         Songs and scores, made on this PC.
         <span className="lede-small dim">Describe the music, add lyrics or keep it instrumental, and use the result under an edit or as the song a character sings in a shot. Every song is kept here.</span>

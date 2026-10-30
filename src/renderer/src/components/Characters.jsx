@@ -77,7 +77,7 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
 
   return (
     <div className="characters">
-      <Hero title="Characters" kicker="Your recurring actors" />
+      <Hero art="characters" title="Characters" kicker="Your recurring actors" />
       <p className="lede">
         The people H3 plays, the same in every shot.
         <span className="lede-small dim">
@@ -301,7 +301,7 @@ export function CharacterTrainer({ trainingId, notify, go, setCharacters }) {
 
   return (
     <div className="characters">
-      <Hero title={t.name} kicker={`Character · trigger ${t.trigger}`} />
+      <Hero art="characters" title={t.name} kicker={`Character · trigger ${t.trigger}`} />
       <div className="segmented char-steps">
         {STEPS.map(([id, label], i) => (
           <button key={id} className={step === id ? 'on' : ''} onClick={() => setStep(id)}>

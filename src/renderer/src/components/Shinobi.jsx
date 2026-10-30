@@ -44,7 +44,7 @@ export function ShinobiList({ openShinobi, notify }) {
   if (!st) return null
   return (
     <div className="shinobi">
-      <Hero title="Shinobi" kicker="Edits your agent cuts" />
+      <Hero art="shinobi" title="Shinobi" kicker="Edits your agent cuts" />
       <p className="lede">
         Hand your footage to an agent and get a finished edit.
         <span className="lede-small dim">
@@ -188,7 +188,7 @@ Read the guides first (shinobi read_guide: agent, timeline, effects). Look at th
 
   return (
     <div className="shinobi">
-      <Hero title={p.name} kicker="Shinobi film" />
+      <Hero art="shinobi" title={p.name} kicker="Shinobi film" />
       {busy && <p className="mono small dim">{busy}…</p>}
 
       <section className="block">

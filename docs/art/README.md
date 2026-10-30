@@ -20,3 +20,20 @@ shut lid), lifted to sit across the eye's middle, with five lashes at the outlin
 left out.
 
     python docs/art/make_closed_mark.py src/renderer/src/assets/iv-mark.png src/renderer/src/assets/iv-mark-closed.png
+
+## Each page's own banner (2026-10-29)
+
+Matthew asked for every page to have its own version of the eye art. Create keeps the eye; every other page swaps
+the eye for its own subject in the same style (`src/renderer/src/assets/pages/<page>.webp`, chosen by `<Hero art>`).
+Incognito still shows the closed eye on every page.
+
+- Same recipe as the closed eye: Flux.2 Klein 9B with `eye.webp` as the reference latent, 4 steps, 1536 × 800, local
+  and free. `page-art.mjs` holds each page's subject and the prompt, and renders seeds 101, 202 and 303.
+- Picks (seed): shots 101 (clapperboard), sequences 202 (curling filmstrip), edit 101 (scissors through film),
+  workflows 202 (cogs), shinobi 303 (katana), replace 202 (two masks), sizzle 202 (lit match), characters 101 (cameo
+  profile), loras 101 (lens), cloud 202 (storm cloud), settings 202 (crossed wrenches), library 202 (fanned
+  photographs), voices 101 (lips), lines 202 (ribbon microphone), music 101 (record player).
+- Settings and Library were rendered a second time with new subjects; a dial knob and a stack of film cans didn't
+  read at banner size.
+- The app copies are 1400 × 737 WebP (quality 86), the eye's own size. Raw outputs are in ComfyUI's
+  `output\IV-Studio\page-art\`. `page-art-banners.jpg` shows every page's banner in the app.

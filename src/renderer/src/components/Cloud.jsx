@@ -2,7 +2,54 @@ import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
 import { ask } from './Confirm'
 
-// Shuts the cloud GPU down now, on top of the idle timer. On the title bar and the Cloud page.
+// The title-bar meter while rendering in the cloud: GPU time and its estimated cost since IV Studio opened,
+// ticking while a GPU is up. Modal is asked every 30 s which containers run; each one counts from its own
+// start until it was last seen. Clicking it opens the Cloud page (Shut down GPU is there).
+const seen = new Map() // container id -> { start, last }, kept while the window is open
+const clock = (s) => {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = String(Math.floor(s % 60)).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
+}
+export function CloudMeter({ onOpen }) {
+  const [usage, setUsage] = useState(null)
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    let live = true
+    const poll = () =>
+      window.ivstudio.cloud
+        .usage()
+        .then((u) => {
+          if (!live) return
+          const t = Date.now()
+          for (const c of u.running) seen.set(c.id, { start: c.startedAt || t, last: t })
+          setUsage(u)
+        })
+        .catch(() => {})
+    poll()
+    const p = setInterval(poll, 30000)
+    const tick = setInterval(() => setNow(Date.now()), 1000)
+    return () => {
+      live = false
+      clearInterval(p)
+      clearInterval(tick)
+    }
+  }, [])
+  if (!usage) return null
+  const on = usage.running.length > 0
+  const ids = new Set(usage.running.map((c) => c.id))
+  const seconds = [...seen].reduce((sum, [id, c]) => sum + Math.max(0, ((ids.has(id) ? now : c.last) - c.start) / 1000), 0)
+  const cost = (seconds / 3600) * usage.perHour
+  return (
+    <button className={`mono cloud-meter ${on ? 'on' : ''}`} onClick={onOpen} title={`Cloud GPU time and estimated cost since IV Studio opened (${usage.gpu} at $${usage.perHour.toFixed(2)} an hour, billed by the second). Click for the Cloud page.`}>
+      <span className="cloud-meter-dot" />
+      {on ? 'GPU on' : 'GPU off'} · {clock(seconds)} · ${cost.toFixed(2)}
+    </button>
+  )
+}
+
+// Shuts the cloud GPU down now, on top of the idle timer. On the Cloud page.
 export function ShutDownGpu({ notify, className = 'btn btn-small' }) {
   const [stopping, setStopping] = useState(false)
   async function stop() {
@@ -114,7 +161,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
 
   return (
     <div className="cloud">
-      <Hero title="Cloud" kicker="Your own GPU · by the second" />
+      <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
       <p className="lede">
         No strong graphics card? Render on a cloud GPU in your own Modal account.
         <span className="lede-small dim">
@@ -191,7 +238,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
           </div>
         </div>
         <p className="small dim">
-          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. Shut down GPU (top bar, or above) switches it off at once. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
+          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. Shut down GPU (above) switches it off at once; the top bar's meter shows its time and cost. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
           {chosen && ` A 10-second 2 MP shot takes roughly 3–5 minutes of GPU, about $${((chosen.perHour * 4) / 60).toFixed(2)}.`}
         </p>
       </Step>

@@ -5,7 +5,7 @@ import ivMark from './assets/iv-mark.png'
 import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
 import Library from './components/Library'
-import Cloud, { ShutDownGpu } from './components/Cloud'
+import Cloud, { CloudMeter } from './components/Cloud'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
@@ -221,7 +221,7 @@ export default function App() {
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
-          {setup?.remote && <ShutDownGpu notify={notify} className="mono gpu-off" />}
+          {setup?.remote && <CloudMeter onOpen={() => setPage('cloud')} />}
         </div>
       </header>
       <nav className="nav">

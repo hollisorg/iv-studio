@@ -19,7 +19,7 @@ export function EditList({ openEdit, notify }) {
   }
   return (
     <div className="edits">
-      <Hero title="Edit" kicker="Infinite Variance" />
+      <Hero art="edit" title="Edit" kicker="Infinite Variance" />
       <p className="lede">
         Cut your shots and sequences together.
         <span className="lede-small dim">A multi-track timeline with trims, fades, titles and sound, played live and exported as one MP4.</span>

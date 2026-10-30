@@ -385,7 +385,7 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
   const use = (l) => addLoraToCreate?.(l)
   return (
     <div className="loras">
-      <Hero title="LoRAs" kicker="Looks, moves and styles" />
+      <Hero art="loras" title="LoRAs" kicker="Looks, moves and styles" />
       <p className="lede">
         Change how H3 looks and moves.
         <span className="lede-small dim">Find LoRAs on Civitai and download them straight into ComfyUI, or browse the ones you already have. Add one to a shot from Create's LoRA tray.</span>

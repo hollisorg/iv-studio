@@ -537,6 +537,13 @@ app.whenReady().then(() => {
     makeStudio()
     return target
   })
+  // What the cloud GPU is doing, for the title-bar meter: the running containers and the chosen GPU's rate.
+  handle('cloud:usage', async () => {
+    const s = readSettings(BASE)
+    const gpu = GPUS.find((g) => g.id === s.cloud?.gpu) || GPUS[0]
+    const running = cloud.toolkitReady() ? await cloud.containers() : []
+    return { gpu: gpu.id, perHour: gpu.perHour, running: running.map((c) => ({ id: c.id, startedAt: Date.parse(String(c.startedAt).replace(' ', 'T')) })) }
+  })
   // Stops the cloud GPU now (the "Shut down GPU" button). A render running there is lost.
   handle('cloud:stop', () => {
     if (!cloud.toolkitReady()) throw new Error('The cloud tools are not installed.')

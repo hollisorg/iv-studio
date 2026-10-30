@@ -92,7 +92,7 @@ export function VoicesPage({ notify, characters, setCharacters }) {
 
   return (
     <div className="voices">
-      <Hero title="Voices" kicker="Audio" />
+      <Hero art="voices" title="Voices" kicker="Audio" />
       <p className="lede">
         A voice for every character.
         <span className="lede-small dim">Give a character a voice and Create can speak a line in it for H3 to lip-sync. Design a new voice from a description, or start from a recording. Only invented voices, your own, or someone who agreed to it.</span>
@@ -340,7 +340,7 @@ export function LinesPage({ notify, characters, sendToCreate }) {
   }
   return (
     <div className="voices">
-      <Hero title="Lines" kicker="Audio" />
+      <Hero art="lines" title="Lines" kicker="Audio" />
       <p className="lede">
         Say it in their voice.
         <span className="lede-small dim">Type a line, pick a voice, and use the result as a shot's voice line: H3 lip-syncs the character to it. Every line is kept here.</span>

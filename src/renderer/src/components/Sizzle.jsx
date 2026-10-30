@@ -46,7 +46,7 @@ export function SizzleList({ notify, openSizzle }) {
   }
   return (
     <div className="sizzle">
-      <Hero title="Sizzle" kicker="A website, made into a film" />
+      <Hero art="sizzle" title="Sizzle" kicker="A website, made into a film" />
       <p className="lede">
         Put in a web address and get a promo film.
         <span className="lede-small dim">IV Studio captures the site as people see it. Your agent writes a storyboard from it, you approve it, and the H3 shots, pictures, music and voice-over are made on this PC. Then IV Studio cuts it on the music's beat with the site's own screens and colours, and your agent can refine the cut in Shinobi.</span>
@@ -130,7 +130,7 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
 
   return (
     <div className="sizzle">
-      <Hero title={s.name} kicker="Website sizzle" />
+      <Hero art="sizzle" title={s.name} kicker="Website sizzle" />
       <button className="link-btn mono" onClick={() => go('sizzle')}>
         ← All sizzles
       </button>

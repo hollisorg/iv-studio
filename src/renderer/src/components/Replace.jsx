@@ -105,7 +105,7 @@ export default function Replace({ notify, characters }) {
 
   return (
     <div className="replace">
-      <Hero title="Replace" kicker="Swap who's in the shot" />
+      <Hero art="replace" title="Replace" kicker="Swap who's in the shot" />
       <p className="lede">
         Put your character into any video.
         <span className="lede-small dim">The camera, cuts, motion and soundtrack stay; only the person or thing you choose is redrawn by H3, clip by clip. SAM 3.1 tracks them and Qwen3-VL writes the prompts.</span>

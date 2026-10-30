@@ -36,7 +36,7 @@ export function SequenceList({ openSequence, notify }) {
 
   return (
     <div className="sequences">
-      <Hero title="Sequences" kicker="Infinite Variance" />
+      <Hero art="sequences" title="Sequences" kicker="Infinite Variance" />
       <p className="lede">
         Several shots that play as one continuous video.
         <span className="lede-small dim">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</span>
@@ -358,7 +358,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
 
   return (
     <div className="sequence">
-      <Hero back={{ label: 'All sequences', onClick: () => go('sequences') }} kicker={`Sequence · ${shots.length} shot${shots.length === 1 ? '' : 's'}`}>
+      <Hero art="sequences" back={{ label: 'All sequences', onClick: () => go('sequences') }} kicker={`Sequence · ${shots.length} shot${shots.length === 1 ? '' : 's'}`}>
         <input className="shot-name" value={seq.name} onChange={(e) => edit({ name: e.target.value })} />
       </Hero>
 

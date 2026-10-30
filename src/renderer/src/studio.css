@@ -603,7 +603,7 @@ input.mini {
   height: 400px;
   top: -75px;
   left: calc(72% - 375px);
-  background: url('./assets/eye.webp') center / 100% 100% no-repeat;
+  background: var(--hero-art, url('./assets/eye.webp')) center / 100% 100% no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 34%, #000 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 34%, #000 100%);
   opacity: 0.92;
@@ -769,24 +769,50 @@ input.mini {
   background: var(--red);
   color: var(--ink);
 }
-/* "Shut down GPU" in the title bar, while rendering in the cloud */
-.gpu-off {
+/* the cloud GPU meter in the title bar (time and cost; opens the Cloud page) */
+.cloud-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 3px 9px;
-  border: 1px solid var(--red);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   background: transparent;
-  color: var(--red);
+  color: var(--paper-dim);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.gpu-off:hover:not(:disabled) {
+.cloud-meter.on {
+  border-color: var(--red);
+  color: var(--red);
+}
+.cloud-meter:hover {
   background: var(--red);
+  border-color: var(--red);
   color: var(--ink);
 }
-.gpu-off:disabled {
-  opacity: 0.6;
-  cursor: wait;
+.cloud-meter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.cloud-meter.on .cloud-meter-dot {
+  opacity: 1;
+  animation: cloud-meter-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cloud-meter-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud-meter.on .cloud-meter-dot {
+    animation: none;
+  }
 }
 .cloud-stop {
   margin-left: auto;

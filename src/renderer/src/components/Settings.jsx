@@ -460,7 +460,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
   if (!settings) return null
   return (
     <div className="settings">
-      <Hero title="Settings" kicker="Infinite Variance" />
+      <Hero art="settings" title="Settings" kicker="Infinite Variance" />
       <SettingsTabs tab="settings" go={go} setup={setup} />
 
       <section className="group">

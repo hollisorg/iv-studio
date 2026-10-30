@@ -373,8 +373,9 @@ Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspir
 
 The **Cloud** page renders on your own [Modal](https://modal.com) account instead of your PC: it installs
 Modal's client, signs you in on Modal's own page and deploys IV Studio's ComfyUI app there. GPUs bill by the
-second and stop on their own when idle (after 3, 5, 10 or 20 minutes), or at once with **Shut down GPU** in the
-top bar or on the Cloud page. New Modal accounts get free monthly credit. Cloud renders use a
+second and stop on their own when idle (after 3, 5, 10 or 20 minutes), or at once with **Shut down GPU** on the
+Cloud page. While you render in the cloud, the top bar shows the GPU's time and estimated cost since IV Studio
+opened; click it for the Cloud page. New Modal accounts get free monthly credit. Cloud renders use a
 2× AI upscale and RIFE frame interpolation in place of DLSS, which is Windows-only. Voices and music run on
 your PC.
 

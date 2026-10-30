@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     use: call('cloud:use'),
     wake: call('cloud:wake'),
     stop: call('cloud:stop'),
+    usage: call('cloud:usage'),
     onLog: on('cloud:log')
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },

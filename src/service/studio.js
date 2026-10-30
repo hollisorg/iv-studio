@@ -108,8 +108,14 @@ export class Studio {
   }
 
   // ---------- setup ----------
+  // An unreachable ComfyUI still reports remote, so the title bar keeps its cloud badge and GPU meter.
   async checkSetup() {
-    const result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters() })
+    let result
+    try {
+      result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters() })
+    } catch (err) {
+      return { ready: false, items: [{ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message }], remote: this.comfy.remote }
+    }
     if (result.items[0]?.status === 'ok') result.caps = await this.capabilities(true).catch(() => null)
     return { ...result, remote: this.comfy.remote }
   }

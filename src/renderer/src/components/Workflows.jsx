@@ -10,7 +10,7 @@ const TOOLS = [
 export default function Workflows({ go }) {
   return (
     <div className="workflows">
-      <Hero title="Workflows" kicker="Take a video further" />
+      <Hero art="workflows" title="Workflows" kicker="Take a video further" />
       <p className="lede">
         Tools for what comes after a render.
         <span className="lede-small dim">Each one works with your IV Studio renders and characters, and agents can use them through IV Studio's MCP.</span>

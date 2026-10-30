@@ -149,7 +149,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
 
   return (
     <div className="shot">
-      <Hero back={{ label: 'All shots', onClick: () => go('library') }} kicker={`Shot · ${runs.length} run${runs.length === 1 ? '' : 's'}`}>
+      <Hero art="shots" back={{ label: 'All shots', onClick: () => go('library') }} kicker={`Shot · ${runs.length} run${runs.length === 1 ? '' : 's'}`}>
         <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
       </Hero>
       <div className="shot-actions">
