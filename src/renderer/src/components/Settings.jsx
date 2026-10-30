@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { UpdateSettings } from './Update'
 import Hero from './Hero'
 import { ask } from './Confirm'
+import { setUnblurred } from './Loras'
 
 const WRITER_MODEL = 'qwen3-vl:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -84,7 +85,15 @@ function CivitaiSettings({ settings, setSettings, notify }) {
   }
   async function mature(on) {
     if (on && !(await ask({ title: 'Show mature LoRAs?', message: 'Only if you are 18 or over. LoRAs then come from civitai.red, Civitai’s unrestricted address, and adult LoRAs and previews can appear (previews stay blurred until you click them). LoRAs of real people and anything involving minors are never shown.', confirm: 'I’m 18 or over, show them' }))) return
-    setSettings(await window.ivstudio.settings.set({ civitaiMature: on }))
+    // turning mature off also puts the blur back
+    const s = await window.ivstudio.settings.set(on ? { civitaiMature: true } : { civitaiMature: false, civitaiUnblur: false })
+    setSettings(s)
+    setUnblurred(s.civitaiMature && s.civitaiUnblur)
+  }
+  async function unblur(on) {
+    const s = await window.ivstudio.settings.set({ civitaiUnblur: on })
+    setSettings(s)
+    setUnblurred(s.civitaiMature && s.civitaiUnblur)
   }
   return (
     <section className="group">
@@ -121,6 +130,12 @@ function CivitaiSettings({ settings, setSettings, notify }) {
           <input type="checkbox" checked={!!settings.civitaiMature} onChange={(e) => mature(e.target.checked)} />
           <span>Show mature LoRAs (18+). Off by default.</span>
         </label>
+        {settings.civitaiMature && (
+          <label className="consent">
+            <input type="checkbox" checked={!!settings.civitaiUnblur} onChange={(e) => unblur(e.target.checked)} />
+            <span>Show mature previews without the blur. Off by default.</span>
+          </label>
+        )}
       </div>
     </section>
   )

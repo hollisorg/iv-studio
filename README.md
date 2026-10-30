@@ -196,8 +196,8 @@ character goes. On the **Characters** page:
 - **Create's LoRA tray** shows the LoRAs in a shot as pictures with a strength slider; **+ Add LoRA** opens
   the same browser. A LoRA's trigger words go into the prompt when you add it.
 - **Mature LoRAs** are off. **Settings → Civitai → Show mature LoRAs (18+)** switches to civitai.red, with
-  previews blurred until clicked. LoRAs of real people and anything involving minors are never shown, in
-  either mode.
+  previews blurred until clicked; a second box, **Show mature previews without the blur**, drops the blur.
+  LoRAs of real people and anything involving minors are never shown, in either mode.
 
 ## Voices
 
@@ -278,6 +278,19 @@ at once with a strip saying what it did and a one-click Undo, and tracks you loc
 The **Library** button above the Video | Audio switch opens everything you've made: shot finals and
 previews, sequences, Replace runs, Edit exports, songs and spoken lines, newest first. Filter by type or
 search, then add any of them to an edit or use a sound as a shot's voice line.
+
+## Incognito
+
+The **Incognito** switch in the title bar restarts IV Studio into a separate, private space, and the eye
+closes. Shots, sequences, edits, songs, voices and lines, characters, trainings, Shinobi films, sizzles and
+exports made there are kept apart (in `%APPDATA%\IV Studio\incognito`, exports in its `videos` folder) and
+never show in the normal app; nothing normal shows there. Your characters and saved voices come along, and
+settings, keys and models are shared. ComfyUI saves Incognito renders into its `output\IV Private` folder
+(uploads into `input\IV Private`), and leaving Incognito clears them from ComfyUI's history. Switch back
+the same way.
+
+Incognito keeps things out of IV Studio's normal views. It isn't encryption: the files are on your PC, in
+the folders above, and LoRAs trained in Incognito land in ComfyUI's LoRAs folder like any other.
 
 ## Workflows
 

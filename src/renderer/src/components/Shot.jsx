@@ -173,7 +173,15 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
             </div>
             <Progress job={run} />
             {run.status === 'error' && <p className="notice">{run.error}</p>}
-            {req.prompt && <details className="run-prompt"><summary className="mono dim">Prompt</summary><pre>{req.prompt}</pre></details>}
+            {req.prompt && (
+              <details className="run-prompt">
+                <summary className="mono dim">Prompt</summary>
+                <pre>{req.prompt}</pre>
+                <button className="link-btn small" onClick={() => navigator.clipboard.writeText(req.prompt).then(() => notify('Prompt copied.', 'info'), () => notify('Could not copy the prompt.'))}>
+                  Copy the prompt
+                </button>
+              </details>
+            )}
             {previews.length > 0 && (
               <div className={`candidates n${previews.length}`}>
                 {previews.map((o) => (

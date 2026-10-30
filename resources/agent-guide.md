@@ -208,6 +208,12 @@ The Characters page (and these tools) turn an invented person into a character p
 5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the
    renders, and `adopt_checkpoint` the best. It's then a character like any other.
 
+## Incognito
+
+The person can switch IV Studio into Incognito (title bar), a separate private set of everything made; the
+app restarts to switch. This server works in whichever set was on when it started, and refuses tools after
+a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or move work between the two.
+
 ## House rules
 
 - Renders take real GPU minutes, and the person may be using ComfyUI for other work too. Only

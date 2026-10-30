@@ -13,9 +13,32 @@ const folderOf = (name) => {
   return parts.length > 1 ? parts.slice(0, -1).join(' / ') : 'Top level'
 }
 
-// A clip or picture that plays on hover. Mature previews stay blurred until clicked.
+// Whether mature previews show without the blur: Settings -> Civitai, only after the 18+ opt-in.
+let unblurred = false
+const unblurWatchers = new Set()
+export function setUnblurred(on) {
+  unblurred = !!on
+  unblurWatchers.forEach((f) => f(unblurred))
+}
+window.ivstudio?.settings
+  .get()
+  .then((s) => setUnblurred(s.civitaiMature && s.civitaiUnblur))
+  .catch(() => {})
+function useUnblurred() {
+  const [on, setOn] = useState(unblurred)
+  useEffect(() => {
+    unblurWatchers.add(setOn)
+    return () => unblurWatchers.delete(setOn)
+  }, [])
+  return on
+}
+
+// A clip or picture that plays on hover. Mature previews stay blurred until clicked, unless the person
+// chose to see them unblurred.
 export function LoraThumb({ preview, label, mature = false, className = '' }) {
-  const [shown, setShown] = useState(!mature)
+  const [clicked, setShown] = useState(false)
+  const unblur = useUnblurred()
+  const shown = !mature || clicked || unblur
   const ref = useRef(null)
   const src = preview?.url || (preview?.file ? fileUrl(preview.file) : null)
   if (!src)

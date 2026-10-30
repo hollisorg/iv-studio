@@ -237,7 +237,9 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
       <div className="seq-row-head">
         <span className="seq-shot-no">Shot {i + 1}</span>
         <span className={`mono small ${state?.stale ? 'pink' : 'dim'}`}>{status}</span>
-        <span className="dim small seq-row-prompt">{shot.prompt.slice(0, 90)}</span>
+        <span className="dim small seq-row-prompt" title={shot.prompt}>
+          {shot.prompt.slice(0, 90)}
+        </span>
         <button className="btn btn-small" disabled={busy || !state?.ready || !shot.prompt.trim() || (pj && !DONE.includes(pj.status))} onClick={() => act(() => window.ivstudio.sequences.huntShot(seqId, i, {}))} title={state?.ready ? '' : `Finish shot ${i} first`}>
           {pj ? 'Hunt again' : i === 0 ? 'Hunt 3 previews' : 'Render preview'}
         </button>

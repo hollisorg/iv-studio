@@ -17,6 +17,7 @@ const on = (channel) => (cb) => {
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
   update: { state: call('update:state'), check: call('update:check'), install: call('update:install'), onChange: on('update:changed') },
+  incognito: { set: call('incognito:set') },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
   // pathFor: the path of a file dropped on the window.
   replace: {

@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, scree
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { dataDir, incognitoDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
@@ -54,7 +54,13 @@ function serveFile(req) {
 const BG = '#100c0e'
 // A copy started with its own user data (testing beside the installed app) says so everywhere.
 const TEST_COPY = !!process.env.IV_STUDIO_USER_DATA
-const DATA = process.env.IV_STUDIO_DATA || dataDir()
+// Settings and keys live in BASE. Everything made lives in DATA: BASE itself, or BASE\incognito while
+// Incognito is on (see incognitoDir). The switch takes a restart, so one run never mixes the two.
+const BASE = process.env.IV_STUDIO_DATA || dataDir()
+const INCOGNITO = !!readSettings(BASE).incognito
+const DATA = INCOGNITO ? incognitoDir(BASE) : BASE
+// Downloads and exports: Videos\IV Studio, or a folder inside the Incognito data
+const videosDir = () => (INCOGNITO ? path.join(DATA, 'videos') : path.join(app.getPath('videos'), 'IV Studio'))
 let win = null
 let studio = null
 let stopWatch = null
@@ -84,9 +90,10 @@ const unseal = (enc) => {
 
 function makeStudio() {
   stopWatch?.()
-  const s = readSettings(DATA)
+  const s = readSettings(BASE)
   const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
+  studio.comfy.private = INCOGNITO
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
   if (catalog) catalog.studio = studio
@@ -123,7 +130,7 @@ async function pump() {
 setInterval(pump, 4000)
 
 function savedBounds() {
-  const b = readSettings(DATA).window
+  const b = readSettings(BASE).window
   if (!b) return { width: 1380, height: 900 }
   const visible = screen.getAllDisplays().some((d) => b.x < d.workArea.x + d.workArea.width - 100 && b.x + b.width > d.workArea.x + 100)
   return visible ? b : { width: b.width, height: b.height }
@@ -151,12 +158,12 @@ function createWindow() {
   })
   win.once('ready-to-show', () => win.show())
   if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
-  win.on('close', () => writeSettings({ window: win.getBounds() }, DATA))
+  win.on('close', () => writeSettings({ window: win.getBounds() }, BASE))
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(path.join(__dirname, '../renderer/index.html'))
 }
 
-const localCopy = (file) => studio.localCopy(file, path.join(app.getPath('videos'), 'IV Studio'))
+const localCopy = (file) => studio.localCopy(file, videosDir())
 
 // Errors cross IPC as plain messages so the window can show them.
 function handle(channel, fn) {
@@ -193,23 +200,23 @@ app.whenReady().then(() => {
       return { website: 'https://infinitevariance.ai', modalSignup: null }
     }
   })()
-  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, links }))
+  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
     const { comfyApiKey, cloudToken, civitaiKey, ...rest } = s
     return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey }
   }
-  const comfyKey = () => unseal(readSettings(DATA).comfyApiKey)
-  handle('settings:get', () => publicSettings(readSettings(DATA)))
+  const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
+  handle('settings:get', () => publicSettings(readSettings(BASE)))
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()
     if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
-    return publicSettings(writeSettings({ comfyApiKey: seal(k) }, DATA))
+    return publicSettings(writeSettings({ comfyApiKey: seal(k) }, BASE))
   })
   handle('settings:setCivitaiKey', (key) => {
     const k = String(key || '').trim()
     if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
-    return publicSettings(writeSettings({ civitaiKey: seal(k) }, DATA))
+    return publicSettings(writeSettings({ civitaiKey: seal(k) }, BASE))
   })
   // ---------- edits (the timeline editor) ----------
   const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
@@ -222,7 +229,7 @@ app.whenReady().then(() => {
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------
-  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(DATA).target === 'cloud' ? null : studio.comfy) })
+  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(BASE).target === 'cloud' ? null : studio.comfy) })
   handle('voices:status', () => voices.status())
   handle('voices:setup', () => voices.setup())
   handle('voices:list', async () => (await catalog?.attachVoices().catch(() => {}), voices.list()))
@@ -266,8 +273,8 @@ app.whenReady().then(() => {
     return putOnEdit(song.file, song.name, editId, 'music')
   })
   // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
-  civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(DATA).comfyUrl), key: () => unseal(readSettings(DATA).civitaiKey), mature: () => !!readSettings(DATA).civitaiMature, onProgress: (u) => send('loras:progress', u) })
-  handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(DATA).civitaiMature, hasKey: !!readSettings(DATA).civitaiKey }))
+  civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => unseal(readSettings(BASE).civitaiKey), mature: () => !!readSettings(BASE).civitaiMature, onProgress: (u) => send('loras:progress', u) })
+  handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(BASE).civitaiMature, hasKey: !!readSettings(BASE).civitaiKey }))
   handle('loras:search', (opts) => civitai.search(opts))
   handle('loras:model', (id) => civitai.model(id))
   handle('loras:download', (opts) => civitai.download(opts))
@@ -437,7 +444,7 @@ app.whenReady().then(() => {
       send('edits:changed', { id, updatedAt: e.updatedAt })
     })
   })
-  fs.watch(DATA, (_, name) => name === 'settings.json' && later('settings', () => (studio.models = readSettings(DATA).models || {})))
+  fs.watch(BASE, (_, name) => name === 'settings.json' && later('settings', () => (studio.models = readSettings(BASE).models || {})))
   handle('edits:delete', (id) => edits.remove(id))
   handle('edits:pickFiles', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'wav', 'mp3', 'm4a', 'flac', 'ogg', 'png', 'jpg', 'jpeg', 'webp'] }] })
@@ -445,7 +452,7 @@ app.whenReady().then(() => {
   })
   handle('edits:library', () => studio.library())
   handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
-  handle('edits:export', (id) => edits.export(id, path.join(app.getPath('videos'), 'IV Studio', 'Edits'), (p) => send('edits:progress', { id, progress: p })))
+  handle('edits:export', (id) => edits.export(id, path.join(videosDir(), 'Edits'), (p) => send('edits:progress', { id, progress: p })))
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
   handle('edits:filmstrip', (file, duration) => edits.filmstrip(file, duration))
   handle('edits:peaks', (file) => edits.peaks(file))
@@ -467,9 +474,9 @@ app.whenReady().then(() => {
       cloudBusy = null
     }
   }
-  const saveCloud = (patch) => writeSettings({ cloud: { ...(readSettings(DATA).cloud || {}), ...patch } }, DATA)
+  const saveCloud = (patch) => writeSettings({ cloud: { ...(readSettings(BASE).cloud || {}), ...patch } }, BASE)
   handle('cloud:status', async () => {
-    const s = readSettings(DATA)
+    const s = readSettings(BASE)
     return { toolkit: cloud.toolkitReady(), workspace: await cloud.workspace(), cloud: s.cloud, target: s.target, gpus: GPUS, busy: cloudBusy, hasToken: !!s.cloudToken }
   })
   handle('cloud:install', () => cloudTask('installing the cloud tools', () => cloud.installToolkit()))
@@ -477,9 +484,9 @@ app.whenReady().then(() => {
   handle('cloud:deploy', ({ gpu, idleSeconds }) =>
     cloudTask('setting up the cloud', async () => {
       const { url, token } = await cloud.deploy({ gpu, idleSeconds })
-      writeSettings({ cloudToken: seal(token) }, DATA)
+      writeSettings({ cloudToken: seal(token) }, BASE)
       saveCloud({ url, gpu, idleSeconds, workspace: await cloud.workspace(), deployedAt: new Date().toISOString() })
-      return readSettings(DATA).cloud
+      return readSettings(BASE).cloud
     })
   )
   handle('cloud:fetchModels', () =>
@@ -491,7 +498,7 @@ app.whenReady().then(() => {
   // Each character's LoRA and the RefMods it uses, found through the local ComfyUI's model folders.
   handle('cloud:uploadCharacters', () =>
     cloudTask('uploading characters', async () => {
-      const local = await fetch(`${readSettings(DATA).comfyUrl}/experiment/models`).then((r) => r.json())
+      const local = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`).then((r) => r.json())
       const roots = (name) => local.find((f) => f.name === name)?.folders || []
       const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
       const done = []
@@ -508,9 +515,9 @@ app.whenReady().then(() => {
     })
   )
   handle('cloud:use', (target) => {
-    const s = readSettings(DATA)
+    const s = readSettings(BASE)
     if (target === 'cloud' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
-    writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, DATA)
+    writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, BASE)
     makeStudio()
     return target
   })
@@ -527,17 +534,17 @@ app.whenReady().then(() => {
       }
     }
   })
-  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(DATA).promptEngine, model: readSettings(DATA).ollamaModel, hasComfyKey: !!readSettings(DATA).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE }))
+  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE }))
   handle('prompts:write', (request) => {
-    const s = readSettings(DATA)
+    const s = readSettings(BASE)
     const engine = request?.engine || s.promptEngine
     return studio.writePrompt(request, { engine, apiKey: engine === 'contextir' ? comfyKey() : null, model: s.ollamaModel })
   })
-  handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(DATA).ollamaModel }))
+  handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(BASE).ollamaModel }))
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
     const { comfyApiKey, cloudToken, civitaiKey, cloud, target, ...safe } = patch || {}
-    const s = publicSettings(writeSettings(safe, DATA))
+    const s = publicSettings(writeSettings(safe, BASE))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
     return s
@@ -595,7 +602,7 @@ app.whenReady().then(() => {
   handle('render:plan', (request, finish) => studio.planRender(request, finish))
   handle('render:planFinish', (jobId, finish) => studio.planFinishJob(jobId, finish))
   // A voice engine still holding the GPU would slow H3 down: let it go before a render on this PC.
-  const freeVoices = () => (readSettings(DATA).target === 'cloud' ? null : voices.release())
+  const freeVoices = () => (readSettings(BASE).target === 'cloud' ? null : voices.release())
   handle('render:previews', async (request) => {
     await freeVoices()
     const job = await studio.generatePreviews(request)
@@ -651,6 +658,29 @@ app.whenReady().then(() => {
     const waits = busy()
     if (waits.length) throw new Error(`Restart when it's done: ${waits.join(' and ')}.`)
     return updater.install()
+  })
+
+  // ---------- Incognito ----------
+  // Switching restarts the app into the other set of data (see BASE / DATA). Leaving Incognito also takes
+  // its renders out of ComfyUI's history, whose queue panel would show them; the files stay in IV Private.
+  handle('incognito:set', async (on) => {
+    if (!!on === INCOGNITO) return { on: INCOGNITO }
+    const waits = [...busy(), pending.size && 'a render is running'].filter(Boolean)
+    if (waits.length) throw new Error(`Switch when it's done: ${waits.join(' and ')}.`)
+    if (INCOGNITO && !studio.comfy.remote) {
+      const dir = path.join(DATA, 'jobs')
+      const promptOf = (f) => {
+        try {
+          return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).promptId || []
+        } catch {
+          return []
+        }
+      }
+      await studio.comfy.deleteHistory(fs.existsSync(dir) ? fs.readdirSync(dir).flatMap(promptOf) : []).catch(() => {})
+    }
+    writeSettings({ incognito: !!on }, BASE)
+    setTimeout(() => (app.relaunch(), app.exit(0)), 200)
+    return { on: !!on, restarting: true }
   })
   createWindow()
 })

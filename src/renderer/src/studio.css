@@ -249,11 +249,17 @@ input.mini {
   text-transform: uppercase;
   margin: 0;
 }
+/* the whole prompt, scrolling inside its box when it's long */
 .run-prompt pre {
   white-space: pre-wrap;
   font: 400 12.5px/1.5 var(--mono);
   color: var(--paper-dim);
-  margin: 8px 0 0;
+  margin: 8px 0 6px;
+  max-height: 42vh;
+  overflow: auto;
+  padding: 10px 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
 }
 .progress {
   display: flex;
@@ -2379,6 +2385,57 @@ body.resizing * {
   width: auto;
   display: block;
   -webkit-user-drag: none;
+}
+
+/* Incognito: the title bar's switch, and the eye art closed while it's on */
+.incognito-switch {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.incognito-switch:hover,
+.incognito-switch.on {
+  color: var(--paper);
+}
+.incognito-switch .switch-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+}
+.incognito-switch .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--paper-dim);
+  transition: transform 0.15s;
+}
+.incognito-switch.on .switch-track {
+  background: var(--red);
+  border-color: var(--red);
+}
+.incognito-switch.on .switch-knob {
+  transform: translateX(12px);
+  background: var(--ink);
+}
+.incognito-switch + .engine-badge {
+  margin-left: 22px;
+}
+.app.incognito .hero-eye,
+.app.incognito .nav::before {
+  background-image: url('./assets/eye-closed.webp');
 }
 
 /* ---------- Audio: the Video | Audio switch, Voices and Lines ---------- */

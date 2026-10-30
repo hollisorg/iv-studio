@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { MediaTools } from '../service/media'
-import { dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -27,11 +27,15 @@ import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 
-const DATA = dataDir()
-const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(DATA).comfyUrl, models: readSettings(DATA).models })
+// Settings in BASE; what's made in DATA (BASE\incognito while the app is in Incognito; see contentDir).
+const BASE = dataDir()
+const INCOGNITO = !!readSettings(BASE).incognito
+const DATA = contentDir(BASE)
+const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
+studio.comfy.private = INCOGNITO
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
-const VIDEOS = path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
+const VIDEOS = INCOGNITO ? path.join(DATA, 'videos') : path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
 // Packaged, the ffmpeg binaries sit outside the asar archive.
 const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
@@ -45,6 +49,8 @@ const fail = (err) => ({ isError: true, content: [{ type: 'text', text: err.mess
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try {
+      // the app switched Incognito on or off after this server started: its data is somewhere else now
+      if (!!readSettings(BASE).incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
       return ok(await fn(args))
     } catch (err) {
       return fail(err)
@@ -89,7 +95,7 @@ tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, wit
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))
-tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, async (args) => (readSettings(DATA).target === 'cloud' || (await voices.release()), studio.generatePreviews(args)))
+tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), studio.generatePreviews(args)))
 tool('finish_candidate', "Finish one preview candidate (2 MP pass + DLSS, optional RTX 2x and frame generation) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
 const sequenceFields = {
   name: z.string().optional(),
@@ -141,7 +147,7 @@ tool('write_prompt', 'Write a MiniMax H3 prompt from a plain-words idea, using t
   previous: z.string().optional().describe('sequence: the prompt of the previous shot'),
   engine: z.enum(['local', 'contextir']).optional()
 }, ({ engine, ...request }) => {
-  const s = readSettings(DATA)
+  const s = readSettings(BASE)
   const e = engine || (s.promptEngine === 'contextir' && process.env.COMFY_ORG_API_KEY ? 'contextir' : 'local')
   return studio.writePrompt(request, { engine: e, apiKey: process.env.COMFY_ORG_API_KEY || null, model: s.ollamaModel }).then((prompt) => ({ prompt, engine: e }))
 })
@@ -150,7 +156,7 @@ tool('write_shots_from_story', 'Split a short story into sequence shots and writ
   shots: z.number().int().min(1).max(8).default(3),
   seconds: z.number().refine((v) => SHOT_SECONDS.includes(v)).default(10),
   character: z.string().default('tess')
-}, (args) => studio.writeStory(args, { model: readSettings(DATA).ollamaModel }).then((shots) => ({ shots })))
+}, (args) => studio.writeStory(args, { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots })))
 tool('get_job', 'Status, progress and outputs of a job.', { jobId: z.string() }, ({ jobId }) => studio.refreshJob(jobId))
 tool('cancel_job', 'Cancel an IV Studio job (removes it from the queue or interrupts it if running); never touches other work.', { jobId: z.string() }, ({ jobId }) => studio.cancelJob(jobId))
 tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that made them, for a job or a whole project.', { jobId: z.string().optional(), projectId: z.string().optional() }, async ({ jobId, projectId }) => {
@@ -523,7 +529,7 @@ tool('replace_history', 'Past Replace runs, newest first, with their status and 
 const WORKFLOWS = ['text', 'frames', 'reference', 'continue', 'take', 'retake']
 tool('list_h3_models', 'H3 models the ComfyUI can load, each workflow\'s built-in default, and the model chosen in Settings for each (text, frames, reference, continue, take = Sequences one take, retake). Some models suit realism, others animation.', {}, async () => {
   const { models, defaults } = await studio.h3Models()
-  return { models, defaults, chosen: readSettings(DATA).models || {} }
+  return { models, defaults, chosen: readSettings(BASE).models || {} }
 })
 tool('set_workflow_model', 'Choose the H3 model one workflow uses (Settings -> Models). model null = back to the default. Applies to this MCP server at once and to the app window from its next render.', {
   workflow: z.enum(WORKFLOWS),
@@ -533,10 +539,10 @@ tool('set_workflow_model', 'Choose the H3 model one workflow uses (Settings -> M
     const { models } = await studio.h3Models()
     if (!models.includes(model)) throw new Error(`ComfyUI has no H3 model "${model}". list_h3_models shows them.`)
   }
-  const next = { ...(readSettings(DATA).models || {}) }
+  const next = { ...(readSettings(BASE).models || {}) }
   if (model) next[workflow] = model
   else delete next[workflow]
-  studio.models = writeSettings({ models: next }, DATA).models
+  studio.models = writeSettings({ models: next }, BASE).models
   return { chosen: studio.models }
 })
 tool('list_choices', 'Character LoRAs and RefMods the ComfyUI can load (for save_character and the refmods of a request).', {}, () => studio.choices())
@@ -624,7 +630,7 @@ tool('make_music', 'Make a song or an instrumental on this PC (free, local). Ret
   key: z.enum(ACE_KEYS).optional().describe('ace only, e.g. "E minor"'),
   timesignature: z.enum(['2', '3', '4', '6']).optional().describe('ace only: beats per bar'),
   language: z.string().optional().describe('ace only: lyrics language code, e.g. en, es, ja')
-}, async (args) => (readSettings(DATA).target === 'cloud' || (await voices.release()), music.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+}, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), music.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
 tool('list_music', 'Every song made in IV Studio, newest first, with status, file (once finished), length, engine, style, lyrics and seed.', {}, () => music.list())
 tool('get_music', 'One song, brought up to date: status (queued, running, success, error), progress, and its file once finished.', { songId: z.string() }, ({ songId }) => music.get(songId))
 tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
@@ -710,7 +716,7 @@ tool('delete_sizzle', 'Delete a sizzle and its capture (renders, songs and the S
 // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
 // Downloads use CIVITAI_API_KEY from this server's environment (the app keeps its own key encrypted).
 // Mature LoRAs only when the person has turned them on in the app (Settings > Civitai).
-const civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(DATA).comfyUrl), key: () => process.env.CIVITAI_API_KEY || null, mature: () => !!readSettings(DATA).civitaiMature })
+const civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => process.env.CIVITAI_API_KEY || null, mature: () => !!readSettings(BASE).civitaiMature })
 tool('search_loras', `Search Civitai for MiniMax H3 LoRAs (styles, looks, motion, speed). Returns cards: name, file size, downloads, trigger words, preview clip URLs and whether it's installed. tag: ${LORA_TAGS.filter(([t]) => t).map(([t]) => t).join(', ')}. Real-person LoRAs are never returned; mature ones only if the person turned them on in the app.`, {
   query: z.string().optional(),
   tag: z.string().optional(),

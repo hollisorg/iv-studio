@@ -616,7 +616,8 @@ export class Studio {
 
   publicJob(job) {
     const { previewPlan, ...rest } = job
-    return { ...rest, plan: { resolved: job.plan?.resolved, request: job.plan?.request ? summarise(job.plan.request) : undefined, finish: job.plan?.finish } }
+    // the request goes out whole: the shot page shows its prompt in full
+    return { ...rest, plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish } }
   }
 
   listJobs(projectId) {
@@ -661,7 +662,3 @@ export class Studio {
   }
 }
 
-function summarise(r) {
-  const { prompt, ...rest } = r
-  return { ...rest, prompt: prompt?.length > 400 ? prompt.slice(0, 400) + '…' : prompt }
-}

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
-import { ConfirmHost } from './components/Confirm'
+import ivMarkClosed from './assets/iv-mark-closed.png'
+import { ConfirmHost, ask } from './components/Confirm'
 import Library from './components/Library'
 import Cloud from './components/Cloud'
 import { EditEditor, EditList } from './components/Edit'
@@ -160,13 +161,38 @@ export default function App() {
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
+  // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
+  // art closes while it's on.
+  const incognito = !!info?.incognito
+  async function switchIncognito() {
+    const ok = await ask(
+      incognito
+        ? { title: 'Leave Incognito?', message: 'IV Studio restarts into your normal shots, edits, songs and voices. Everything made in Incognito stays where it is, hidden, until you switch back. Its renders are also cleared from ComfyUI’s history.', confirm: 'Leave Incognito' }
+        : { title: 'Go Incognito?', message: 'IV Studio restarts into a separate, private space. Shots, sequences, edits, songs, voices, characters and exports made there never show in the normal app, and nothing normal shows there. Your characters and voices come along; settings and models are shared. Renders save into ComfyUI’s output\\IV Private folder.', confirm: 'Go Incognito' }
+    )
+    if (!ok) return
+    try {
+      await window.ivstudio.incognito.set(!incognito)
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+
   return (
-    <div className={`app ${focus && page === 'edit' ? 'app-focus' : ''}`}>
+    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''}`}>
       <header className="titlebar">
-        <img className="brand-logo" src={ivMark} alt="Infinite Variance" />
+        <img className="brand-logo" src={incognito ? ivMarkClosed : ivMark} alt="Infinite Variance" />
         <span className="mono">Infinite Variance</span>
         <span className="mono dim">/ Studio</span>
         {info?.testCopy && <span className="mono test-copy">Test copy · separate data</span>}
+        {info && (
+          <button className={`incognito-switch mono ${incognito ? 'on' : ''}`} onClick={switchIncognito} title={incognito ? 'Leave Incognito (restarts IV Studio)' : 'Go Incognito: a private space (restarts IV Studio)'}>
+            <span className="switch-track">
+              <span className="switch-knob" />
+            </span>
+            Incognito
+          </button>
+        )}
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
