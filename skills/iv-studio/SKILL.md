@@ -90,6 +90,24 @@ cropped to the shot's aspect, because they're stretched to fit).
 - If the edit is open in the app, it reloads there and an activity strip tells the person what you
   changed, with a one-click Undo.
 
+### New footage inside an edit
+
+`generate_in_edit` makes footage with H3 right on the timeline, as the editor's right-click menu does:
+
+- `extend` carries `clip` on for 5, 10 or 15 `seconds` from its last frames (Continue a video). It is
+  finished by itself and inserted after the clip, pushing the rest of the track along.
+- `bridge` with `clip` and `next` (two touching clips) makes a new shot from the first's last frame to the
+  second's first frame, `seconds` long, inserted between them. With `gap: {track, from, to}` it fills a
+  gap (up to 15 s) instead. Either way it makes 3 previews: show them to the person (the candidates' paths
+  are in `list_generations`), then `pick_generation`; the pick is finished at 2 MP and placed.
+- `retake` renders `from`..`to` (timeline seconds inside `clip`) again: `mode` both (picture and sound),
+  video (keeps the performance) or audio (keeps the picture). It replaces that stretch.
+
+Write the prompt as a normal H3 prompt (`write_prompt` with mode continue, frames or reference can write it).
+Pass `character` when the clip shows one. Each takes GPU minutes; poll `list_generations` every 20-30 s.
+The person sees a striped placeholder on the timeline while it works, and the result lands as an
+ordinary clip they can undo. Retake needs ComfyUI on this PC.
+
 ## Models and characters
 
 - `list_h3_models` and `set_workflow_model` choose the H3 model per workflow (some suit realism,

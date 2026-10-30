@@ -50,7 +50,7 @@ function TrackHead({ t, height, target, empty, onTarget, onTrack, onRemove }) {
   )
 }
 
-function Clip({ c, m, kind, zoom, height, selected, tool, locked, onPointerDown }) {
+function Clip({ c, m, kind, zoom, height, selected, tool, locked, onPointerDown, onContextMenu }) {
   const strip = useStrip(kind === 'video' ? m : null)
   const wave = usePeaks(kind === 'audio' || kind === 'video' ? m : null)
   const width = Math.max(6, clipLength(c) * zoom)
@@ -61,7 +61,8 @@ function Clip({ c, m, kind, zoom, height, selected, tool, locked, onPointerDown 
     <div
       className={`tl-clip ${kind} ${selected ? 'on' : ''} ${c.muted ? 'muted' : ''} ${locked ? 'locked' : ''} tool-${tool}`}
       style={{ left: c.start * zoom, width }}
-      onPointerDown={(e) => onPointerDown(e, 'move')}
+      onPointerDown={(e) => e.button === 0 && onPointerDown(e, 'move')}
+      onContextMenu={onContextMenu}
       title={`${label} · ${clipLength(c).toFixed(2)} s`}
     >
       {(kind === 'video' || kind === 'image') && <Filmstrip m={m} strip={strip} from={c.in} to={c.out} width={width} height={kind === 'video' && wave ? inner - waveH : inner} />}
@@ -83,11 +84,36 @@ function Clip({ c, m, kind, zoom, height, selected, tool, locked, onPointerDown 
   )
 }
 
+// A generation on its way (edit.gens): a striped box where the new clip will land, with how far it has got.
+const GEN_WORD = { extend: 'Extend', bridge: 'Bridge', retake: 'Retake' }
+function GenBox({ g, zoom, height, onClick }) {
+  const state =
+    g.status === 'pick'
+      ? 'Pick a take ›'
+      : g.status === 'error'
+        ? 'Failed: click for details'
+        : g.progress?.max
+          ? `${g.status === 'finishing' ? 'Finishing' : 'Rendering'} · step ${g.progress.value}/${g.progress.max}`
+          : g.queuePosition
+            ? `Waiting · #${g.queuePosition}`
+            : g.status === 'finishing'
+              ? 'Finishing…'
+              : 'Rendering…'
+  const pct = g.progress?.max ? (g.progress.value / g.progress.max) * 100 : 0
+  return (
+    <button className={`tl-gen ${g.status}`} style={{ left: g.at * zoom, width: Math.max(24, g.length * zoom), height }} onPointerDown={(e) => e.stopPropagation()} onClick={onClick} title={`${g.name} · ${state}`}>
+      <span className="tl-gen-name">{g.gap ? 'Fill' : GEN_WORD[g.kind]}</span>
+      <span className="tl-gen-state mono">{state}</span>
+      {g.progress?.max && <span className="tl-gen-bar" style={{ width: `${pct}%` }} />}
+    </button>
+  )
+}
+
 // The timeline: ruler with markers, track headers, clips with filmstrips and waveforms, and the playhead.
 // Tools: select (move across tracks of its kind, trim an edge), razor (click to cut), ripple trim (the
 // rest of the track follows) and rolling edit (moves the cut between two touching clips). Changes are
 // committed on release.
-export default function Timeline({ tracks, clips, media, markers, time, zoom, selected, selectedMarker, snapOn, tool, targets, length, height, onSeek, onSelect, onSelectMarker, onCommit, onMarkers, onTrack, onTarget, onRemoveTrack, onWidth, notify }) {
+export default function Timeline({ tracks, clips, media, markers, time, zoom, selected, selectedMarker, snapOn, tool, targets, length, height, onSeek, onSelect, onSelectMarker, onCommit, onMarkers, onTrack, onTarget, onRemoveTrack, onWidth, notify, gens = [], onMenu, onGen }) {
   const box = useRef(null)
   const [drag, setDrag] = useState(null) // { clips } while dragging
   const dragRef = useRef(null)
@@ -298,16 +324,48 @@ export default function Timeline({ tracks, clips, media, markers, time, zoom, se
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => drop(e, t.id)}
                 onPointerDown={(e) => {
-                  if (e.target === e.currentTarget) {
+                  if (e.target === e.currentTarget && e.button === 0) {
                     onSelect(null)
                     scrub(e)
                   }
+                }}
+                onContextMenu={(e) => {
+                  if (e.target !== e.currentTarget || !onMenu) return
+                  e.preventDefault()
+                  // empty space: the gap it sits in, between the clip before and the clip after
+                  const at = secondsAt(e.clientX)
+                  const on = clips.filter((c) => c.track === t.id)
+                  const before = on.filter((c) => clipEnd(c) <= at).sort((a, b) => clipEnd(b) - clipEnd(a))[0]
+                  const after = on.filter((c) => c.start >= at).sort((a, b) => a.start - b.start)[0]
+                  onMenu(e, { track: t, at, gap: before && { track: t.id, from: clipEnd(before), to: after ? after.start : null } })
                 }}
               >
                 {live
                   .filter((c) => c.track === t.id)
                   .map((c) => (
-                    <Clip key={c.id} c={c} m={media[c.media]} kind={clipKind(c, media)} zoom={zoom} height={h - 8} selected={selected === c.id} tool={tool} locked={t.locked} onPointerDown={(e, mode) => startDrag(e, c, mode)} />
+                    <Clip
+                      key={c.id}
+                      c={c}
+                      m={media[c.media]}
+                      kind={clipKind(c, media)}
+                      zoom={zoom}
+                      height={h - 8}
+                      selected={selected === c.id}
+                      tool={tool}
+                      locked={t.locked}
+                      onPointerDown={(e, mode) => startDrag(e, c, mode)}
+                      onContextMenu={(e) => {
+                        if (!onMenu) return
+                        e.preventDefault()
+                        onSelect(c.id)
+                        onMenu(e, { track: t, at: secondsAt(e.clientX), clip: c })
+                      }}
+                    />
+                  ))}
+                {gens
+                  .filter((g) => g.track === t.id && ['rendering', 'pick', 'finishing', 'error'].includes(g.status))
+                  .map((g) => (
+                    <GenBox key={g.id} g={g} zoom={zoom} height={h - 8} onClick={() => onGen?.(g)} />
                   ))}
               </div>
             </div>

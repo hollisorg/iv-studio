@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
+import { EditGen, GEN_KINDS } from '../service/editgen'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -202,11 +203,12 @@ const edits = new Edits({
   fontFile: path.join(resourcesDir(), 'fonts', 'BarlowCondensed-SemiBold.ttf')
 })
 const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
-tool('prepare_media', 'Crop a picture, or trim (and optionally crop) a video or a sound, before using it as a reference, frame, source video or voice line. The original stays as it is; returns the new file. For first/last frames, crop to the shot aspect: frames are stretched to the shot size. H3 video lengths are 17n+5 frames at 24 fps (73 = 3.04 s, 124 = 5.17 s).', {
+tool('prepare_media', 'Crop a picture, or trim (and optionally crop) a video or a sound, before using it as a reference, frame, source video or voice line; fitH3 also resizes it to fit H3 as an input. The original stays as it is; returns the new file. For first/last frames, crop to the shot aspect: frames are stretched to the shot size. H3 video lengths are 17n+5 frames at 24 fps (73 = 3.04 s, 124 = 5.17 s).', {
   file: z.string().describe('Absolute path on this PC'),
   crop: z.object({ x: z.number().min(0), y: z.number().min(0), w: z.number().min(16), h: z.number().min(16) }).optional().describe('In source pixels'),
   start: z.number().min(0).optional().describe('Seconds'),
-  end: z.number().optional().describe('Seconds')
+  end: z.number().optional().describe('Seconds'),
+  fitH3: z.number().min(0.2).max(4).optional().describe("Megapixels (0.5, 1 or 2 are usual): resizes, after any crop, to about that size with both sides on H3's 32-pixel grid, keeping the shape; videos also become 24 fps. Use it when a source video or frame is an odd size (e.g. 1290x720).")
 }, (args) => mediaTools.prepare(args))
 const exporting = new Map() // edit id -> { state, progress, file, error, startedAt }
 
@@ -318,6 +320,33 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
   })
   return { image: png.toString('base64'), caption: `${path.basename(src)} at ${t.toFixed(2)} s` }
 })
+
+// New footage from inside an edit: the same Extend, Fill/Bridge and Retake as the editor's right-click menu.
+const editgen = new EditGen({ edits, studio: () => studio, localCopy: (f) => studio.localCopy(f, VIDEOS) })
+const genView = (editId) => editgen.advance(editId).then(() => ({ items: editgen.view(editId) }))
+tool('generate_in_edit', `Make new footage on an edit's timeline with H3, the way the editor's right-click menu does. kind extend: carry clip on for seconds (5, 10 or 15) from its last frames (Continue a video); it is finished by itself and inserted after the clip. kind bridge: a new shot from clip's last frame to next's first frame (inserted between them, seconds long), or fill gap {track, from, to} (up to 15 s, over the gap); it makes 3 previews, then call pick_generation. kind retake: render from..to (timeline seconds inside clip) again, mode both (picture and sound), video (keep the performance) or audio (keep the picture); it replaces that stretch. Each takes GPU minutes; follow with list_generations every 20-30 s. The prompt is an H3 prompt ({char} for the character); write_prompt can write it. ${LIVE}`, {
+  editId: z.string(),
+  kind: z.enum(GEN_KINDS),
+  prompt: z.string().min(1),
+  clip: z.string().optional().describe('extend, retake, bridge: the clip id (get_edit)'),
+  next: z.string().optional().describe('bridge: the clip right after it'),
+  gap: z.object({ track: z.string(), from: z.number(), to: z.number() }).optional().describe('bridge: fill this gap instead'),
+  seconds: z.number().optional().describe('extend: 5, 10 or 15; bridge between clips: its length (default 3)'),
+  from: z.number().optional().describe('retake: start, timeline seconds'),
+  to: z.number().optional().describe('retake: end, timeline seconds'),
+  mode: z.enum(Object.keys(RETAKE_MODES)).optional(),
+  character: z.string().default('none').describe('A character preset id, or none'),
+  seed: z.number().int().optional()
+}, async ({ editId, ...spec }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return editgen.start(editId, spec)
+})
+tool('list_generations', 'The new footage an edit is making (generate_in_edit), each moved on first: rendering (with step progress), pick (a bridge waiting for pick_generation, with its candidates), finishing, done (placedClip is the clip on the timeline), error or cancelled.', { editId: z.string() }, ({ editId }) => genView(editId))
+tool('pick_generation', `Pick which of a bridge's previews to finish (candidate 1-3, from list_generations). It is finished at 2 MP and lands on the timeline. ${LIVE}`, { editId: z.string(), genId: z.string(), candidate: z.number().int().min(1).max(3) }, async ({ editId, genId, candidate }) => {
+  await editgen.pick(editId, genId, candidate)
+  return genView(editId)
+})
+tool('cancel_generation', 'Stop a generation (only ones you started, or the person asked you to) and remove its placeholder.', { editId: z.string(), genId: z.string() }, async ({ editId, genId }) => ({ removed: await editgen.cancel(editId, genId) }))
 
 tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\IV Studio\\Edits, or outDir. Returns at once; follow with get_edit_export. The export runs inside this MCP server, so it stops if the server stops.`, {
   editId: z.string(),

@@ -4,6 +4,8 @@ import Preview from './Preview'
 import ProjectBin from './ProjectBin'
 import SourceMonitor from './SourceMonitor'
 import Timeline from './Timeline'
+import { ContextMenu, GenDialog, PickDialog } from './Generate'
+import { ask } from '../Confirm'
 import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf } from './model'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share
@@ -57,9 +59,13 @@ const fitFades = (c) => {
 // The editor, laid out like Premiere: project bin, source and program monitors and effect controls on top,
 // the timeline below, every border draggable. A full-screen workspace hides IV Studio's own sidebar.
 // An agent edits the same file through the MCP server: its changes appear here with a one-click undo.
-export default function EditEditor({ editId, notify, go, focus, setFocus }) {
+export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [] }) {
   const [meta, setMeta] = useState(null)
   const [edit, setEdit] = useState(null)
+  const [gens, setGens] = useState([]) // new footage on its way (src/service/editgen.js)
+  const [menu, setMenu] = useState(null) // { x, y, items }
+  const [genSpec, setGenSpec] = useState(null) // the generate dialog's { kind, clip, next, gap, from, to }
+  const [picking, setPicking] = useState(null) // a bridge waiting for its take to be picked
   const [hist, setHist] = useState({ past: [], future: [] })
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -88,7 +94,10 @@ export default function EditEditor({ editId, notify, go, focus, setFocus }) {
   useEffect(() => {
     window.ivstudio.edits.meta().then(setMeta)
     window.ivstudio.edits.get(editId).then(setEdit)
-    return window.ivstudio.edits.onProgress((p) => p.id === editId && setExp((x) => (x && !x.file ? { progress: p.progress } : x)))
+    window.ivstudio.edits.gens(editId).then(setGens, () => {})
+    const offGens = window.ivstudio.edits.onGens((u) => u.id === editId && setGens(u.gens))
+    const offProgress = window.ivstudio.edits.onProgress((p) => p.id === editId && setExp((x) => (x && !x.file ? { progress: p.progress } : x)))
+    return () => (offGens(), offProgress())
   }, [editId])
 
   const persist = useCallback((e) => {
@@ -301,6 +310,49 @@ export default function EditEditor({ editId, notify, go, focus, setFocus }) {
     if (done) e.preventDefault()
   }
   keyRef.current = onKey
+
+  // ---------- new footage from inside the edit ----------
+  // Right-click on a clip or on empty track space: what can be made there.
+  function openMenu(e, { track, at, clip, gap }) {
+    if (track.kind !== 'video') return
+    const items = []
+    if (track.locked) items.push({ label: `${track.id} is locked`, disabled: true, onClick: () => {} })
+    else if (clip) {
+      const m = edit.media[clip.media]
+      const video = m && ['video', 'image'].includes(m.kind)
+      const next = edit.clips.find((x) => x.track === clip.track && x.id !== clip.id && Math.abs(x.start - clipEnd(clip)) < FRAME + 1e-3)
+      items.push({ label: 'Extend…', hint: 'carry it on 5 to 15 s', disabled: !video, onClick: () => setGenSpec({ kind: 'extend', clip: clip.id }) })
+      if (next) items.push({ label: 'Bridge to the next clip…', hint: 'a new shot between them', disabled: !video, onClick: () => setGenSpec({ kind: 'bridge', clip: clip.id, next: next.id }) })
+      items.push({
+        label: 'Retake this stretch…',
+        hint: 'redo part of the clip',
+        disabled: !video || m.kind === 'image',
+        onClick: () => setGenSpec({ kind: 'retake', clip: clip.id, from: +Math.max(clip.start, at - 1).toFixed(2), to: +Math.min(clipEnd(clip), at + 1).toFixed(2) })
+      })
+    } else if (gap?.to != null && gap.to - gap.from > FRAME) {
+      items.push({ label: `Fill this gap…`, hint: `${(gap.to - gap.from).toFixed(2)} s`, disabled: gap.to - gap.from > 15, onClick: () => setGenSpec({ kind: 'bridge', gap }) })
+    } else if (gap) {
+      const before = edit.clips.filter((x) => x.track === track.id && clipEnd(x) <= at).sort((a, b) => clipEnd(b) - clipEnd(a))[0]
+      if (before) items.push({ label: 'Extend the clip before…', hint: 'carry it on 5 to 15 s', onClick: () => setGenSpec({ kind: 'extend', clip: before.id }) })
+    }
+    if (items.length) setMenu({ x: e.clientX, y: e.clientY, items })
+  }
+  async function startGen(spec) {
+    clearTimeout(saveTimer.current)
+    await window.ivstudio.edits.save(edit.id, { name: edit.name, settings: edit.settings, media: edit.media, clips: edit.clips, tracks: edit.tracks, markers: edit.markers || [] })
+    const g = await window.ivstudio.edits.generate(edit.id, spec)
+    setGens((all) => [...all.filter((x) => x.id !== g.id), g])
+    notify(`${g.name}: rendering. It shows on the timeline and lands there when it's done.`, 'info')
+  }
+  async function genClicked(g) {
+    if (g.status === 'pick') return setPicking(g)
+    const ok = await ask(
+      g.status === 'error'
+        ? { title: 'This generation failed', message: g.error || 'The render stopped with an error.', confirm: 'Remove it' }
+        : { title: 'Stop this generation?', message: `${g.name} stops and its placeholder goes away.`, confirm: 'Stop it' }
+    )
+    if (ok) await window.ivstudio.edits.cancelGen(edit.id, g.id).then(() => setGens((all) => all.filter((x) => x.id !== g.id)), (err) => notify(err.message))
+  }
 
   async function exportEdit() {
     setPlaying(false)
@@ -537,7 +589,20 @@ export default function EditEditor({ editId, notify, go, focus, setFocus }) {
           onRemoveTrack={(id) => setTracks(tracks.filter((t) => t.id !== id))}
           onWidth={setTlWidth}
           notify={notify}
+          gens={gens}
+          onMenu={openMenu}
+          onGen={genClicked}
         />
+        {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
+        {genSpec && <GenDialog edit={edit} spec={genSpec} characters={characters} notify={notify} onStart={startGen} onClose={() => setGenSpec(null)} />}
+        {picking && (
+          <PickDialog
+            gen={picking}
+            onPick={(n) => window.ivstudio.edits.pickGen(edit.id, picking.id, n).catch((err) => notify(err.message))}
+            onCancel={() => window.ivstudio.edits.cancelGen(edit.id, picking.id).then(() => setGens((all) => all.filter((x) => x.id !== picking.id)))}
+            onClose={() => setPicking(null)}
+          />
+        )}
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writeS
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
+import { EditGen } from '../service/editgen'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
@@ -472,6 +473,36 @@ app.whenReady().then(() => {
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
   handle('edits:filmstrip', (file, duration) => edits.filmstrip(file, duration))
   handle('edits:peaks', (file) => edits.peaks(file))
+  // New footage from inside an edit (extend, fill/bridge, retake): placeholders on the timeline until each lands.
+  const editgen = new EditGen({ edits, studio: () => studio, localCopy, onChange: (id) => send('editgen:changed', { id, gens: editgen.view(id) }) })
+  const genEdits = new Set(editgen.openEdits().map((x) => x.id))
+  let genTick = 0
+  setInterval(async () => {
+    // an agent's MCP server can start generations too: look for edits with open ones every half minute
+    if (++genTick % 8 === 0) for (const x of editgen.openEdits()) genEdits.add(x.id)
+    for (const id of [...genEdits]) {
+      try {
+        await editgen.advance(id)
+        send('editgen:changed', { id, gens: editgen.view(id) })
+        if (!editgen.open(edits.get(id))) genEdits.delete(id)
+      } catch {
+        genEdits.delete(id)
+      }
+    }
+  }, 4000)
+  handle('editgen:list', (id) => (genEdits.add(id), editgen.view(id)))
+  handle('editgen:prepare', (id, spec) => editgen.prepare(id, spec))
+  handle('editgen:start', async (id, spec) => {
+    const g = await editgen.start(id, spec)
+    genEdits.add(id)
+    return g
+  })
+  handle('editgen:pick', async (id, genId, n) => {
+    const f = await editgen.pick(id, genId, n)
+    genEdits.add(id)
+    return f
+  })
+  handle('editgen:cancel', (id, genId) => editgen.cancel(id, genId))
   // The editor's full-screen workspace: the window itself goes full screen too.
   handle('window:fullScreen', (on) => {
     win.setFullScreen(!!on)

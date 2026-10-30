@@ -462,6 +462,17 @@ export class Studio {
     return { v, path: v.file.path }
   }
 
+  // A retake of any video file (the editor's Retake): the graph Sequences use, at their defaults. The file must
+  // be on the PC that runs ComfyUI.
+  async retakeFile({ name, sourcePath, start, end, mode = 'both', prompt, character = 'none', seed }) {
+    if (this.comfy.remote) throw new Error('Retake in the editor needs ComfyUI on this PC for now.')
+    if (!(end > start)) throw new Error('The retake must end after it starts.')
+    const ch = character === 'none' ? null : this.characters().find((c) => c.id === character) || null
+    const base = `${slug(name)}_${randomUUID().slice(0, 6)}`
+    const { graph } = retakeGraph({ template: this.template, seq: { ...SEQUENCE_DEFAULTS }, character: ch, name: base, sourcePath, prompt, start, end, mode, seed: seed ?? SEQUENCE_DEFAULTS.seed, unet: this.models.retake })
+    return this.submitGraph({ kind: 'retake', graph, name: base, plan: { saves: SAVES, resolved: { start, end, mode } } })
+  }
+
   async retakeSequence(id, { versionId, prompt, start, end, mode = 'both', seed }) {
     const s = this.getSequence(id)
     const character = this.sequenceCharacter(s)

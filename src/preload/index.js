@@ -114,7 +114,14 @@ contextBridge.exposeInMainWorld('ivstudio', {
     peaks: call('edits:peaks'),
     fullScreen: call('window:fullScreen'),
     onProgress: on('edits:progress'),
-    onChanged: on('edits:changed')
+    onChanged: on('edits:changed'),
+    // new footage made inside the edit
+    gens: call('editgen:list'),
+    prepareGen: call('editgen:prepare'),
+    generate: call('editgen:start'),
+    pickGen: call('editgen:pick'),
+    cancelGen: call('editgen:cancel'),
+    onGens: on('editgen:changed')
   },
   cloud: {
     status: call('cloud:status'),

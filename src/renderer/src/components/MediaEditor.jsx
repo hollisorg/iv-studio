@@ -43,13 +43,22 @@ function fitBox(w, h, r) {
   return { x: (w - bw) / 2, y: (h - bh) / 2, w: bw, h: bh }
 }
 
-// Crop, trim, or both, on a copy of the reference. shotAspect is the render's aspect (e.g. "16:9").
+// H3's own sizes: about mp megapixels, both sides on a 32-pixel grid (as src/service/media.js h3Size).
+const h3Size = (w, h, mp) => {
+  const s = Math.sqrt((mp * 1024 * 1024) / (w * h))
+  const grid = (x) => Math.max(256, Math.round((x * s) / 32) * 32)
+  return { w: grid(w), h: grid(h) }
+}
+const FITS = [0.5, 1, 2]
+
+// Crop, trim, resize, or all three, on a copy of the reference. shotAspect is the render's aspect (e.g. "16:9").
 export function MediaEditor({ item, shotAspect, hint, onApply, onClose, notify }) {
   const source = item.source || item.path
   const [info, setInfo] = useState(null)
   const [crop, setCrop] = useState(item.edit?.crop || null)
   const [lock, setLock] = useState(null) // aspect string or null (free)
   const [range, setRange] = useState(null) // [start, end]
+  const [fit, setFit] = useState(item.edit?.fitH3 || null) // megapixels to resize to H3's sizes, or null
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [snap, setSnap] = useState(false)
@@ -205,10 +214,10 @@ export function MediaEditor({ item, shotAspect, hint, onApply, onClose, notify }
   async function apply() {
     const full = !range || (range[0] < 0.01 && range[1] > info.duration - 0.01)
     const whole = !crop || (crop.x < 1 && crop.y < 1 && crop.w > info.width - 1 && crop.h > info.height - 1)
-    if (full && whole) return onApply({ kind: item.kind, path: source, info })
+    if (full && whole && !fit) return onApply({ kind: item.kind, path: source, info })
     setBusy(true)
     try {
-      const edit = { crop: whole ? null : crop, start: full ? null : range[0], end: full ? null : range[1] }
+      const edit = { crop: whole ? null : crop, start: full ? null : range[0], end: full ? null : range[1], fitH3: fit }
       const res = await window.ivstudio.media.prepare({ file: source, ...edit })
       onApply({ kind: item.kind, path: res.path, source, edit, info: res })
     } catch (err) {
@@ -227,7 +236,7 @@ export function MediaEditor({ item, shotAspect, hint, onApply, onClose, notify }
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal media-editor">
         <div className="modal-head">
-          <h2>{item.kind === 'picture' ? 'Crop picture' : item.kind === 'video' ? 'Trim and crop video' : 'Trim sound'}</h2>
+          <h2>{item.kind === 'picture' ? 'Crop and resize picture' : item.kind === 'video' ? 'Trim, crop and resize video' : 'Trim sound'}</h2>
           <span className="mono dim small">
             {[base(source), info.width && `${info.width}×${info.height}`, info.duration && `${info.duration.toFixed(2)} s`, info.fps && `${info.fps} fps`].filter(Boolean).join(' · ')}
           </span>
@@ -282,6 +291,31 @@ export function MediaEditor({ item, shotAspect, hint, onApply, onClose, notify }
           </div>
         )}
 
+        {visual && info.width && (
+          <div className="me-ratios">
+            <span className="row-label">Size</span>
+            <div className="segmented">
+              <button className={!fit ? 'on' : ''} onClick={() => setFit(null)}>
+                As is
+              </button>
+              {FITS.map((mp) => (
+                <button key={mp} className={fit === mp ? 'on' : ''} onClick={() => setFit(mp)} title="Resized so H3 can use it: about this many megapixels, both sides on its 32-pixel grid">
+                  Fit for H3 · {mp} MP
+                </button>
+              ))}
+            </div>
+            <span className="mono small dim">
+              {(() => {
+                const w = crop ? Math.round(crop.w) : info.width
+                const h = crop ? Math.round(crop.h) : info.height
+                if (!fit) return `${w}×${h}${w % 32 || h % 32 ? ' · not on H3’s 32-pixel grid' : ''}`
+                const t = h3Size(w, h, fit)
+                return `${w}×${h} → ${t.w}×${t.h}${item.kind === 'video' ? ' · 24 fps' : ''}`
+              })()}
+            </span>
+          </div>
+        )}
+
         {range && (
           <div className="me-trim">
             {item.kind === 'audio' && <audio ref={el} src={fileUrl(source)} preload="auto" />}
@@ -330,6 +364,7 @@ export function MediaEditor({ item, shotAspect, hint, onApply, onClose, notify }
             onClick={() => {
               setCrop(null)
               setLock(null)
+              setFit(null)
               if (info.duration) setRange([0, info.duration])
             }}
           >
