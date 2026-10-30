@@ -144,11 +144,17 @@ function Discover({ meta, onOpen, compact = false }) {
 }
 
 // One Civitai LoRA: its clips, trigger words, licence and notes, with Download and Use.
+// A LoRA from Civitai in a centered pop-up: its previews as a gallery on the left (click one to see it full size,
+// with how it was made), everything else on the right. Esc closes the full view first, then the pop-up.
 function Details({ id, meta, onClose, onUse, go }) {
   const [m, setM] = useState(null)
   const [error, setError] = useState(null)
   const [version, setVersion] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [viewing, setViewing] = useState(null) // index into the gallery
+  const [revealed, setRevealed] = useState(() => new Set())
+  const [copied, setCopied] = useState(null)
+  const unblur = useUnblurred()
   const dl = useProgress()
   useEffect(() => {
     L()
@@ -156,6 +162,23 @@ function Details({ id, meta, onClose, onUse, go }) {
       .then((x) => (setM(x), setVersion(x.versions[0]?.id || null)), (err) => setError(err.message))
   }, [id])
   const v = m?.versions.find((x) => x.id === version)
+  const gallery = (v?.previews.length ? v.previews : m?.previews) || []
+  const shown = (i) => !gallery[i]?.mature || unblur || revealed.has(i)
+  const reveal = (i) => setRevealed((r) => new Set(r).add(i))
+  // Esc and the arrows belong to the pop-up while it's open (the picker underneath also listens for Esc)
+  useEffect(() => {
+    const key = (e) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation()
+        viewing != null ? setViewing(null) : onClose()
+      } else if (viewing != null && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        e.preventDefault()
+        setViewing((i) => (i + (e.key === 'ArrowRight' ? 1 : -1) + gallery.length) % gallery.length)
+      }
+    }
+    window.addEventListener('keydown', key, true)
+    return () => window.removeEventListener('keydown', key, true)
+  }, [viewing, gallery.length])
   const state = v ? dl[v.id] : null
   async function download() {
     setBusy(true)
@@ -168,105 +191,198 @@ function Details({ id, meta, onClose, onUse, go }) {
       setBusy(false)
     }
   }
+  function copy(text, what) {
+    navigator.clipboard?.writeText(text).then(() => (setCopied(what), setTimeout(() => setCopied(null), 1500)), () => {})
+  }
   const pct = state?.total ? Math.floor((state.received / state.total) * 100) : 0
   const installedName = v?.lora || state?.lora
+  const view = viewing != null ? gallery[viewing] : null
   return (
-    <div className="lora-details">
-      <div className="lora-details-head">
-        <span className="mono small dim">Civitai</span>
-        <button className="link-btn mono" onClick={onClose}>
-          Close ×
-        </button>
-      </div>
-      {error && <p className="small pink">{error}</p>}
-      {!m && !error && <p className="mono dim">Loading…</p>}
-      {m && (
-        <>
-          <h2 className="lora-details-title">{m.name}</h2>
-          <p className="mono small dim">
-            {m.creator ? `by ${m.creator} · ` : ''}
-            {K(m.downloads)} downloads · {K(m.likes)} likes
-          </p>
-          <div className="lora-gallery">
-            {(v?.previews.length ? v.previews : m.previews).map((p, i) => (
-              <LoraThumb key={i} preview={p} label={m.name} mature={p.mature} />
+    <div className="lora-modal-backdrop" onClick={onClose}>
+      <div className="lora-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={m?.name || 'LoRA'}>
+        <div className="lora-modal-gallery">
+          {!m && !error && <p className="mono dim">Loading…</p>}
+          {m && gallery.length === 0 && <p className="dim">No previews to show.</p>}
+          <div className="lora-modal-grid" style={{ columnCount: gallery.length <= 1 ? 1 : gallery.length <= 4 ? 2 : 3 }}>
+            {gallery.map((p, i) => (
+              <button key={i} className={`lora-modal-thumb ${shown(i) ? '' : 'veiled'}`} onClick={() => (shown(i) ? setViewing(i) : reveal(i))} title={shown(i) ? 'See it full size' : 'Mature: click to show'}>
+                {p.type === 'video' ? <video src={p.url} muted loop autoPlay={shown(i)} playsInline preload="metadata" /> : <img src={p.url} alt="" loading="lazy" />}
+                {!shown(i) && <span className="lora-veil mono">Mature · click to show</span>}
+                {p.type === 'video' && shown(i) && <span className="lora-modal-kind mono">Clip</span>}
+              </button>
             ))}
           </div>
-          {m.versions.length > 1 && (
-            <div className="row tight">
-              <span className="row-label">Version</span>
-              <select value={version || ''} onChange={(e) => setVersion(Number(e.target.value))}>
-                {m.versions.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                    {x.installed ? ' · installed' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {v?.trainedWords.length > 0 && (
-            <div className="lora-words">
-              <span className="mono small dim">Trigger words</span>
-              {v.trainedWords.map((w) => (
-                <span key={w} className="lora-word mono">
-                  {w}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="lora-licence">
-            <span className={`lora-pill ${m.licence.commercial ? 'ok' : 'warn'}`}>{m.licence.commercial ? 'Commercial use allowed' : 'Not for commercial use'}</span>
-            {m.licence.creditNeeded && <span className="lora-pill">Credit the maker</span>}
-            {v?.file && <span className="lora-pill">SHA-256 checked</span>}
+        </div>
+
+        <aside className="lora-modal-info">
+          <div className="lora-modal-head">
+            <span className="mono small dim">Civitai{m?.version?.baseModel ? ` · ${m.version.baseModel}` : ''}</span>
+            <button className="link-btn mono" onClick={onClose}>
+              Close ×
+            </button>
           </div>
-          {v?.file && (
-            <div className="lora-actions">
-              {v.installed || installedName ? (
-                <>
-                  <span className="mono small cloud-ok">● Installed</span>
-                  {onUse && installedName && (
-                    <button className="btn btn-primary" onClick={() => onUse({ name: installedName, words: v.trainedWords, title: m.name })}>
-                      Use in a shot
-                    </button>
-                  )}
-                </>
-              ) : state && ['downloading', 'verifying'].includes(state.status) ? (
-                <div className="dl">
-                  <div className="bar">
-                    <span style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="mono dim">{state.status === 'verifying' ? 'Checking…' : `${pct}% of ${MB(state.total)}`}</span>
-                </div>
-              ) : meta?.hasKey ? (
-                <button className="btn btn-primary" disabled={busy} onClick={download}>
-                  Download · {MB(v.file.size)}
-                </button>
-              ) : (
-                <p className="small">
-                  Downloading needs your own free Civitai API key.{' '}
-                  {go ? (
-                    <button className="link-btn" onClick={() => go('settings')}>
-                      Add it in Settings
+          {error && <p className="small pink">{error}</p>}
+          {m && (
+            <>
+              <h2 className="lora-details-title">{m.name}</h2>
+              <div className="lora-modal-stats mono small">
+                {m.creator && <span>by {m.creator}</span>}
+                <span>↓ {K(m.downloads)}</span>
+                <span>♥ {K(m.likes)}</span>
+                {v?.publishedAt && <span>{new Date(v.publishedAt).toLocaleDateString()}</span>}
+              </div>
+
+              {m.versions.length > 1 && (
+                <label className="lora-modal-field">
+                  <span className="mono small dim">Version</span>
+                  <select value={version || ''} onChange={(e) => (setVersion(Number(e.target.value)), setViewing(null), setRevealed(new Set()))}>
+                    {m.versions.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                        {x.installed ? ' · installed' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {v?.file && (
+                <div className="lora-actions">
+                  {v.installed || installedName ? (
+                    <>
+                      <span className="mono small cloud-ok">● Installed</span>
+                      {onUse && installedName && (
+                        <button className="btn btn-primary" onClick={() => onUse({ name: installedName, words: v.trainedWords, title: m.name })}>
+                          Use in a shot
+                        </button>
+                      )}
+                    </>
+                  ) : state && ['downloading', 'verifying'].includes(state.status) ? (
+                    <div className="dl">
+                      <div className="bar">
+                        <span style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="mono dim">{state.status === 'verifying' ? 'Checking…' : `${pct}% of ${MB(state.total)}`}</span>
+                    </div>
+                  ) : meta?.hasKey ? (
+                    <button className="btn btn-primary" disabled={busy} onClick={download}>
+                      Download · {MB(v.file.size)}
                     </button>
                   ) : (
-                    'Add it in Settings → Civitai.'
+                    <p className="small">
+                      Downloading needs your own free Civitai API key.{' '}
+                      {go ? (
+                        <button className="link-btn" onClick={() => go('settings')}>
+                          Add it in Settings
+                        </button>
+                      ) : (
+                        'Add it in Settings → Civitai.'
+                      )}
+                    </p>
                   )}
+                </div>
+              )}
+
+              {v?.trainedWords.length > 0 && (
+                <div className="lora-modal-section">
+                  <span className="mono small dim">Trigger words {copied === 'words' ? '· copied' : '· click to copy'}</span>
+                  <div className="lora-words">
+                    {v.trainedWords.map((w) => (
+                      <button key={w} className="lora-word mono" onClick={() => copy(w, 'words')}>
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="lora-modal-section">
+                <span className="mono small dim">Licence</span>
+                <div className="lora-licence">
+                  <span className={`lora-pill ${m.licence.commercial ? 'ok' : 'warn'}`}>{m.licence.commercial ? 'Commercial use allowed' : 'Not for commercial use'}</span>
+                  {m.licence.creditNeeded && <span className="lora-pill">Credit the maker</span>}
+                  {!m.licence.derivatives && <span className="lora-pill">No derivatives</span>}
+                  {v?.file && <span className="lora-pill">SHA-256 checked</span>}
+                </div>
+                {m.licence.commercialUses?.length > 0 && <span className="small dim">Allowed: {m.licence.commercialUses.join(', ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}</span>}
+              </div>
+
+              {v?.file && (
+                <div className="lora-modal-section">
+                  <span className="mono small dim">File</span>
+                  <span className="small lora-modal-file" title={v.file.name}>
+                    {v.file.name} · {MB(v.file.size)}
+                  </span>
+                </div>
+              )}
+
+              {m.tags?.length > 0 && (
+                <div className="lora-modal-section">
+                  <span className="mono small dim">Tags</span>
+                  <div className="lora-words">
+                    {m.tags.map((t) => (
+                      <span key={t} className="lora-pill">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(v?.notes || m.description) && (
+                <div className="lora-modal-section">
+                  <span className="mono small dim">About</span>
+                  {v?.notes && <p className="lora-desc small">{v.notes}</p>}
+                  {m.description && m.description !== v?.notes && <p className="lora-desc small">{m.description}</p>}
+                </div>
+              )}
+
+              <button className="link-btn mono small" onClick={() => window.ivstudio.links.open(m.url)}>
+                Open on Civitai ↗
+              </button>
+            </>
+          )}
+        </aside>
+
+        {view && (
+          <div className="lora-full" onClick={() => setViewing(null)}>
+            <div className="lora-full-stage" onClick={(e) => e.stopPropagation()}>
+              <button className="lora-full-nav prev" onClick={() => setViewing((viewing - 1 + gallery.length) % gallery.length)} aria-label="Previous">
+                ‹
+              </button>
+              <div className={`lora-full-media ${shown(viewing) ? '' : 'veiled'}`} onClick={() => !shown(viewing) && reveal(viewing)}>
+                {view.type === 'video' ? <video key={view.full || view.url} src={view.full || view.url} controls autoPlay loop playsInline /> : <img key={view.full || view.url} src={view.full || view.url} alt="" />}
+                {!shown(viewing) && <span className="lora-veil mono">Mature · click to show</span>}
+              </div>
+              <button className="lora-full-nav next" onClick={() => setViewing((viewing + 1) % gallery.length)} aria-label="Next">
+                ›
+              </button>
+            </div>
+            <div className="lora-full-info" onClick={(e) => e.stopPropagation()}>
+              <span className="mono small dim">
+                {viewing + 1} / {gallery.length}
+                {view.width ? ` · ${view.width}×${view.height}` : ''} · ← → · Esc
+              </span>
+              {view.made?.prompt && (
+                <p className="small lora-full-prompt">
+                  {view.made.prompt}{' '}
+                  <button className="link-btn mono small" onClick={() => copy(view.made.prompt, 'prompt')}>
+                    {copied === 'prompt' ? 'Copied' : 'Copy prompt'}
+                  </button>
                 </p>
               )}
+              {view.made?.settings?.length > 0 && <span className="mono small dim">{view.made.settings.join(' · ')}</span>}
+              <button className="link-btn mono small" onClick={() => setViewing(null)}>
+                Back to the LoRA
+              </button>
             </div>
-          )}
-          {(v?.notes || m.description) && <p className="lora-desc small">{v?.notes || m.description}</p>}
-          <button className="link-btn mono small" onClick={() => window.ivstudio.links.open(m.url)}>
-            Open on Civitai ↗
-          </button>
-        </>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-// ---------- Yours: the LoRAs on this PC ----------
 export function useYours() {
   const [items, setItems] = useState(null)
   const reload = () => L().yours().then(setItems, () => setItems([]))
@@ -399,7 +515,7 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
           Yours{items ? ` · ${items.filter((x) => x.h3).length}` : ''}
         </button>
       </div>
-      <div className={`lora-layout ${open ? 'with-details' : ''}`}>
+      <div className="lora-layout">
         <div>
           {tab === 'discover' ? (
             <Discover meta={meta} onOpen={(m) => setOpen(m.id)} />
@@ -444,7 +560,7 @@ export function LoraPicker({ onPick, onClose, notify, go, family = null }) {
             Close ×
           </button>
         </div>
-        <div className={`lora-layout ${open ? 'with-details' : ''}`}>
+        <div className="lora-layout">
           <div>
             {tab === 'yours' ? (
               <Yours compact family={family} items={items} setItems={setItems} notify={notify} onOpenCivitai={(id) => setOpen(id)} onPick={(x) => onPick({ name: x.name, words: x.prefs.triggers || x.civitai?.trainedWords || [], title: x.civitai?.name || loraTitle(x.name) })} />

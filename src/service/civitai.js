@@ -30,6 +30,19 @@ export const LORA_TAGS = [
 ]
 export const LORA_SORTS = ['Most Downloaded', 'Highest Rated', 'Newest']
 const PREVIEW_WIDTH = 450
+const FULL_WIDTH = 1280 // the LoRA pop-up's full view
+
+// How a preview was made, from Civitai's generation data: the prompt and the main settings, when it has them.
+function madeWith(meta) {
+  if (!meta || typeof meta !== 'object') return null
+  const pick = (k) => (meta[k] == null || meta[k] === '' ? null : String(meta[k]))
+  const made = {
+    prompt: pick('prompt')?.slice(0, 2000) || null,
+    negative: pick('negativePrompt')?.slice(0, 800) || null,
+    settings: [['Seed', 'seed'], ['Steps', 'steps'], ['CFG', 'cfgScale'], ['Sampler', 'sampler'], ['Size', 'Size']].map(([label, k]) => pick(k) && `${label} ${pick(k)}`).filter(Boolean)
+  }
+  return made.prompt || made.settings.length ? made : null
+}
 // Civitai's content levels are bit flags: 1 PG, 2 PG-13, 4 R, 8 X, 16 XXX. Safe mode shows PG and PG-13.
 const SAFE_LEVEL = 2
 
@@ -62,15 +75,15 @@ const plain = (html) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
-// A small version of a Civitai picture or clip: 450 px wide, clips transcoded to MP4.
-export function previewUrl(img) {
+// A small version of a Civitai picture or clip: 450 px wide (or width), clips transcoded to MP4.
+export function previewUrl(img, width = PREVIEW_WIDTH) {
   try {
     const u = new URL(img.url)
     const [key, id, ...rest] = u.pathname.split('/').filter(Boolean)
     const last = rest.at(-1)
     const video = img.type === 'video'
     const name = last && last.includes('.') ? last.replace(/\.\w+$/, video ? '.mp4' : '.jpeg') : video ? 'preview.mp4' : 'preview.jpeg'
-    return `${u.origin}/${key}/${id}/${video ? `transcode=true,width=${PREVIEW_WIDTH},optimized=true` : `width=${PREVIEW_WIDTH},optimized=true`}/${name}`
+    return `${u.origin}/${key}/${id}/${video ? `transcode=true,width=${width},optimized=true` : `width=${width},optimized=true`}/${name}`
   } catch {
     return null
   }
@@ -111,11 +124,12 @@ export class Civitai {
     if (!item || item.poi || item.minor) return false
     return this.mature() || (item.nsfwLevel ?? 1) <= SAFE_LEVEL || item.nsfw === false
   }
-  previews(images, max = 6) {
+  // detail: also a large version (for the LoRA pop-up's full view) and how the picture was made, when Civitai says.
+  previews(images, max = 6, detail = false) {
     return (images || [])
       .filter((i) => !i.poi && !i.minor && (this.mature() || (i.nsfwLevel ?? 1) <= SAFE_LEVEL))
       .slice(0, max)
-      .map((i) => ({ url: previewUrl(i), type: i.type === 'video' ? 'video' : 'image', width: i.width, height: i.height, mature: (i.nsfwLevel ?? 1) > SAFE_LEVEL }))
+      .map((i) => ({ url: previewUrl(i), type: i.type === 'video' ? 'video' : 'image', width: i.width, height: i.height, mature: (i.nsfwLevel ?? 1) > SAFE_LEVEL, ...(detail ? { full: previewUrl(i, FULL_WIDTH), made: madeWith(i.meta) } : {}) }))
       .filter((p) => p.url)
   }
   // The file a version downloads: its primary SafeTensors model file.
@@ -168,7 +182,7 @@ export class Civitai {
         .filter((v) => v.baseModel === LORA_BASE)
         .map((v) => {
           const f = this.pickFile(v)
-          return { id: v.id, name: v.name, baseModel: v.baseModel, publishedAt: v.publishedAt, trainedWords: v.trainedWords || [], notes: plain(v.description).slice(0, 1500), file: f ? { id: f.id, name: f.name, size: Math.round(f.sizeKB * 1024), sha256: f.hashes?.SHA256?.toLowerCase() || null } : null, previews: this.previews(v.images, 8), installed: !!(f?.hashes?.SHA256 && installed.has(f.hashes.SHA256.toLowerCase())) }
+          return { id: v.id, name: v.name, baseModel: v.baseModel, publishedAt: v.publishedAt, trainedWords: v.trainedWords || [], notes: plain(v.description).slice(0, 1500), file: f ? { id: f.id, name: f.name, size: Math.round(f.sizeKB * 1024), sha256: f.hashes?.SHA256?.toLowerCase() || null } : null, previews: this.previews(v.images, 16, true), installed: !!(f?.hashes?.SHA256 && installed.has(f.hashes.SHA256.toLowerCase())) }
         })
     }
   }
