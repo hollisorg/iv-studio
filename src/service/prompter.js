@@ -9,7 +9,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 
 export const OLLAMA_URL = 'http://127.0.0.1:11434'
-export const DEFAULT_LOCAL_MODEL = 'qwen3-vl:8b-instruct'
+export const DEFAULT_LOCAL_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 export const CONTEXT_IR_PRICE = 'about $0.02 a prompt ($0.05 with first/last frames, $0.06–0.11 with reference media)'
 
 const RULES = `You write prompts for MiniMax H3, a model that makes short videos with native sound (24 fps, picture and audio together).

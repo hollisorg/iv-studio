@@ -24,7 +24,7 @@ export function resourcesDir(hint) {
 // outputFolder / privateFolder: the folder inside ComfyUI's output where renders save, normally and in
 // Incognito ('' = straight into output). Incognito uploads go into the same folder name under input.
 export const PRIVATE_FOLDER = 'IV Private'
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'qwen3-vl:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER }
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER }
 
 // A folder name as ComfyUI takes it: relative to its output (or input) folder, forward slashes, nothing
 // that climbs out of it or that Windows won't allow.

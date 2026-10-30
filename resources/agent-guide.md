@@ -5,6 +5,14 @@ sequences with recurring characters, and cuts them together on its own timeline.
 (`iv-studio`) uses the same projects, renders and edits as the app window, so what you make shows up
 there for the person, and the other way round.
 
+## Start menu
+
+When a chat starts with IV Studio and the person hasn't said what they want, offer the start menu: call
+`get_menu` and give its choices as one multiple-choice question (your app's question or options tool if it
+has one, otherwise a short numbered list), plus "something else". Each choice comes with what to do next.
+Apps that show MCP prompts also list them as slash commands (in Claude Code, `/mcp__iv-studio__start` and
+`/mcp__iv-studio__make_a_shot` and so on).
+
 ## First steps
 
 1. `check_setup`: is ComfyUI up, which GPU, are the node packs and models there? If something is

@@ -4,7 +4,7 @@ import Hero from './Hero'
 import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
 
-const WRITER_MODEL = 'qwen3-vl:8b-instruct'
+const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
 
 const WORKFLOWS = [

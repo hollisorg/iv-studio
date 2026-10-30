@@ -3,12 +3,14 @@
 // pastes into their agent to set it all up.
 import fs from 'node:fs'
 import path from 'node:path'
+import { MENU_RULE } from './startmenu'
 
 export const readGuide = (resourcesDir) => fs.readFileSync(path.join(resourcesDir, 'agent-guide.md'), 'utf8')
 
 export const INSTRUCTIONS = `IV Studio renders MiniMax H3 video shots and continuous sequences with recurring characters on a local ComfyUI, and cuts them together on its own timeline. It shares projects, renders and edits with the IV Studio window the person sees.
 Start with check_setup and list_characters, and call get_guide once for the full workflow (shots, prompts, sequences, timeline edits, Shinobi agent-driven edits, website sizzle videos, character training) and the house rules.
-Prompts write {char} where the character goes. Renders take GPU minutes: poll get_job every 20-30 s. Ask the person before deleting anything or using the paid Context IR writer, and only cancel jobs you started.`
+Prompts write {char} where the character goes. Renders take GPU minutes: poll get_job every 20-30 s. Ask the person before deleting anything or using the paid Context IR writer, and only cancel jobs you started.
+${MENU_RULE}`
 
 // mcp: { command, args } of this install, or null for the copy hosted on GitHub.
 export function skillMarkdown(guide, mcp = null) {
@@ -35,5 +37,5 @@ export function pasteMessage(mcp) {
    In Claude Code that's: claude mcp add -s user iv-studio -e ELECTRON_RUN_AS_NODE=1 -- "${mcp.command}" "${mcp.args[0]}"
    In Codex: codex mcp add iv-studio --env ELECTRON_RUN_AS_NODE=1 -- "${mcp.command}" "${mcp.args[0]}"
 2. Reload MCP servers if your app needs it, then call the iv-studio tool get_guide and follow it.
-3. Run check_setup and tell me what's ready and what you can make for me.`
+3. Run check_setup and tell me what's ready, then show me IV Studio's start menu (get_menu) so I can pick what to make.`
 }

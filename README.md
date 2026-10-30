@@ -153,8 +153,10 @@ back to edit, keep or undo. It always uses your mode, length, aspect, character 
 writer under **Settings → Prompt writer**:
 
 - **Local (free):** a model in Ollama on your PC with IV Studio's H3 rule sheet. The recommended model is
-  `qwen3-vl:8b-instruct` (about 6 GB, one click to install). It can look at your pictures, and while
-  ComfyUI is rendering it runs on the CPU, so it never takes H3's VRAM.
+  `huihui_ai/qwen3-vl-abliterated:8b-instruct` (about 6 GB, one click to install), huihui-ai's uncensored
+  copy of Qwen3-VL 8B Instruct (Apache-2.0), so it doesn't refuse mature ideas. Any other Ollama model works
+  too, including the original `qwen3-vl:8b-instruct`. It can look at your pictures, and while ComfyUI is
+  rendering it runs on the CPU, so it never takes H3's VRAM.
 - **MiniMax Context IR:** MiniMax's own prompt rewriter through ComfyUI, paid through your Comfy.org
   account (about $0.02 to $0.11 a prompt). Your API key is stored encrypted on your PC.
 

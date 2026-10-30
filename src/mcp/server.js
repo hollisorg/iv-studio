@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
+import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
@@ -93,6 +94,18 @@ const finish = {
 // The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill).
 server.registerTool('get_guide', { description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit.', inputSchema: {} }, () => ({
   content: [{ type: 'text', text: readGuide(resourcesDir()) }]
+}))
+// The start menu: offered when a chat opens without a request (get_menu), and each entry as an MCP prompt, which
+// clients like Claude Code list as slash commands.
+server.registerTool('get_menu', { description: 'The start menu: what the person can make with IV Studio. Offer it as one multiple-choice question when a chat starts and they have not said what they want; each choice comes with what to do.', inputSchema: {} }, () => ({
+  content: [{ type: 'text', text: JSON.stringify({ ask: 'What would you like to make?', choices: START_MENU.map(({ id, title, blurb, brief }) => ({ id, title, blurb, then: brief })), slashCommands: 'Also listed as prompts (slash commands) in apps that show MCP prompts.' }, null, 2) }]
+}))
+for (const entry of START_MENU)
+  server.registerPrompt(entry.id, { title: entry.title, description: entry.blurb, argsSchema: Object.fromEntries(Object.entries(entry.args).map(([k, d]) => [k, z.string().optional().describe(d)])) }, (args) => ({
+    messages: [{ role: 'user', content: { type: 'text', text: menuMessage(entry, args) } }]
+  }))
+server.registerPrompt('start', { title: 'Start here', description: 'Choose what to make with IV Studio from a short menu.' }, () => ({
+  messages: [{ role: 'user', content: { type: 'text', text: `I'd like to make something with IV Studio. Show me the start menu (get_menu) as one multiple-choice question, then help me with what I pick.` } }]
 }))
 tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing.', {}, () => studio.checkSetup())
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
