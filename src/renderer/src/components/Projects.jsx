@@ -12,6 +12,7 @@ import { dayGroup, groupBy, WHEN, inWhen, Chips, useMore, Groups, FilterPanel } 
 import { LoraPicker } from './Loras'
 import { askAgent, useAgentName } from './ChatPanel'
 import { CinemaChips, CinemaPicker, LookbookBox, PromptTools, useSlate } from './CraftKit'
+import { SPEEDS } from '../../../service/speed'
 
 // Projects: a short film made step by step (src/service/productions.js). The list of films, and one film as a
 // six-step wizard: Idea, Story, Cast and places, Storyboard, Film it, Watch. The storyboard is the heart of it:
@@ -742,6 +743,51 @@ function Cast({ v, act, characters, notify, go, setStep }) {
   )
 }
 
+// ---------- the film's own models and speed (GitHub #34) ----------
+// Draw with: the picture model for sketches, places and faces (an editing one keeps faces and the place).
+// Speed: Create's presets for the previews and the finish; "Each shot's own" keeps 0.4 MP previews and a 2 MP finish.
+function FilmSettings({ v, act }) {
+  const [fams, setFams] = useState(null)
+  useEffect(() => {
+    let live = true
+    window.ivstudio.images.status().then((s) => live && setFams(s?.families || []), () => live && setFams([]))
+    return () => {
+      live = false
+    }
+  }, [])
+  const s = v.settings || {}
+  const save = (patch, ok) => act(() => P().update(v.id, { settings: { ...s, ...patch } }), ok)
+  const picked = fams?.find((f) => f.id === s.picture)
+  return (
+    <div className="wiz-settings">
+      <label className="small" title="The picture model that draws this film's sketches, places and made-up faces. One that edits keeps each person's face and the place in every sketch.">
+        <span className="dim">Draw with</span>
+        <select value={s.picture || 'auto'} onChange={(e) => save({ picture: e.target.value }, 'Saved. Redraw sketches to see the new model.')} aria-label="Picture model for sketches">
+          <option value="auto">Best on this PC (Flux Klein)</option>
+          {(fams || []).filter((f) => f.ready && f.models?.length).map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.label}{f.edit ? '' : ' (from words: faces not kept)'}
+            </option>
+          ))}
+          {s.picture && s.picture !== 'auto' && fams && !picked?.ready && <option value={s.picture}>{picked?.label || s.picture} (not set up)</option>}
+        </select>
+      </label>
+      <label className="small" title="Preview size, steps and the finish for every shot of this film: Create's speed presets">
+        <span className="dim">Speed</span>
+        <select value={s.speed || ''} onChange={(e) => save({ speed: e.target.value || null }, 'Saved. It applies to the next takes you film.')} aria-label="Speed for this film">
+          <option value="">Each shot: 0.4 MP, finish 2 MP</option>
+          {Object.entries(SPEEDS).map(([id, x]) => (
+            <option key={id} value={id}>
+              {x.label}: {x.previewMp} MP, {x.steps} steps, finish {x.finalMp} MP{x.upscale2x ? ' + 2×' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className="small dim">Video: MiniMax H3</span>
+    </div>
+  )
+}
+
 // ---------- 4 · Storyboard and 5 · Film it: one board of panels ----------
 function Board({ v, act, characters, openShot, setStep, mode }) {
   const [open, setOpen] = useState(null) // { sceneId, shotId } in the drawer
@@ -890,6 +936,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
           </div>
         </div>
       )}
+      <FilmSettings v={v} act={act} />
       {b?.sketchError && !film && <p className="small pink">Sketches: {b.sketchError}</p>}
       {b?.state === 'done' && !film && b.cutScenes?.length > 0 && (
         <p className="small pink">
@@ -1190,6 +1237,10 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
           <label className="wiz-field">
             <span className="mono small dim">Length · {sh.seconds} s</span>
             <input type="range" min={3} max={10} step={1} defaultValue={sh.seconds} onMouseUp={(e) => Number(e.target.value) !== sh.seconds && edit({ seconds: Number(e.target.value) }, false)} onKeyUp={(e) => Number(e.target.value) !== sh.seconds && edit({ seconds: Number(e.target.value) }, false)} />
+          </label>
+          <label className="wiz-field wiz-seed" title="The same seed films the same takes again. Empty: a new one each time.">
+            <span className="mono small dim">Seed</span>
+            <input type="number" min={0} key={`seed${sh.seed ?? ''}`} defaultValue={sh.seed ?? ''} placeholder="New each time" onBlur={(e) => String(e.target.value) !== String(sh.seed ?? '') && edit({ seed: e.target.value === '' ? null : Number(e.target.value) }, false)} />
           </label>
         </div>
         {speaker && (

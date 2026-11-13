@@ -18,6 +18,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
+import { SPEED_IDS, finishFor, isSpeed } from './speed.js'
 import { DEFAULT_LOCAL_MODEL, jpegOf, writeHarness, writeLocal } from './prompter.js'
 import { askWriter, continuityCheck, writerSees, coverageRules, promptVariants, rewritePrompt, shotListCsv, shotListMarkdown } from './filmcraft.js'
 import { parseScript, sceneText } from './screenplay.js'
@@ -26,6 +27,8 @@ import { applyOps } from './timeline.js'
 const now = () => new Date().toISOString()
 const id6 = () => randomUUID().slice(0, 6)
 const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase() // people match by first name
+// a shot's own seed when it has one, else a new one each time it's filmed
+const shotSeed = (sh) => (Number.isInteger(sh?.seed) ? sh.seed : Math.floor(Math.random() * 1e9))
 // a script's cue in capitals ("KEEPER") reads as a name ("Keeper")
 const nameCase = (n) => (n && n === n.toUpperCase() ? n.toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase()) : n)
 const readJson = (file, fallback) => {
@@ -551,6 +554,12 @@ export class Productions {
     const oldOutfits = new Map((p.cast || []).map((c) => [first(c.as), String(c.outfit || '').trim()]))
     const oldAngles = new Map((p.locations || []).map((l) => [l.id, l.angles || []]))
     for (const k of ['name', 'logline', 'aspect', 'targetSeconds', 'look', 'cast', 'locations', 'props', 'step']) if (patch[k] !== undefined) p[k] = patch[k]
+    // the film's own models and speed (GitHub #34): picture: a picture family id or 'auto'; speed: a preset or null
+    if (patch.settings !== undefined) {
+      const s = { ...(p.settings || {}), ...(patch.settings || {}) }
+      if (s.speed != null && !isSpeed(s.speed)) throw new Error(`speed must be one of ${SPEED_IDS.join(', ')}, or null for each shot's own.`)
+      p.settings = { picture: typeof s.picture === 'string' && s.picture ? s.picture : 'auto', speed: s.speed || null }
+    }
     if (!ASPECTS[p.aspect]) throw new Error(`aspect must be ${Object.keys(ASPECTS).join(', ')}.`)
     if (!STEPS.includes(p.step || 'idea')) throw new Error(`step must be ${STEPS.join(', ')}.`)
     // a place keeps its drawn angles when the new list doesn't give them
@@ -827,6 +836,10 @@ export class Productions {
   madeUp(p, name) {
     return (p.cast || []).find((c) => !c.characterId && first(c.as) === first(name)) || null
   }
+  // A film shot's preview settings: the film's speed preset (Create's presets), else the old 0.4 MP default.
+  speedFor(p) {
+    return isSpeed(p?.settings?.speed) ? { speed: p.settings.speed } : { megapixels: 0.4 }
+  }
   // What someone wears in this film (their cast entry's outfit, found by role or by the preset's name), or ''.
   outfitOf(p, name) {
     if (!name) return ''
@@ -1020,6 +1033,8 @@ export class Productions {
       if (looks && (sh.sketch || sh.sketchSet)) sh.sketchStale = true
       if (patch.prompt !== undefined && patch.prompt !== sh.prompt) remember(sh, patch.why || 'edited')
       for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character', 'stage', 'continues']) if (patch[k] !== undefined) sh[k] = patch[k]
+      // a seed of the shot's own: every Film it starts from it (null: a new one each time)
+      if (patch.seed !== undefined) sh.seed = patch.seed === null || patch.seed === '' ? null : Math.max(0, Math.floor(Number(patch.seed)) || 0)
       if (sh.continues && i === 0) sh.continues = false // the first shot of a scene has nothing to carry on from
       // a staging board's plan becomes the shot's words, unless the words were given too
       if (patch.stage) {
@@ -1098,8 +1113,8 @@ export class Productions {
   // before any video renders. With a face for the shot's character or a picture of the place, an editing model
   // (Flux.2 Klein, else Flux 3 Klein) keeps them in the film's frame; otherwise a generating model draws it.
   async sketch(id, { shotIds = null, redo = false } = {}) {
-    const { images, editor, drawer } = await this.pictureModels('Sketches')
     let p = this.get(id)
+    const { images, editor, drawer } = await this.pictureModels('Sketches', p)
     const todo = (sc) => sc.shots.filter((sh) => (shotIds ? shotIds.includes(sh.id) : redo || !(sh.sketch || sh.sketchSet)))
     // a place with no photo gets one drawn first (it shows on Cast and places), or each sketch makes up its own room
     if (editor)
@@ -1137,12 +1152,21 @@ export class Productions {
   }
   // This PC's picture models: editor (Flux.2 or Flux 3 Klein, which keep a face, a place and the film's frame) and
   // drawer (any model that draws from words).
-  async pictureModels(what) {
+  // p: the film; its settings.picture picks the model (GitHub #34). An editing model draws every sketch that keeps
+  // a face or a place; a model that only draws from words draws them from words (faces are then not kept).
+  async pictureModels(what, p = null) {
     const images = this.images()
     if (!images) throw new Error(`${what} need IV Studio on this PC.`)
     const st = await images.status()
     if (st.error) throw new Error(st.error)
     const ready = (ids, edit) => ids.map((f) => st.families.find((x) => x.id === f && x.ready && x.models.length && (!edit || x.edit))).find(Boolean)
+    const pick = p?.settings?.picture && p.settings.picture !== 'auto' ? p.settings.picture : null
+    if (pick) {
+      const fam = st.families.find((x) => x.id === pick)
+      if (!fam) throw new Error(`The film's picture model "${pick}" isn't one IV Studio knows. Pick another in the film's settings.`)
+      if (!fam.ready || !fam.models.length) throw new Error(`${fam.label || pick} isn't set up on this PC, and this film draws with it. Set it up in Settings → Setup, or pick another picture model in the film's settings.`)
+      return { images, editor: fam.edit ? fam : null, drawer: fam, st, picked: fam }
+    }
     const editor = ready(['flux2', 'flux3'], true)
     const drawer = ready(['flux2', 'zimage', 'flux3', 'krea2', 'qwen21', 'moss'], false)
     if (!drawer) throw new Error(`${what} need a picture model. Set one up in Settings → Setup (Flux.2 Klein or Z-Image Turbo).`)
@@ -1165,8 +1189,8 @@ export class Productions {
   // Draws a face for someone no character preset plays (from their description, if the person gave one) and keeps
   // it on their cast entry ({ as, characterId: null, description, face }). again: a new face.
   async drawFace(id, role, { again = false } = {}) {
-    const { images, drawer } = await this.pictureModels('Faces')
     const p = this.get(id)
+    const { images, drawer } = await this.pictureModels('Faces', p)
     const entry = this.madeUp(p, role) || { as: role, characterId: null, description: '', face: null }
     if (entry.face && fs.existsSync(entry.face) && !again) return entry
     const rec = await images.create({ mode: 'generate', model: drawer.models[0], prompt: facePrompt({ role: entry.as, description: entry.description, look: p.look?.notes, outfit: entry.outfit }), aspect: '3:4', megapixels: 0.5, count: 1, seed: again ? Math.floor(Math.random() * 1e9) : null, name: `${p.name} · ${entry.as}`, tag: `film:${p.id}` })
@@ -1286,7 +1310,7 @@ export class Productions {
       this.onChange(id)
     }
   }
-  async queueShot(id, shotId, { previews = 3, seed, fromSketch = true, room: useRoom = true, previs: usePrevis = true } = {}) {
+  async queueShot(id, shotId, { previews, seed, fromSketch = true, room: useRoom = true, previs: usePrevis = true } = {}) {
     const studio = this.studio()
     const p = this.get(id)
     const { sc, sh } = this.find(p, shotId)
@@ -1303,6 +1327,7 @@ export class Productions {
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
     }
     const said = oneTake(sh.line ? sh.prompt : withSilence(sh.prompt))
+    previews = previews ?? (this.speedFor(p).speed ? undefined : 3)
     if (sh.continues) return this.queueContinued(p, sc, sh, { projectId, said, previews, seed })
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
     const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
@@ -1330,11 +1355,11 @@ export class Productions {
       character: sh.character || 'none',
       seconds,
       aspect: p.aspect,
-      megapixels: 0.4,
+      ...this.speedFor(p),
       previews,
       extraLoras: p.look?.loras || [],
       voiceLine: sh.voiceLine?.file || null,
-      seed: seed ?? Math.floor(Math.random() * 1e9)
+      seed: seed ?? shotSeed(sh)
     })
     this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null }))
     return job
@@ -1366,10 +1391,10 @@ export class Productions {
       seconds: Math.min(15, +(sh.seconds + CONTINUE_OVERLAP).toFixed(2)),
       overlapFrames: 22,
       aspect: p.aspect,
-      megapixels: 0.4,
+      ...this.speedFor(p),
       previews,
       extraLoras: p.look?.loras || [],
-      seed: seed ?? Math.floor(Math.random() * 1e9),
+      seed: seed ?? shotSeed(sh),
       media: [{ kind: 'video', file: src, duration: cut.duration, width: cut.width, height: cut.height, hasAudio: true }]
     })
     this.patch(p.id, (q) => Object.assign(this.find(q, sh.id).sh, { filmedFrom: 'continue', previs: null }))
@@ -1388,8 +1413,13 @@ export class Productions {
     return ids.length ? this.filmShots(id, ids, opts) : []
   }
   // Finishes preview n of the shot's latest hunt (2 MP; with the voice line as its sound when it has one).
-  async finish(id, shotId, candidate = 1, { megapixels = 2, upscale2x = false } = {}) {
+  // Finishes at the film's speed preset when it has one (Balanced: 1 MP + RTX 2x), else 2 MP; megapixels and
+  // upscale2x given win.
+  async finish(id, shotId, candidate = 1, { megapixels, upscale2x } = {}) {
     const p = this.get(id)
+    const f = isSpeed(p.settings?.speed) ? finishFor(p.settings.speed) : { megapixels: 2, upscale2x: false }
+    megapixels = megapixels ?? f.megapixels
+    upscale2x = upscale2x ?? f.upscale2x
     const { sh } = this.find(p, shotId)
     const st = this.shotState(sh)
     if (!st.previewsJob || st.previewsStatus !== 'success') throw new Error('Render its previews first.')

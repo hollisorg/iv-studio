@@ -353,4 +353,34 @@ ok('an outfit is kept on the cast, found by role or preset name, and changing it
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+
+// ---------- the film's own models and speed (GitHub #34) ----------
+ok('a film keeps its picture model and speed, and its shots and finishes follow the speed', () => {
+  const dir = tmp()
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [] }) })
+  const p = films.create({ name: 'Settings' })
+  assert.deepEqual(films.speedFor(films.get(p.id)), { megapixels: 0.4 }, 'no setting: the old 0.4 MP previews')
+  films.update(p.id, { settings: { picture: 'qwen21', speed: 'balanced' } })
+  assert.deepEqual(films.get(p.id).settings, { picture: 'qwen21', speed: 'balanced' })
+  assert.deepEqual(films.speedFor(films.get(p.id)), { speed: 'balanced' })
+  films.update(p.id, { settings: { speed: null } })
+  assert.deepEqual(films.get(p.id).settings, { picture: 'qwen21', speed: null }, 'one setting changes, the other stays')
+  assert.throws(() => films.update(p.id, { settings: { speed: 'turbo' } }), /speed must be/)
+  films.patch(p.id, (q) => (q.scenes = [{ id: 's1', shots: [{ id: 'a', action: 'A.', seconds: 5 }] }]))
+  films.editShot(p.id, 's1', 'a', { seed: '4242' })
+  assert.equal(films.find(films.get(p.id), 'a').sh.seed, 4242)
+  films.editShot(p.id, 's1', 'a', { seed: null })
+  assert.equal(films.find(films.get(p.id), 'a').sh.seed, null)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+await (async (name, fn) => (await fn(), n++, console.log(`ok  ${name}`)))('the film\'s picture model draws its sketches, or says how to set it up', async () => {
+  const fams = [{ id: 'flux2', label: 'Flux.2 Klein 9B', ready: true, edit: true, models: ['f2'] }, { id: 'zimage', label: 'Z-Image Turbo', ready: true, edit: false, models: ['z'] }, { id: 'qwen21', label: 'Qwen Image 2.1', ready: false, edit: true, models: [] }]
+  const films = new Productions({ dataDir: tmp(), studio: () => null, images: () => ({ status: async () => ({ families: fams }) }) })
+  assert.equal((await films.pictureModels('Sketches', null)).editor.id, 'flux2', 'auto: Flux Klein edits')
+  const z = await films.pictureModels('Sketches', { settings: { picture: 'zimage' } })
+  assert.equal(z.drawer.id, 'zimage')
+  assert.equal(z.editor, null, 'Z-Image draws from words, so no face is kept')
+  await assert.rejects(films.pictureModels('Sketches', { settings: { picture: 'qwen21' } }), /Qwen Image 2\.1 isn't set up/)
+})
+
 console.log(`${n} checks passed`)

@@ -16713,3 +16713,24 @@ html.chat-window body {
   width: 100%;
   font-size: 13px;
 }
+
+/* Projects: the film's own picture model and speed (GitHub #34) */
+.wiz-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0 0 14px;
+}
+.wiz-settings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wiz-settings select {
+  max-width: 320px;
+}
+
+.wiz-seed input {
+  width: 130px;
+}
