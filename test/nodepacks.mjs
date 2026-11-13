@@ -6,7 +6,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findPython, installPacks, missingPacks, requirementsFor } from '../src/service/nodepacks.js'
+import { spawnSync } from 'node:child_process'
+import { findPython, installPacks, missingPacks, packsNeedingRuntime, requirementsFor, runtimeReady } from '../src/service/nodepacks.js'
+import { explainRenderError } from '../src/service/studio.js'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'resources', 'models.json'), 'utf8'))
@@ -71,6 +73,55 @@ try {
     assert.ok(fs.existsSync(path.join(customNodes, 'ComfyUI-IV-Studio', '__init__.py')))
     assert.equal(fs.readFileSync(path.join(customNodes, 'rgthree-comfy', 'mine.txt'), 'utf8'), 'keep me')
     assert.ok(steps.includes('ComfyUI-IV-Studio:done') && steps.includes('rgthree-comfy:skipped'))
+  })
+
+  // GitHub #36: the DLSS pack's nodes load without its runtime, and every DLSS finish then fails
+  const dlss = manifest.node_packs.find((p) => p.dir === 'comfyui-dlss5-enhancer-v15')
+  await ok('the DLSS runtime counts in its folder or where config.json points, and a pack without it is found', () => {
+    assert.equal(dlss.runtime.exe, 'VE_CLI.exe')
+    const customNodes = path.join(tmp, 'rt', 'custom_nodes')
+    const dir = path.join(customNodes, dlss.dir)
+    fs.mkdirSync(path.join(dir, 'runtime'), { recursive: true })
+    assert.equal(runtimeReady(dir, dlss.runtime), false)
+    assert.deepEqual(packsNeedingRuntime(manifest, customNodes).map((p) => p.dir), [dlss.dir])
+    assert.deepEqual(packsNeedingRuntime(manifest, customNodes, { linux: true }), [], 'DLSS is Windows only')
+    const elsewhere = path.join(tmp, 'rt', 'Visual Enhancer')
+    fs.mkdirSync(elsewhere, { recursive: true })
+    fs.writeFileSync(path.join(elsewhere, 'VE_CLI.exe'), '')
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ runtime_dir: elsewhere }))
+    assert.equal(runtimeReady(dir, dlss.runtime), true)
+    fs.rmSync(path.join(dir, 'config.json'))
+    fs.writeFileSync(path.join(dir, 'runtime', 'VE_CLI.exe'), '')
+    assert.equal(runtimeReady(dir, dlss.runtime), true)
+    assert.deepEqual(packsNeedingRuntime(manifest, customNodes), [])
+  })
+
+  const py = ['python3', 'python'].find((c) => spawnSync(c, ['-c', 'print(1)'], { encoding: 'utf8' }).stdout?.trim() === '1')
+  await ok(`a pack already there still gets its runtime script run${py ? '' : ' (skipped: no Python here)'}`, async () => {
+    if (!py) return
+    const customNodes = path.join(tmp, 'rt2', 'custom_nodes')
+    const dir = path.join(customNodes, dlss.dir)
+    fs.mkdirSync(dir, { recursive: true })
+    // a stand-in for the pack's install.py: makes runtime/VE_CLI.exe the way the real one does after its download
+    fs.writeFileSync(path.join(dir, 'install.py'), "import os\nos.makedirs('runtime', exist_ok=True)\nopen(os.path.join('runtime','VE_CLI.exe'),'w').close()\n")
+    const steps = []
+    const [r] = await installPacks([dlss], { customNodes, python: py, resourcesDir: path.join(ROOT, 'resources'), onProgress: (u) => steps.push(u.step) })
+    assert.equal(r.status, 'skipped')
+    assert.equal(r.runtime, 'installed')
+    assert.ok(steps.includes('runtime'))
+    assert.ok(fs.existsSync(path.join(dir, 'runtime', 'VE_CLI.exe')))
+    // without ComfyUI's Python it says how to do it by hand
+    fs.rmSync(path.join(dir, 'runtime'), { recursive: true })
+    const [r2] = await installPacks([dlss], { customNodes, python: null, resourcesDir: path.join(ROOT, 'resources') })
+    assert.equal(r2.runtime, 'failed')
+    assert.match(r2.runtimeDetail, /install\.py/)
+  })
+
+  await ok('the VE_CLI.exe render error says what to press', () => {
+    const raw = "DLSS5_Enhance_Video: Could not find VE_CLI.exe. Searched: [WindowsPath('D:/x/runtime')]. Run install_runtime.py or set DLSS5_V15_RUNTIME_DIR."
+    assert.match(explainRenderError(raw), /Install missing node packs/)
+    assert.ok(explainRenderError(raw).includes(raw))
+    assert.equal(explainRenderError('KSampler: out of memory'), 'KSampler: out of memory')
   })
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true })

@@ -16,6 +16,25 @@ export function missingPacks(manifest, objectInfo, { linux = false } = {}) {
   return manifest.node_packs.filter((p) => !(linux && p.windowsOnly) && !(!linux && p.linuxOnly) && p.classes.some((c) => !objectInfo[c]))
 }
 
+// A pack that also needs files its own script downloads (DLSS 5's VE_CLI.exe runtime): is that runtime there?
+// The pack looks in its runtime folder and in the runtime_dir its config.json names (or DLSS5_V15_RUNTIME_DIR,
+// which only ComfyUI's own process can see), so IV Studio checks the same two places.
+export function runtimeReady(packDir, runtime) {
+  if (!runtime) return true
+  if (fs.existsSync(path.join(packDir, runtime.folder || '', runtime.exe))) return true
+  try {
+    const dir = JSON.parse(fs.readFileSync(path.join(packDir, 'config.json'), 'utf8')).runtime_dir
+    return !!dir && fs.existsSync(path.join(dir, runtime.exe))
+  } catch {
+    return false
+  }
+}
+
+// Packs whose nodes ComfyUI has but whose runtime isn't downloaded yet (the folder is there, so missingPacks skips them).
+export function packsNeedingRuntime(manifest, customNodes, { linux = false } = {}) {
+  return manifest.node_packs.filter((p) => p.runtime && !(linux && p.windowsOnly) && !(!linux && p.linuxOnly) && fs.existsSync(path.join(customNodes, p.dir)) && !runtimeReady(path.join(customNodes, p.dir), p.runtime))
+}
+
 // The Python that runs ComfyUI, next to it: the portable build's python_embeded, a venv, or ComfyUI Desktop's .venv.
 export function findPython(comfyRoot, platform = process.platform) {
   const win = platform === 'win32'
@@ -109,6 +128,24 @@ export function packVersion(dir) {
 }
 const hasGit = () => run(process.platform === 'win32' ? 'git.exe' : 'git', ['--version']).then(() => true, () => false)
 
+// Runs the pack's own runtime script with ComfyUI's Python (DLSS 5's install.py downloads Merserk's Visual Enhancer
+// release from GitHub, checks its SHA-256 and unpacks it into the pack's runtime folder). It can take a while.
+async function fetchRuntime(p, target, python, result, say) {
+  const rt = p.runtime
+  if (!python) {
+    Object.assign(result, { runtime: 'failed', runtimeDetail: `ComfyUI’s Python wasn’t found, so the ${rt.label} wasn’t downloaded. Run ${rt.script} in ${target} with ComfyUI’s Python.` })
+    return
+  }
+  say('runtime', `Downloading the ${rt.label} (${rt.size})`)
+  try {
+    await run(python, ['-I', rt.script], { cwd: target, timeout: 45 * 60000 })
+    if (!runtimeReady(target, rt)) throw new Error(`${rt.exe} still isn’t there after ${rt.script} ran.`)
+    result.runtime = 'installed'
+  } catch (err) {
+    Object.assign(result, { runtime: 'failed', runtimeDetail: `The ${rt.label} didn’t download: ${err.message}` })
+  }
+}
+
 // Installs the packs (each { id or dir, ... } from missingPacks). onProgress gets { dir, label, step, detail }.
 // Returns one result per pack: installed, skipped (folder already there) or failed, and whether its requirements went in.
 export async function installPacks(packs, { customNodes, python, resourcesDir, onProgress = () => {} }) {
@@ -136,7 +173,11 @@ export async function installPacks(packs, { customNodes, python, resourcesDir, o
       }
       if (fs.existsSync(target)) {
         Object.assign(result, { status: 'skipped', detail: `Already in custom_nodes (${p.dir}), so it was left alone. ComfyUI loads it when it restarts.` })
-        say('skipped', result.detail)
+        if (p.runtime && !runtimeReady(target, p.runtime)) {
+          await fetchRuntime(p, target, python, result, say)
+          if (result.runtime === 'installed') result.detail = `The ${p.runtime.label} was downloaded, so DLSS finishes work now.`
+        }
+        say(result.runtime === 'failed' ? 'failed' : 'skipped', result.runtime === 'failed' ? result.runtimeDetail : result.detail)
         continue
       }
       try {
@@ -170,7 +211,8 @@ export async function installPacks(packs, { customNodes, python, resourcesDir, o
             }
           }
         }
-        say('done', result.requirements && result.requirements !== 'installed' ? result.requirements : undefined)
+        if (p.runtime && !runtimeReady(target, p.runtime)) await fetchRuntime(p, target, python, result, say)
+        say('done', result.runtime === 'failed' ? result.runtimeDetail : result.requirements && result.requirements !== 'installed' ? result.requirements : undefined)
       } catch (err) {
         fs.rmSync(target, { recursive: true, force: true })
         Object.assign(result, { status: 'failed', detail: err.message })

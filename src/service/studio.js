@@ -18,7 +18,7 @@ import { Cast, resolveMentions, withCast } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { cleanSequenceLoras, renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions, fileBase, modelFileMap, whyUnreached } from './setup.js'
-import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
+import { comfyPlace, installPacks, missingPacks, packsNeedingRuntime } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
 import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
 import { finalFrom, finalGraph, graphProblems, NODES as SEEDANCE_NODES, planSeedance, SEEDANCE, seedanceGraph, seedanceMentions, sizeOf, takesFrom, FINAL_FROM_DRAFT } from './seedance.js'
@@ -151,6 +151,13 @@ export function renderFacts({ job, jobs = [], output = {}, request = {}, charact
   return { facts, tile, prompt, model: seedance ? 'seedance' : 'h3', width: width || null, height: height || null, duration: seconds || null, renderSeconds: job.seconds || null, cost: cost?.usd ?? null }
 }
 
+// Errors a node pack raises that a person can fix themselves, said in words, with the original kept after it.
+export function explainRenderError(text) {
+  if (/Could not find VE_CLI.exe/i.test(text))
+    return `DLSS 5's runtime isn't downloaded in your ComfyUI, so the DLSS finish couldn't run. Open Settings → Setup and press Install missing node packs: it downloads the runtime (about 700 MB). Or finish this take with SeedVR2. (${text})`
+  return text
+}
+
 export class Studio {
   // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
   constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, comfyApiKey = null, outputDir, models = null }) {
@@ -276,11 +283,14 @@ export class Studio {
     // only for which packs suit Linux; this ComfyUI is on this PC, so this PC's system stands in if it's slow to say
     const stats = await this.comfy.systemStats().catch(() => null)
     const os = stats?.system?.os || process.platform
-    const packs = missingPacks(this.manifest, info, { linux: !['nt', 'win32'].includes(os) })
+    const linux = !['nt', 'win32'].includes(os)
+    const packs = missingPacks(this.manifest, info, { linux })
+    // a pack whose nodes load but whose runtime was never downloaded (DLSS 5's VE_CLI.exe, GitHub #36)
+    const place = await comfyPlace(this.comfy, folder).catch((err) => (packs.length ? Promise.reject(err) : null))
+    if (place) for (const p of packsNeedingRuntime(this.manifest, place.customNodes, { linux })) if (!packs.includes(p)) packs.push(p)
     if (!packs.length) return { results: [], restart: false }
-    const place = await comfyPlace(this.comfy, folder)
     const results = await installPacks(packs, { ...place, resourcesDir: this.resourcesDir, onProgress })
-    return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed' || r.status === 'skipped') }
+    return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed' || (r.status === 'skipped' && !r.runtime)) }
   }
 
   // ---------- updating ComfyUI, its node packs and ComfyUI-Manager (comfyupdate.js) ----------
@@ -1287,7 +1297,7 @@ export class Studio {
       const err = msgs.find((m) => m[0] === 'execution_error')
       const interrupted = msgs.find((m) => m[0] === 'execution_interrupted')
       job.status = err ? 'error' : interrupted ? 'cancelled' : h.status?.status_str === 'success' ? 'success' : 'error'
-      if (err) job.error = `${err[1].node_type}: ${err[1].exception_message}`.slice(0, 1200)
+      if (err) job.error = explainRenderError(`${err[1].node_type}: ${err[1].exception_message}`).slice(0, 1200)
       const t = msgs.filter((m) => ['execution_start', 'execution_success', 'execution_error'].includes(m[0])).map((m) => m[1].timestamp)
       if (t.length > 1) job.seconds = Math.round((t.at(-1) - t[0]) / 1000)
       job.outputs = this.collectOutputs(job, h.outputs || {})

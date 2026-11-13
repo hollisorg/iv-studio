@@ -62,7 +62,7 @@ function ModelAction({ item, dl }) {
   )
 }
 
-const STEP = { copying: 'Copying', downloading: 'Downloading', unpacking: 'Unpacking', requirements: 'Installing its requirements', done: 'Installed', skipped: 'Left alone', failed: 'Failed' }
+const STEP = { copying: 'Copying', downloading: 'Downloading', unpacking: 'Unpacking', requirements: 'Installing its requirements', runtime: 'Downloading its runtime', done: 'Installed', skipped: 'Left alone', failed: 'Failed' }
 
 // Installs every missing node pack into this PC's ComfyUI (nodepacks.js), a line per pack as it goes, then offers
 // to restart ComfyUI so they load. The status card's button starts it too (the iv:installNodes event).
@@ -97,7 +97,7 @@ function NodeInstaller({ missing, recheck, notify }) {
           <button className="btn btn-small" disabled={busy} onClick={install}>
             {busy ? 'Installing…' : `Install ${missing} missing node pack${missing === 1 ? '' : 's'}`}
           </button>
-          {!busy && <span className="dim small">At the versions IV Studio is tested with, with their requirements. Packs you already have are left alone.</span>}
+          {!busy && <span className="dim small">At the versions IV Studio is tested with, with their requirements. Packs you already have are left alone (a missing DLSS runtime is still downloaded).</span>}
         </div>
       )}
       {list.length > 0 && (

@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { findComfyElsewhere } from './comfylauncher.js'
-import { packVersion } from './nodepacks.js'
+import { packVersion, runtimeReady } from './nodepacks.js'
 
 // Why a ComfyUI request failed, as a Setup item's status, detail and fix:
 // - busy: ComfyUI took the connection but didn't answer in time (loading, rendering or short on memory); it's running,
@@ -128,6 +128,13 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
     }
     if (miss.length && onDisk(pack.dir)) {
       items.push({ id: `pack:${pack.label}`, label: pack.label, status: core ? 'missing' : 'warn', detail: 'Installed. ComfyUI loads it when it restarts.', fix: 'Restart ComfyUI to load it.', kind: 'node_pack', for: pack.for, dir: pack.dir, restartNeeded: true })
+      continue
+    }
+    // its nodes load, but the files its own script downloads aren't there (DLSS 5's VE_CLI.exe, GitHub #36): every
+    // DLSS finish would fail with "Could not find VE_CLI.exe"
+    const packDir = customNodes?.map((d) => path.join(d, pack.dir)).find((d) => fs.existsSync(d))
+    if (!miss.length && pack.runtime && packDir && !runtimeReady(packDir, pack.runtime)) {
+      items.push({ id: `pack:${pack.label}`, label: pack.label, status: 'missing', detail: `Its nodes are here, but the ${pack.runtime.label} (${pack.runtime.exe}) isn't downloaded, so DLSS finishes fail.`, fix: `Press Install missing node packs to download it (${pack.runtime.size}). Until then, finish with SeedVR2.`, kind: 'node_pack', for: pack.for, dir: pack.dir, runtimeMissing: true })
       continue
     }
     const status = !miss.length ? 'ok' : core ? 'missing' : 'warn'
