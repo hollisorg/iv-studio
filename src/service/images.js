@@ -13,9 +13,59 @@ import { comboOptions, modelOptions, resolveModel } from './setup.js'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { probe } from './media.js'
 import { DEPTH_OUTPUTS, PICTURE_TOOLS, RELIGHT, depthGraph, inpaintGraph, relightGraph, relightText, removeBgGraph, upscaleGraph } from './picturetools.js'
+import { CODEX_MODEL, codexHome, codexImage, codexImageStatus } from './codeximages.js'
+import { codexConfigured } from './harness.js'
 
 // the bundled ffprobe, outside the asar in a packaged app (an upscale reads the picture's size)
 const FFPROBE = ffmpegStatic.ffprobePath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+const FFMPEG = ffmpegStatic.ffmpegPath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+
+// ChatGPT Images: not a ComfyUI family. The person's own Codex makes each picture with ChatGPT's image tool, on their
+// ChatGPT plan (codeximages.js). It makes and edits (up to four pictures: the one to change, then references), in
+// any of the shapes, about half a minute a picture. No LoRAs, seed, steps or size: ChatGPT picks those.
+export const CODEX_FAMILY = {
+  id: 'chatgpt',
+  label: 'ChatGPT Images',
+  engine: 'codex',
+  maxRefs: 4,
+  licence: 'OpenAI’s usage policies; made on your ChatGPT plan',
+  note: 'Made by ChatGPT through your Codex, on your ChatGPT plan: no ComfyUI or graphics card needed, about half a minute a picture.',
+  tips: 'Write it the way you’d ask ChatGPT: the subject, the place, the light and the style, in plain sentences. It handles lettering well: put the exact words in quotes. To edit, say what to change and what to keep.'
+}
+const CODEX_AT_ONCE = 2
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e.code === 'EPERM'
+  }
+}
+// The family as the window and agents see it: ready when Codex is installed and signed in.
+export function codexFamilyStatus(st = codexImageStatus()) {
+  return { ...CODEX_FAMILY, models: st.ready ? [CODEX_MODEL] : [], ready: st.ready, missing: st.missing, edit: st.ready, canEdit: true, editNote: null, loraPattern: null, steps: null, cfg: null, sizes: null, noNegative: true, setup: [] }
+}
+
+// A picture at exactly this aspect: kept when it's within 3% of it, otherwise cropped evenly from the middle.
+// Always saved as PNG at out.
+async function fitAspect(src, out, aspect) {
+  const want = IMAGE_ASPECTS[aspect]
+  const info = await probe(FFPROBE, src).catch(() => null)
+  const w = info?.width
+  const h = info?.height
+  let vf = null
+  if (want && w && h && Math.abs(w / h - want) / want > 0.03) {
+    const cw = w / h > want ? Math.round(h * want) : w
+    const ch = w / h > want ? h : Math.round(w / want)
+    vf = `crop=${cw - (cw % 2)}:${ch - (ch % 2)}`
+  }
+  if (!vf && /\.png$/i.test(src)) return fs.copyFileSync(src, out)
+  await new Promise((resolve, reject) => {
+    const p = spawn(FFMPEG, ['-v', 'error', '-y', '-i', src, ...(vf ? ['-vf', vf] : []), '-frames:v', '1', out], { windowsHide: true })
+    p.on('error', reject)
+    p.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve() : reject(new Error('Couldn’t save the picture.'))))
+  })
+}
 
 // unet: the family's checkpoints, by their folder or name in ComfyUI's diffusion_models.
 // te / vae: the text encoder and VAE the official template uses, then compatible ones, first found wins.
@@ -366,11 +416,13 @@ export class Images {
   async status() {
     // the person's own cloud (Modal, RunPod) answers from its saved lists plus the models it can download (one pinned
     // model per family, cloud.json); Comfy Cloud has its own, read like this PC's
+    // ChatGPT Images needs Codex, not ComfyUI, so it's listed (and ready) whether or not ComfyUI answers
+    const codex = codexFamilyStatus()
     let info
     try {
       info = await this.studio.comfy.objectInfo()
     } catch (err) {
-      return { error: err.message, families: IMAGE_FAMILIES.map((f) => ({ ...strip(f), ready: false, models: [], missing: [] })) }
+      return { error: codex.ready ? null : err.message, comfyError: err.message, families: [...IMAGE_FAMILIES.map((f) => ({ ...strip(f), ready: false, models: [], missing: ['ComfyUI (it isn’t answering)'], setup: [] })), codex], aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS, remote: !!this.studio.comfy?.remote }
     }
     const unets = comboOptions(info, 'UNETLoader', 'unet_name') || []
     const clips = comboOptions(info, 'CLIPLoader', 'clip_name') || []
@@ -418,7 +470,7 @@ export class Images {
         .filter((m) => m.pictureFamilies?.includes(f.id))
         .map((m) => ({ id: m.id, label: m.label, size: m.size || 0, present: !!resolveModel(m, modelOptions(info, m) || [])?.file, gated: m.gated || null }))
     }
-    return { families, aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS, remote: !!this.studio.comfy?.remote }
+    return { families: [...families, codex], aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS, remote: !!this.studio.comfy?.remote }
   }
 
   // Queues a set of pictures. request: { mode: generate|edit, model (a checkpoint), prompt, negative, loras
@@ -428,6 +480,7 @@ export class Images {
   async create({ mode = 'generate', model, prompt = '', negative = '', loras = [], aspect = IMAGE_DEFAULTS.aspect, megapixels = IMAGE_DEFAULTS.megapixels, count = IMAGE_DEFAULTS.count, seed = null, steps = null, cfg = null, refs = [], name, tag = null, keepAspect = false } = {}) {
     const text = String(prompt || '').trim()
     if (!text) throw new Error(mode === 'edit' ? 'Say what to change in the picture.' : 'Describe the picture first.')
+    if (model === CODEX_MODEL || model === CODEX_FAMILY.id) return this.codexCreate({ mode, prompt: text, aspect, count, refs, name, tag })
     const st = await this.status()
     if (st.error) throw new Error(st.error)
     const fam = st.families.find((f) => f.models.includes(model)) || st.families.find((f) => f.id === familyOfModel(String(model || ''))?.id)
@@ -466,8 +519,87 @@ export class Images {
     return record
   }
 
+  // ---------- ChatGPT Images (codeximages.js) ----------
+  // A set made by the person's Codex: each picture is its own Codex run, two at a time, copied into images/ as it
+  // lands (cropped to the shape asked for). The set belongs to this process (owner); another IV Studio process (the
+  // window, or the MCP server) sees it through images.json.
+  async codexCreate({ mode = 'generate', prompt, aspect = IMAGE_DEFAULTS.aspect, count = 1, refs = [], name, tag = null }) {
+    const st = codexImageStatus()
+    if (!st.ready) throw new Error(`ChatGPT Images needs ${st.missing.join(' and ')}.`)
+    if (!['generate', 'edit'].includes(mode)) throw new Error('Mode is generate or edit.')
+    if (mode === 'edit' && !refs.length) throw new Error('Add the picture to edit.')
+    if (refs.length > CODEX_FAMILY.maxRefs) throw new Error(`${CODEX_FAMILY.label} takes up to ${CODEX_FAMILY.maxRefs} pictures.`)
+    for (const r of refs) if (!fs.existsSync(r)) throw new Error(`No picture at ${r}.`)
+    if (!IMAGE_ASPECTS[aspect]) aspect = IMAGE_DEFAULTS.aspect
+    const n = Math.max(1, Math.min(4, Math.round(Number(count) || 1)))
+    const id = randomUUID().slice(0, 8)
+    const title = String(name || '').trim() || prompt.split(/[.,\n]/)[0].slice(0, 48)
+    const record = { id, name: title, mode, family: CODEX_FAMILY.id, familyLabel: CODEX_FAMILY.label, engine: 'codex', model: CODEX_MODEL, prompt, negative: '', loras: [], aspect, megapixels: null, width: null, height: null, count: n, seed: null, refs, ...(tag ? { tag } : {}), owner: process.pid, status: 'running', progress: { value: 0, max: n }, files: [], createdAt: now() }
+    this.saveAll([record, ...this.all()])
+    this.codexRun(record, st.exe)
+    return record
+  }
+  saveRec(id, patch) {
+    let out = null
+    this.saveAll(this.all().map((x) => (x.id === id ? (out = { ...x, ...patch }) : x)))
+    return out
+  }
+  async codexRun(rec, exe) {
+    this.codexRuns ||= new Map()
+    const run = { children: new Set() }
+    this.codexRuns.set(rec.id, run)
+    const home = codexHome()
+    const model = codexConfigured() || ''
+    const errors = []
+    let next = 0
+    let done = 0
+    const stopped = () => this.all().find((x) => x.id === rec.id)?.status === 'cancelled'
+    const worker = async () => {
+      while (next < rec.count && !stopped()) {
+        const i = next++
+        try {
+          const pic = await codexImage({ mode: rec.mode, prompt: rec.prompt, aspect: rec.aspect, refs: rec.refs, exe, model, home, onChild: (c) => (run.children.add(c), c.on('close', () => run.children.delete(c))) })
+          if (stopped()) return
+          fs.mkdirSync(this.dir, { recursive: true })
+          const file = path.join(this.dir, `${slug(rec.name)}_${rec.id}_${i + 1}.png`)
+          await fitAspect(pic, file, rec.mode === 'edit' ? null : rec.aspect)
+          const cur = this.all().find((x) => x.id === rec.id)
+          this.saveRec(rec.id, { files: [...(cur?.files || []), file].sort(), progress: { value: ++done, max: rec.count } })
+        } catch (err) {
+          if (!stopped()) errors.push(err.message)
+          this.saveRec(rec.id, { progress: { value: ++done, max: rec.count } })
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(CODEX_AT_ONCE, rec.count) }, worker))
+    this.codexRuns.delete(rec.id)
+    if (stopped()) return
+    const cur = this.all().find((x) => x.id === rec.id)
+    const files = cur?.files || []
+    const first = files[0] && (await probe(FFPROBE, files[0]).catch(() => null))
+    const finish = { status: files.length ? 'success' : 'error', finishedAt: now(), width: first?.width || null, height: first?.height || null }
+    if (!files.length) finish.error = errors[0] || 'ChatGPT made no picture.'
+    else if (errors.length) finish.note = `${errors.length} of ${rec.count} didn’t come back: ${errors[0]}`
+    // progress: undefined drops it from images.json
+    this.saveRec(rec.id, { ...finish, progress: undefined })
+  }
+  // Stops a ChatGPT set: marked cancelled (its owner, here or in another process, stops at the next picture), and
+  // this process's Codex runs end now.
+  codexCancel(rec) {
+    if (!DONE.includes(rec.status)) this.saveRec(rec.id, { status: 'cancelled', finishedAt: now(), progress: undefined })
+    for (const c of this.codexRuns?.get(rec.id)?.children || []) c.kill()
+    return { ...this.all().find((x) => x.id === rec.id), result: 'stopped' }
+  }
+
   // A set brought up to date: a finished job's pictures are copied into images/ once.
   async refresh(rec) {
+    if (rec.engine === 'codex') {
+      if (DONE.includes(rec.status)) return rec
+      // still being made here, or by another IV Studio process that's still open
+      if (this.codexRuns?.has(rec.id) || (rec.owner && rec.owner !== process.pid && alive(rec.owner))) return rec
+      // its process closed before it finished: what it made is kept
+      return this.saveRec(rec.id, rec.files?.length ? { status: 'success', finishedAt: now(), note: 'IV Studio closed before every picture was made.', progress: undefined } : { status: 'error', error: 'IV Studio closed while ChatGPT was making these.', finishedAt: now(), progress: undefined })
+    }
     if (DONE.includes(rec.status) && (rec.status !== 'success' || rec.files?.length)) return rec
     let job
     try {
@@ -650,6 +782,7 @@ export class Images {
   async cancel(id) {
     const r = this.all().find((x) => x.id === id)
     if (!r) throw new Error(`No picture set ${id}.`)
+    if (r.engine === 'codex') return this.codexCancel(r)
     const c = await this.studio.cancelJob(r.jobId)
     return { ...(await this.refresh(r)), result: c.result }
   }
@@ -658,7 +791,8 @@ export class Images {
   async delete(id) {
     const r = this.all().find((x) => x.id === id)
     if (!r) throw new Error(`No picture set ${id}.`)
-    if (!DONE.includes(r.status)) await this.studio.cancelJob(r.jobId).catch(() => {})
+    if (r.engine === 'codex') this.codexCancel(r)
+    else if (!DONE.includes(r.status)) await this.studio.cancelJob(r.jobId).catch(() => {})
     for (const f of r.files || []) fs.rmSync(f, { force: true })
     try {
       this.studio.deleteProject(r.projectId)

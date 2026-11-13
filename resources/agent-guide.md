@@ -358,6 +358,11 @@ licence; `download_recommended_lora` installs one (ask first). The Turnaround Lo
    to each family's own settings.
 3. Poll `get_image` until `success`; its `files` are the pictures. Use one as a shot's first frame with
    `generate_previews` mode `frames` and a picture in `media`.
+4. ChatGPT Images (family `chatgpt`, model `chatgpt-images`): ChatGPT makes the pictures through the person's own
+   Codex, on their ChatGPT plan (no ComfyUI or GPU; IV Studio adds no charge), about half a minute a picture. It's
+   ready when Codex is installed and signed in, even with ComfyUI off. It makes and edits (up to 4 `refs`: the
+   picture to change first) and takes `aspect` and `count`; no LoRAs, seed, steps or size. Strong on lettering:
+   put exact words in quotes. A refusal or a usage limit comes back as the set's `error`.
 
 ## Music (Audio)
 

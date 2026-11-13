@@ -65,7 +65,7 @@ export const TOURS = {
       { at: 'step:What to make', title: 'Make, edit or fix', text: 'Generate makes new pictures from words. Edit changes a picture you give it. Tools are one-step fixes: inpaint, relight, remove the background, upscale, depth map.' },
       { at: 'step:The tool', title: 'The tool', text: 'Pick a fix. One that still needs its model says so and downloads it here.' },
       { at: 'step:The picture', title: 'The picture', text: 'Drop in a picture, or open one of yours below and press Fix this. For Inpaint, paint over the part to change.' },
-      { at: 'step:The model', title: 'The model', text: 'Each family has its own look and speed. Makes means it creates pictures; edits means it can also change one. One that says not set up opens what it needs, with a button that downloads it.' },
+      { at: 'step:The model', title: 'The model', text: 'Each family has its own look and speed. Makes means it creates pictures; edits means it can also change one. ChatGPT Images makes them with ChatGPT through your Codex, on your ChatGPT plan, with no ComfyUI needed. One that says not set up opens what it needs.' },
       { at: 'step:The picture to edit', title: 'The picture to edit', text: 'Drop in the picture to change.' },
       { at: ['step:What it shows', 'step:What to change'], title: 'Describe it', text: 'Write what you want to see, or for Edit, what to change. LoRAs for the chosen model add a look or a style.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The picture shape, its size and how many to make at once.' },

@@ -66,7 +66,8 @@ import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
 import { SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
 import { offeredFx, CLIP_FX, FreefieldApps } from '../service/freefield'
-import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
+import { CODEX_FAMILY, IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
+import { CODEX_MODEL } from '../service/codeximages'
 import { RefMods } from '../service/refmods'
 import { Civitai, LORA_FAMILIES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
@@ -1482,10 +1483,10 @@ tool('save_recipe', "Save something that worked as a recipe: a button on IV Stud
 }, (args) => saveRecipe(BASE, args))
 tool('list_recipes', 'The recipes on the Dashboard: name, instruction, note.', {}, () => ({ items: listRecipes(BASE) }))
 tool('delete_recipe', 'Remove a recipe from the Dashboard. Ask the person first.', { id: z.string() }, ({ id }) => removeRecipe(BASE, id))
-tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, its licence, its sizes (megapixels it works at) and, where the maker gives them, tips for writing its prompt: follow a family's tips when you write for it.`, {}, () => images.status())
-tool('make_image', "Make pictures on this PC (free, local). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
+tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}; plus ${CODEX_FAMILY.label} (family chatgpt, model "${CODEX_MODEL}"), made by ChatGPT through the person's own Codex on their ChatGPT plan, ready when Codex is installed and signed in, even with ComfyUI off. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, its licence, its sizes (megapixels it works at) and, where the maker gives them, tips for writing its prompt: follow a family's tips when you write for it.`, {}, () => images.status())
+tool('make_image', "Make pictures on this PC (free, local), or with ChatGPT through the person's Codex (model \"chatgpt-images\": their ChatGPT plan, no ComfyUI, about half a minute a picture; up to 4 refs; no LoRAs, seed, steps or size, and aspect is the shape). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
   mode: z.enum(['generate', 'edit']).default('generate'),
-  model: z.string().describe('A checkpoint from list_image_models'),
+  model: z.string().describe('A checkpoint from list_image_models, or "chatgpt-images" for ChatGPT Images'),
   prompt: z.string().describe('generate: describe the picture. edit: what to change, and what to keep.'),
   negative: z.string().optional(),
   refs: z.array(z.string()).optional().describe('edit: absolute paths of the pictures to edit (Qwen Image 2.1: up to 3; Krea 2: 1; Flux: up to 6; MiniMax H3 Image: up to 16, called <Picture 1>, <Picture 2>... in the prompt)'),

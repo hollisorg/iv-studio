@@ -35,6 +35,35 @@ const sizeOf = (aspect, mp) => {
 const GB = (b) => `${(b / 1024 ** 3).toFixed(1)} GB`
 const ACTIVE = ['queued', 'downloading', 'verifying']
 
+// ChatGPT Images when it isn't ready: it needs the person's Codex, signed in with ChatGPT, not model files.
+function CodexSetup({ f, onReady }) {
+  return (
+    <div className="family-setup">
+      <div className="family-setup-head">
+        <h3>{f.label} needs Codex</h3>
+        <p className="small dim">
+          {f.note} <span className="mono">{f.licence}</span>
+        </p>
+      </div>
+      <ol className="family-setup-steps small">
+        <li>
+          Install Codex: the{' '}
+          <a href="https://chatgpt.com/codex" target="_blank" rel="noreferrer">
+            ChatGPT Codex app
+          </a>
+          , or its command-line tool (<code>npm i -g @openai/codex</code>).
+        </li>
+        <li>Open it and sign in with your ChatGPT account. Pictures then come from your ChatGPT plan; IV Studio adds no charge.</li>
+        <li>Press Check again.</li>
+      </ol>
+      {f.missing?.length > 0 && <p className="small pink">Still needed: {f.missing.join(', ')}.</p>}
+      <button className="btn btn-small" onClick={onReady}>
+        Check again
+      </button>
+    </div>
+  )
+}
+
 // A model family that isn't set up yet (GitHub #22): what it is, the files it needs and which are already here, one
 // button that downloads the rest into ComfyUI (the same downloader as Settings → Setup), a Hugging Face login when one
 // is gated, and anything else it needs (a newer ComfyUI, a turbo LoRA).
@@ -156,6 +185,8 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
   // a stale saved form from before Tools, or Tools picked: the model steps below stay on generate/edit
   const usable = families.filter((f) => f.ready && (form.mode !== 'edit' || f.edit))
   const fam = families.find((f) => f.id === form.family && f.ready) || null
+  // ChatGPT Images (through Codex): no checkpoint, LoRAs, steps, CFG, size or seed
+  const codex = fam?.engine === 'codex'
   // a LoRA sent from the LoRAs page: switch to its model and put it in the tray
   useEffect(() => {
     if (!incomingLora || !status) return
@@ -271,7 +302,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
           {modeStep}
 
           <section className="create-step">
-            <StepHead n={n.model} title="The model" sub={editMode ? 'Only models that can edit are on.' : 'Your image models in ComfyUI. Each has its own look.'} />
+            <StepHead n={n.model} title="The model" sub={editMode ? 'Only models that can edit are on.' : 'Your image models in ComfyUI, and ChatGPT through your Codex. Each has its own look.'} />
             <div className="family-cards" role="radiogroup" aria-label="Model family">
               {families.map((f) => {
                 // a family that isn't set up stays clickable and opens what it needs; edit mode still rules out the ones
@@ -294,24 +325,33 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
               })}
               {!status && <span className="dim small">Checking your image models…</span>}
             </div>
-            {setupFam && families.some((f) => f.id === setupFam && !f.ready) && <FamilySetup key={setupFam} f={families.find((f) => f.id === setupFam)} remote={status?.remote} notify={notify} go={go} onReady={loadStatus} />}
+            {setupFam &&
+              families.some((f) => f.id === setupFam && !f.ready) &&
+              (families.find((f) => f.id === setupFam).engine === 'codex' ? (
+                <CodexSetup f={families.find((f) => f.id === setupFam)} onReady={loadStatus} />
+              ) : (
+                <FamilySetup key={setupFam} f={families.find((f) => f.id === setupFam)} remote={status?.remote} notify={notify} go={go} onReady={loadStatus} />
+              ))}
             {fam && (
               <>
-                <div className="create-field">
-                  <span className="create-label mono">Checkpoint</span>
-                  <select value={form.model || ''} onChange={(e) => set({ model: e.target.value })}>
-                    {fam.models.map((m) => (
-                      <option key={m} value={m}>
-                        {shortName(m)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!codex && (
+                  <div className="create-field">
+                    <span className="create-label mono">Checkpoint</span>
+                    <select value={form.model || ''} onChange={(e) => set({ model: e.target.value })}>
+                      {fam.models.map((m) => (
+                        <option key={m} value={m}>
+                          {shortName(m)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <p className="small dim image-family-note">
-                  {fam.note} <span className="mono">Licence: {fam.licence}</span>
+                  {fam.note} <span className="mono">{codex ? fam.licence : `Licence: ${fam.licence}`}</span>
                 </p>
               </>
             )}
+            {!codex && (
             <div className="create-field">
               <span className="create-label mono">LoRAs</span>
               <div className="lora-tray">
@@ -340,6 +380,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                 </button>
               </div>
             </div>
+            )}
             {picking && <LoraPicker family={fam?.id || 'h3'} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
           </section>
 
@@ -376,6 +417,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                 <p className="dim">{fam.tips}</p>
               </details>
             )}
+            {!codex && (
             <div className={`more-settings ${more ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setMore(!more)} aria-expanded={more}>
                 {more ? '−' : '+'} More: {fam?.noNegative ? 'steps, CFG' : 'negative prompt, steps, CFG'}
@@ -402,22 +444,25 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                 </div>
               )}
             </div>
+            )}
           </section>
 
           <section className="create-step">
-            <StepHead n={n.shape} title="Shape and size" sub={editMode ? 'An edit keeps the picture’s own shape.' : 'The shape, how big, and how many to make at once.'} />
+            <StepHead n={n.shape} title={codex ? 'Shape and how many' : 'Shape and size'} sub={editMode ? 'An edit keeps the picture’s own shape.' : codex ? 'The shape and how many to make. ChatGPT picks the size (about 1.6 MP).' : 'The shape, how big, and how many to make at once.'} />
             {!editMode && <AspectTiles aspects={ASPECTS} value={form.aspect} onChange={(aspect) => set({ aspect })} />}
             <div className="create-grid">
-              <div className="create-field">
-                <span className="create-label mono">Size</span>
-                <div className="segmented">
-                  {(fam?.sizes || SIZES).map((m) => (
-                    <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
-                      {m} MP
-                    </button>
-                  ))}
+              {!codex && (
+                <div className="create-field">
+                  <span className="create-label mono">Size</span>
+                  <div className="segmented">
+                    {(fam?.sizes || SIZES).map((m) => (
+                      <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
+                        {m} MP
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="create-field">
                 <span className="create-label mono">How many</span>
                 <div className="segmented">
@@ -428,15 +473,17 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                   ))}
                 </div>
               </div>
-              <div className="create-field">
-                <span className="create-label mono">Seed</span>
-                <div className="seed">
-                  <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} aria-label="Seed" />
-                  <button className="seed-roll" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })} title="A new seed" aria-label="A new seed">
-                    ⟳
-                  </button>
+              {!codex && (
+                <div className="create-field">
+                  <span className="create-label mono">Seed</span>
+                  <div className="seed">
+                    <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} aria-label="Seed" />
+                    <button className="seed-roll" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })} title="A new seed" aria-label="A new seed">
+                      ⟳
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </section>
         </div>
@@ -451,7 +498,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
           <dl className="shot-facts">
             <div>
               <dt>Model</dt>
-              <dd>{fam ? `${fam.label} · ${shortName(form.model)}` : status ? 'None ready' : 'Checking…'}</dd>
+              <dd>{fam ? (codex ? `${fam.label} · your ChatGPT plan` : `${fam.label} · ${shortName(form.model)}`) : status ? 'None ready' : 'Checking…'}</dd>
             </div>
             {form.loras.length > 0 && (
               <div>
@@ -467,12 +514,12 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
             )}
             <div>
               <dt>Size</dt>
-              <dd>{editMode ? `about ${form.megapixels} MP, its own shape` : `${w} × ${h}`}</dd>
+              <dd>{codex ? (editMode ? 'ChatGPT picks it' : `${form.aspect}, about 1.6 MP`) : editMode ? `about ${form.megapixels} MP, its own shape` : `${w} × ${h}`}</dd>
             </div>
             <div>
               <dt>Makes</dt>
               <dd>
-                {form.count} · seed {form.seed === '' ? 'random' : form.seed}
+                {codex ? `${form.count} · about half a minute each` : `${form.count} · seed ${form.seed === '' ? 'random' : form.seed}`}
               </dd>
             </div>
           </dl>
@@ -498,23 +545,27 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                     {s.name}
                   </span>
                   <span className="mono small dim">
-                    {s.mode === 'frame' ? 'Last frame of a video' : s.mode === 'tool' ? `${s.familyLabel} · tool` : `${s.familyLabel} · ${s.mode === 'edit' ? 'edit' : 'generate'} · seed ${s.seed}`}
+                    {s.mode === 'frame' ? 'Last frame of a video' : s.mode === 'tool' ? `${s.familyLabel} · tool` : `${s.familyLabel} · ${s.mode === 'edit' ? 'edit' : 'generate'}${s.engine === 'codex' ? '' : ` · seed ${s.seed}`}`}
                   </span>
                   <button className="link-btn small" onClick={() => remove(s)}>
                     Delete
                   </button>
                 </div>
-                {s.status === 'success' ? (
-                  <div className="image-thumbs">
-                    {s.files.map((f, i) => (
-                      <button key={f} className="image-thumb" onClick={() => setViewing({ set: s, i })}>
-                        <img src={fileUrl(f)} alt={`${s.name}, picture ${i + 1}`} loading="lazy" />
-                      </button>
-                    ))}
-                  </div>
+                {s.status === 'success' || (s.status === 'running' && s.files?.length > 0) ? (
+                  <>
+                    <div className="image-thumbs">
+                      {s.files.map((f, i) => (
+                        <button key={f} className="image-thumb" onClick={() => setViewing({ set: s, i })}>
+                          <img src={fileUrl(f)} alt={`${s.name}, picture ${i + 1}`} loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                    {s.status === 'running' && <div className="char-pending mono small dim">ChatGPT is making the rest · {s.files.length} of {s.count} done…</div>}
+                    {s.note && <div className="mono small dim">{s.note}</div>}
+                  </>
                 ) : (
                   <div className="char-pending mono small dim">
-                    {s.status === 'error' ? s.error : s.status === 'running' ? `Making it${s.progress?.max ? ` · ${Math.round((100 * s.progress.value) / s.progress.max)}%` : '…'}` : s.status === 'cancelled' ? 'Stopped' : `Queued${s.queuePosition ? ` · ${s.queuePosition}` : ''}`}
+                    {s.status === 'error' ? s.error : s.status === 'running' && s.engine === 'codex' ? `ChatGPT is making ${s.count > 1 ? `them · ${s.progress?.value || 0} of ${s.count} done` : 'it'}… (about half a minute each)` : s.status === 'running' ? `Making it${s.progress?.max ? ` · ${Math.round((100 * s.progress.value) / s.progress.max)}%` : '…'}` : s.status === 'cancelled' ? 'Stopped' : `Queued${s.queuePosition ? ` · ${s.queuePosition}` : ''}`}
                   </div>
                 )}
               </div>
@@ -527,8 +578,8 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
       {!toolsMode && (
       <section className="go-dock create-dock">
         <div className="go-info">
-          <span className="mono">{fam ? `${form.count} picture${form.count > 1 ? 's' : ''} · ${editMode ? `about ${form.megapixels} MP, the picture's shape` : `${w} × ${h}`} · ${fam.label}` : status ? 'No image model is ready' : 'Checking your image models…'}</span>
-          {fam && <span className="mono dim">{shortName(form.model)}{form.loras.length ? ` · ${form.loras.length} LoRA${form.loras.length > 1 ? 's' : ''}` : ''}</span>}
+          <span className="mono">{fam ? `${form.count} picture${form.count > 1 ? 's' : ''} · ${codex ? (editMode ? "the picture's shape" : form.aspect) : editMode ? `about ${form.megapixels} MP, the picture's shape` : `${w} × ${h}`} · ${fam.label}` : status ? 'No image model is ready' : 'Checking your image models…'}</span>
+          {fam && <span className="mono dim">{codex ? 'on your ChatGPT plan' : shortName(form.model)}{form.loras.length ? ` · ${form.loras.length} LoRA${form.loras.length > 1 ? 's' : ''}` : ''}</span>}
         </div>
         <button className="btn btn-primary" disabled={!canMake} onClick={make}>
           {makeLabel}
@@ -604,7 +655,7 @@ function ImageViewer({ set, index, onIndex, onClose, onEdit, onFix, onShot, onEd
           <p className="image-set-name">{set.name}</p>
           <p className="small dim">{set.prompt}</p>
           <p className="mono small dim">
-            {set.mode === 'tool' || set.mode === 'frame' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
+            {set.mode === 'tool' || set.mode === 'frame' ? set.familyLabel : set.engine === 'codex' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
             {set.files.length > 1 ? ` · ${index + 1} of ${set.files.length}` : ''}
           </p>
           <div className="image-viewer-actions">
