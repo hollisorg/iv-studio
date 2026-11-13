@@ -351,6 +351,14 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
+  // GitHub #35: a film shot opened in Create with everything Film it would send; Create renders into the shot's
+  // own project, so the takes land back on the film's storyboard
+  const filmShotToCreate = (r) => {
+    setRunForCreate(r)
+    pickCreateKind('video')
+    switchSection('video')
+    setPage('create')
+  }
   // A new shot that starts where a finished version ends: Continue mode with the version as its source video, or
   // Frames mode with its last frame as the first frame. The run's character, LoRAs, shape, size and length come
   // along; the prompt starts empty, because it says what happens next (Write it for me looks at the last frame).
@@ -423,7 +431,7 @@ export default function App() {
     window.addEventListener('iv:cloud-wizard', cloud)
     return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', words))
   }, [])
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, shotFromVersion, pictureToEdit, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, filmShotToCreate, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, shotFromVersion, pictureToEdit, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)

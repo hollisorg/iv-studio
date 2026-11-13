@@ -303,6 +303,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     // from a finished version (Continue from this, or its last frame): a new shot that starts where it ended
     if (incomingRun.from === 'continue') notify('A new shot that carries the finished version on. Say what happens next, or let Write it for me look at its last frame.', 'info')
     else if (incomingRun.from === 'frames') notify('A new shot that opens on the last frame. Say what happens next, or let Write it for me look at it.', 'info')
+    else if (incomingRun.from === 'film' && incomingRun.film) notify(`Scene ${incomingRun.film.scene}, shot ${incomingRun.film.shot} of ${incomingRun.film.name}, with everything Film it would use. Change anything and hunt: the takes go back to the film's storyboard.`, 'info')
     clearIncomingRun?.()
   }, [incomingRun])
   // Start from an example (starters.js): the row on this page, or the welcome wizard's "Make your first shot"

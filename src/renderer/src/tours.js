@@ -94,6 +94,7 @@ export const TOURS = {
       { at: '.wiz-scene-tools', title: 'Coverage and continuity', text: 'Cover a scene the way a director would: dialogue coverage, an entrance, parallel action and more. Check continuity reads every shot and sketch like a script supervisor: wardrobe, props, light, screen sides, a phone facing the wrong way.' },
       { at: '.wiz-settings', title: 'This film’s models and speed', text: 'Pick the picture model that draws its sketches and faces, and a speed preset for every shot’s previews and finish. Each shot’s drawer has a seed of its own.' },
       { at: '.wiz-panels', title: 'The storyboard', text: 'Every shot is a panel with a sketch. Click one to change what happens, the camera or the line, or to rework its prompt with a director’s note.' },
+      { at: '.wiz-to-create', title: 'Open in Create', text: 'Every one of Create’s controls for this shot: references, characters, LoRAs, size, steps, sampler and seed. Hunt there, and the takes come back to this storyboard.' },
       { at: '.wiz-shotlist', title: 'Shot list', text: 'Save the shot list as a document, or as CSV for a spreadsheet, for a crew or a schedule.' },
       { at: '.wiz-foot', title: 'Next', text: 'When this step looks right, move on. Play the animatic before filming: it costs seconds, not GPU minutes.' }
     ]

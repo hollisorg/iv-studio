@@ -383,4 +383,35 @@ await (async (name, fn) => (await fn(), n++, console.log(`ok  ${name}`)))('the f
   await assert.rejects(films.pictureModels('Sketches', { settings: { picture: 'qwen21' } }), /Qwen Image 2\.1 isn't set up/)
 })
 
+
+// ---------- GitHub #35: a film shot opened in Create ----------
+await (async (name, fn) => (await fn(), n++, console.log(`ok  ${name}`)))('a film shot opens in Create with what Film it sends, rendering into the shot\'s own project', async () => {
+  const dir = tmp()
+  const face = touch(dir, 'tom.png')
+  const sketch = touch(dir, 'sketch.png')
+  const made = []
+  const studio = { characters: () => [], createProject: (name) => (made.push(name), { id: 'proj1', name }), getProject: (pid) => (pid === 'proj1' ? { id: pid, name: made[0] } : null) }
+  const films = new Productions({ dataDir: dir, studio: () => studio })
+  const p = films.create({ name: 'Ramen', aspect: '9:16' })
+  films.update(p.id, { cast: [{ characterId: null, as: 'Tom', description: '', face, outfit: 'a dark green button-up shirt' }], settings: { speed: 'balanced' } })
+  films.patch(p.id, (q) => (q.scenes = [{ id: 's1', heading: 'INT. RAMEN BAR - NIGHT', location: 'Ramen bar', time: 'NIGHT', shots: [{ id: 'a', action: 'Tom reads his phone.', speaker: 'TOM', characters: ['TOM'], line: 'Code six.', seconds: 5, prompt: 'integrated_multimodal_description:\n[Shot 1] Tom reads his phone.\n\noverall_soundscape:\nChatter.\n\nnon_diegetic_music:\nN/A', character: 'none', sketch, seed: 777 }] }]))
+  await assert.rejects(films.createRequest(p.id, 'nope'), /No such|shot/i)
+  const r = await films.createRequest(p.id, 'a')
+  assert.equal(r.projectId, 'proj1')
+  assert.equal(films.find(films.get(p.id), 'a').sh.projectId, 'proj1', 'the shot keeps the project, so its takes are the film shot\'s')
+  assert.equal(r.from, 'film')
+  assert.deepEqual(r.film, { id: p.id, name: 'Ramen', scene: 1, shot: 1 })
+  assert.equal(r.asked.mode, 'reference', 'a made-up face comes along in References mode')
+  assert.deepEqual(r.asked.media.map((m) => m.file), [sketch, face], 'the sketch first, then Tom\'s face')
+  assert.match(r.asked.prompt, /Tom wears a dark green button-up shirt throughout/)
+  assert.equal(r.request.seed, 777)
+  assert.equal(r.request.aspect, '9:16')
+  assert.equal(r.request.megapixels, 0.4)
+  assert.equal(r.request.steps, 8)
+  assert.equal(r.request.speed, 'balanced')
+  films.patch(p.id, (q) => (q.scenes[0].shots[0].prompt = ''))
+  await assert.rejects(films.createRequest(p.id, 'a'), /no prompt yet/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 console.log(`${n} checks passed`)

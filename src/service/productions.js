@@ -18,7 +18,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
-import { SPEED_IDS, finishFor, isSpeed } from './speed.js'
+import { SPEED_IDS, applySpeed, finishFor, isSpeed } from './speed.js'
 import { DEFAULT_LOCAL_MODEL, jpegOf, writeHarness, writeLocal } from './prompter.js'
 import { askWriter, continuityCheck, writerSees, coverageRules, promptVariants, rewritePrompt, shotListCsv, shotListMarkdown } from './filmcraft.js'
 import { parseScript, sceneText } from './screenplay.js'
@@ -1310,7 +1310,16 @@ export class Productions {
       this.onChange(id)
     }
   }
-  async queueShot(id, shotId, { previews, seed, fromSketch = true, room: useRoom = true, previs: usePrevis = true } = {}) {
+  // A shot's previews, as Film it sends them.
+  async queueShot(id, shotId, opts = {}) {
+    const { input, filmed } = await this.shotRequest(id, shotId, opts)
+    const job = await this.studio().generatePreviews(input)
+    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, filmed))
+    return job
+  }
+  // What Film it sends for a shot (generatePreviews' input) and what the shot records once it's sent. The shot gets
+  // its project (in Shots) here if it has none yet.
+  async shotRequest(id, shotId, { previews, seed, fromSketch = true, room: useRoom = true, previs: usePrevis = true } = {}) {
     const studio = this.studio()
     const p = this.get(id)
     const { sc, sh } = this.find(p, shotId)
@@ -1328,7 +1337,7 @@ export class Productions {
     }
     const said = oneTake(sh.line ? sh.prompt : withSilence(sh.prompt))
     previews = previews ?? (this.speedFor(p).speed ? undefined : 3)
-    if (sh.continues) return this.queueContinued(p, sc, sh, { projectId, said, previews, seed })
+    if (sh.continues) return this.continuedRequest(p, sc, sh, { projectId, said, previews, seed })
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
     const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
     // with a picture of the place too, reference to video keeps the room the same however the camera moves
@@ -1343,7 +1352,7 @@ export class Productions {
     const faces = this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character)
     const reference = room || clip || faces.some((x) => x.made)
     const others = reference ? faces : []
-    const job = await studio.generatePreviews({
+    const input = {
       projectId,
       mode: reference ? 'reference' : sketch ? 'frames' : 'text',
       prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), outfits: Object.fromEntries(others.map((x) => [first(x.ch.name), this.outfitOf(p, x.ch.name)])), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null, outside: isOutside(sc) }) : sketch ? asFirstFrame(said) : said,
@@ -1360,14 +1369,13 @@ export class Productions {
       extraLoras: p.look?.loras || [],
       voiceLine: sh.voiceLine?.file || null,
       seed: seed ?? shotSeed(sh)
-    })
-    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null }))
-    return job
+    }
+    return { input, filmed: { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null } }
   }
   // A continuous shot carries straight on from the previous shot's take (its finished take, else the picked or first
   // preview) as one unbroken take: Continue mode from that take's last 4 seconds. Its takes open with a replay of
   // the previous take, which the cut leaves out (roughCut).
-  async queueContinued(p, sc, sh, { projectId, said, previews, seed }) {
+  async continuedRequest(p, sc, sh, { projectId, said, previews, seed }) {
     const n = sc.shots.indexOf(sh)
     const prev = sc.shots[n - 1]
     if (!prev) throw new Error('The first shot of a scene has nothing to carry on from.')
@@ -1382,7 +1390,7 @@ export class Productions {
     const silent = info.hasAudio ? [] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']
     await this.edits.run(['-y', '-ss', String(Math.max(0, info.duration - 4)), '-i', file, ...silent, '-map', '0:v:0', '-map', info.hasAudio ? '0:a:0' : '1:a:0', '-r', '24', '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-shortest', src])
     const cut = await probe(this.edits.ffprobe, src)
-    const job = await this.studio().generatePreviews({
+    const input = {
       projectId,
       mode: 'continue',
       prompt: said,
@@ -1396,9 +1404,32 @@ export class Productions {
       extraLoras: p.look?.loras || [],
       seed: seed ?? shotSeed(sh),
       media: [{ kind: 'video', file: src, duration: cut.duration, width: cut.width, height: cut.height, hasAudio: true }]
-    })
-    this.patch(p.id, (q) => Object.assign(this.find(q, sh.id).sh, { filmedFrom: 'continue', previs: null }))
-    return job
+    }
+    return { input, filmed: { filmedFrom: 'continue', previs: null } }
+  }
+
+  // GitHub #35: a film shot opened in Create with everything Film it would send (mode, prompt with its references,
+  // the sketch, the place, the faces, character, LoRAs, length, shape, speed, seed and voice line), so every one of
+  // Create's controls can change it. Create renders into the shot's own project, so its takes are the film shot's
+  // takes (Pick a take, the rough cut): nothing has to be sent back. Its line is said first, as Film it does.
+  async createRequest(id, shotId, { voice = true, ...opts } = {}) {
+    const { sh } = this.find(this.get(id), shotId)
+    if (!String(sh.prompt || '').trim()) throw new Error('This shot has no prompt yet: write it first.')
+    if (this.needsLine(sh, voice)) await this.speak(id, shotId).catch(() => {})
+    const { input, filmed } = await this.shotRequest(id, shotId, opts)
+    const p = this.get(id)
+    const { sc, sh: cur } = this.find(p, shotId)
+    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, filmed))
+    const { projectId, ...request } = applySpeed(input)
+    const project = this.studio().getProject(projectId)
+    return {
+      request: { ...request, prompt: input.prompt },
+      asked: { prompt: input.prompt, mode: input.mode, media: (input.media || []).map((m) => ({ kind: m.kind, file: m.file })), voiceLine: input.voiceLine || null, engine: 'h3' },
+      projectId,
+      projectName: project?.name || '',
+      from: 'film',
+      film: { id, name: p.name, scene: p.scenes.indexOf(sc) + 1, shot: sc.shots.indexOf(cur) + 1 }
+    }
   }
   // Previews for every shot in a scene (or, with no sceneId, the whole film) that has a prompt and nothing
   // rendered yet.

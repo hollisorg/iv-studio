@@ -243,7 +243,7 @@ export function ProjectsList({ notify, openProject }) {
 }
 
 // ---------- one film ----------
-export function ProjectPage({ productionId, notify, go, openShot, openEdit, characters }) {
+export function ProjectPage({ productionId, notify, go, openShot, openEdit, characters, filmShotToCreate }) {
   const [v, setV] = useState(null)
   const top = useRef(null)
   const timer = useRef(null)
@@ -276,7 +276,7 @@ export function ProjectPage({ productionId, notify, go, openShot, openEdit, char
     top.current?.scrollIntoView({ block: 'start' })
   }
   const at = STEPS.findIndex(([id]) => id === v.step)
-  const ctx = { v, setV, act, load, notify, go, openShot, openEdit, characters, setStep }
+  const ctx = { v, setV, act, load, notify, go, openShot, openEdit, characters, setStep, filmShotToCreate }
   const t = v.totals
   const filmed = t.finished + t.pick
   const status = {
@@ -789,7 +789,7 @@ function FilmSettings({ v, act }) {
 }
 
 // ---------- 4 · Storyboard and 5 · Film it: one board of panels ----------
-function Board({ v, act, characters, openShot, setStep, mode }) {
+function Board({ v, act, characters, openShot, setStep, mode, filmShotToCreate }) {
   const [open, setOpen] = useState(null) // { sceneId, shotId } in the drawer
   const [takes, setTakes] = useState(null) // shot id whose takes are being picked
   // takes per shot, remembered on this PC
@@ -1008,7 +1008,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
       ) : (
         <Foot back={() => setStep('cast')} next={() => setStep('film')} label="Next: film it" disabled={planning || !all.some((s) => s.prompt)} />
       )}
-      {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} film={film} previews={previews} fromSketch={fromSketch} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
+      {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} toCreate={filmShotToCreate} film={film} previews={previews} fromSketch={fromSketch} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
       {takesShot && <Takes v={v} sh={takesShot} act={act} onClose={() => setTakes(null)} onOpen={() => (setTakes(null), setOpen({ sceneId: v.scenes.find((s) => s.shots.some((x) => x.id === takesShot.id)).id, shotId: takesShot.id }))} />}
       {(animatic?.open || (animatic?.making && animatic.voice)) && <Animatic v={v} a={animatic} unvoiced={unvoiced} onVoice={() => playAnimatic(true)} onClose={() => setAnimatic(null)} />}
     </section>
@@ -1143,7 +1143,7 @@ function Panel({ v, sh, n, film, ch, face, onClick }) {
 }
 
 // A shot opened from the board: what happens, the camera, the line and its length, plus its sketch and prompt.
-function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, previews, fromSketch, onTakes, onClose }) {
+function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, toCreate, film, previews, fromSketch, onTakes, onClose }) {
   const [changed, setChanged] = useState(false)
   const slate = useSlate()
   const [working, setWorking] = useState('')
@@ -1338,6 +1338,20 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
                 {working === 'prompt' ? 'Writing…' : sh.prompt ? 'Rewrite the prompt' : 'Write the prompt'}
               </button>
             </>
+          )}
+          {/* GitHub #35: every one of Create's controls for this shot; its takes come back here */}
+          {sh.prompt && toCreate && !['rendering', 'finishing'].includes(st.status) && (
+            <button
+              className="btn btn-small wiz-to-create"
+              disabled={!!working}
+              title="Opens Create with everything Film it would use: references, character, LoRAs, length, shape, speed and seed. Change anything there; the takes come back to this storyboard."
+              onClick={busy('create', async () => {
+                const r = await act(() => P().createRequest(v.id, sh.id, { previews, fromSketch }))
+                if (r?.projectId) toCreate(r)
+              })}
+            >
+              {working === 'create' ? 'Getting it ready…' : 'Open in Create'}
+            </button>
           )}
           <span className="wiz-drawer-moves">
             <button className="link-btn mono small" disabled={i === 0} onClick={() => edit({ move: -1 }, false)}>

@@ -1228,6 +1228,8 @@ app.whenReady().then(() => {
   handle('productions:continuity', (id, sceneId) => productions.checkContinuity(id, sceneId))
   // outfits (GitHub #37): the writer as costume designer, and shots written before an outfit changed written again
   handle('productions:writeOutfits', (id, opts) => productions.writeOutfits(id, opts))
+  // GitHub #35: a film shot's Film it request, for Create to open (its line said first, so the voice engine runs)
+  handle('productions:createRequest', (id, shotId, opts) => productions.createRequest(id, shotId, opts))
   handle('productions:rewriteOutfitShots', (id) => productions.rewriteOutfitShots(id))
   // the shot list as Markdown or CSV, saved where the person picks
   handle('productions:shotList', async (id, format = 'md') => {
