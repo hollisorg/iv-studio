@@ -608,7 +608,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
               {(ch || speakers.includes(role) || made) && (
                 <label className="wiz-role-outfit">
                   <span className="mono small dim">Wears</span>
-                  <textarea rows={2} key={`o${c?.outfit || ''}`} defaultValue={c?.outfit || ''} placeholder="e.g. a dark green button-up shirt, grey jeans, a black watch" aria-label={`What ${role} wears`} onBlur={(e) => e.target.value.trim() !== (c?.outfit || '') && setOutfit(role, e.target.value.trim())} />
+                  <textarea rows={2} key={`o${c?.outfit || ''}`} defaultValue={c?.outfit || ''} placeholder="e.g. a green shirt, grey jeans" aria-label={`What ${role} wears`} onBlur={(e) => e.target.value.trim() !== (c?.outfit || '') && setOutfit(role, e.target.value.trim())} />
                 </label>
               )}
             </div>
