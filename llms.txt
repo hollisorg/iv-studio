@@ -1,0 +1,34 @@
+# IV Studio
+
+> A free desktop app for making short films with MiniMax H3, where you hunt quick previews, finish the best shot at full size, and cut pictures, songs and voices together into an export.
+
+Runs on Windows, macOS (Apple Silicon and Intel) and Linux (AppImage), driving your own ComfyUI locally, with optional rendering on RunPod, Modal or Comfy Cloud. Includes a chat with your own Claude Code, Codex or Hermes agent, an MCP server for external agents like Claude Desktop, an editor, and a History and Activity log with undo. Current version is 1.1.7; terms of use include MiniMax use restrictions accepted before your first H3 render.
+
+## Docs
+
+- [IV Studio](https://raw.githubusercontent.com/hollisorg/iv-studio/main/README.md): Free open-source desktop app for making short films with MiniMax H3, driving your own ComfyUI and latest 1.1 changes.
+- [IV Studio terms of use and acceptable use](https://raw.githubusercontent.com/hollisorg/iv-studio/main/TERMS.md): Terms of use for IV Studio and MiniMax H3: age, consent, harassment, deception and AI disclosure rules users must accept.
+- [Terms paragraph for release and download notes](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/release-notes-terms.md): Ready-made terms paragraph for pasting into release notes and download pages, with licence facts and misuse report email.
+- [IV Studio safeguards](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/SAFEGUARDS.md): Safeguards against misuse of MiniMax H3: how the app's protections work, report handling and code-reviewed safeguards.
+
+## Art
+
+- [IV Studio artwork: the closed eye (Incognito)](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/art/README.md): How the Incognito closed-eye banner and title-bar mark artwork were generated, including prompts, seeds and scripts.
+
+## Learn
+
+- [Learn: drafts for review](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/learn/drafts.md): Draft Learn content: feature list, Learn page wording, per-page tips and eight tutorial video scripts awaiting review.
+
+## Plans
+
+- [Update ComfyUI, node packs and ComfyUI-Manager from IV Studio: implementation plan](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/plans/2026-11-06-comfy-updates.md): Implementation plan for updating ComfyUI, node packs and ComfyUI-Manager from Setup and MCP, with automatic restart and undo.
+- [Rebuild, build step 1 Implementation Plan (reader, service, agent tools)](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/plans/2026-11-08-rebuild-step1.md): Plan for MCP workflow taking an owned video from file to a first cut in Edit with shots and captions.
+- [Plan: the audio side, themed like Workflows](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/plans/2026-11-10-audio-side-theme.md): Plan to theme the audio side pages like Workflows, using sidebar sections, cards and Stage effects.
+
+## Superpowers
+
+- [Update ComfyUI, its node packs and ComfyUI-Manager from IV Studio](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/superpowers/specs/2026-11-06-comfy-updates-design.md): Design for updating ComfyUI, its node packs and ComfyUI-Manager from Setup or MCP, with restart and Undo, using documented Manager routes.
+- [Rebuild: take a video apart shot by shot, then rebuild it on this PC](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/superpowers/specs/2026-11-08-rebuild-workflow-design.md): Design for the Rebuild workflow: analyzing a video's shots and rebuilding it locally with H3, swaps and editable titles.
+- [Chat with your own Claude Code or Codex inside IV Studio (2026-11-10)](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/superpowers/specs/2026-11-10-agent-chat-design.md): Design for a side panel chat with your own Claude Code or Codex, with approval cards for risky actions.
+- [Your own agent inside IV Studio (2026-11-10)](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/superpowers/specs/2026-11-10-agent-run-design.md): Design of running Claude Code or Codex inside IV Studio from the Dashboard's "What if?" bar, with run panel and process details.
+- [The audio side, themed like Workflows](https://raw.githubusercontent.com/hollisorg/iv-studio/main/docs/superpowers/specs/2026-11-10-audio-side-theme-design.md): Adding an Audio front page mirroring Workflows and animated banners on Voices, Lines, Music and Sounds.
