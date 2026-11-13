@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.10',
+    items: [
+      { text: 'ChatGPT Images in Create → Image: if Codex is installed and signed in to ChatGPT, pick ChatGPT Images beside your ComfyUI models. It makes pictures from a prompt or edits one (up to four pictures), in any shape, on your own ChatGPT plan, even with ComfyUI off.' },
+      { text: 'Your agent can make ChatGPT pictures too (make_image with model chatgpt-images).' }
+    ]
+  },
+  {
     version: '1.1.9',
     items: [
       { text: 'Fixed: the LTX-2.5 models for Dub, Clean plate, Day to night, Add water and SDR to HDR failed their checksum and were deleted after downloading. They download and verify now.' },
