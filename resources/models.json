@@ -248,6 +248,36 @@
       "optionalFor": "live step pictures while a shot renders"
     },
     {
+      "id": "face_yolov8m",
+      "label": "Face finder for Refine faces (Bingsu's ADetailer face_yolov8m, a YOLOv8 model)",
+      "loader": "H3FaceTrackCrop.detector",
+      "match": "face_yolov8m.pt",
+      "folder": "ultralytics/bbox",
+      "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/face_yolov8m.pt",
+      "sha256": "717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f",
+      "size": 52026019,
+      "needed_for": [
+        "faces"
+      ],
+      "optional": true,
+      "optionalFor": "refine faces in a finished shot"
+    },
+    {
+      "id": "h3_ref2v_turbo_8step_768",
+      "label": "H3 ref2v turbo LoRA, 8 steps at 768p (lightx2v), for Refine faces",
+      "loader": "LoraLoaderModelOnly.lora_name",
+      "match": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "folder": "loras",
+      "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/1a4a150fc6707329409eb52e5d75a0e987ac1928/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "sha256": "6a56f41ab4229c9dd845b9501bbd475ee57e112d846cf2e819d534a1ae928c5a",
+      "size": 1956193000,
+      "needed_for": [
+        "faces"
+      ],
+      "optional": true,
+      "optionalFor": "refine faces in a finished shot"
+    },
+    {
       "id": "sam31",
       "label": "SAM 3.1 (tracks people and objects)",
       "loader": "CheckpointLoaderSimple.ckpt_name",
@@ -606,6 +636,22 @@
       ],
       "optional": true,
       "optionalFor": "Dub, Transformations, SDR to HDR, Transitions, Clean plate, Day to night, Add water",
+      "gated": "https://huggingface.co/Lightricks/LTX-2.5"
+    },
+    {
+      "id": "ltx_spatial_upscaler",
+      "label": "LTX-2.5 latent upscaler (2x), for finishing LTX 2.5 shots",
+      "loader": "LatentUpscaleModelLoader.model_name",
+      "match": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+      "folder": "latent_upscale_models",
+      "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/49b093a39c19169a8a81721dcc541e07e945232f/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+      "size": 995778752,
+      "sha256": "eb5a71fe4068ee87ccdb1c3aa635e547ca76bd2d30ae20ae889f2c325c0677e8",
+      "needed_for": [
+        "ltx"
+      ],
+      "optional": true,
+      "optionalFor": "LTX 2.5 shots (finishing at full size)",
       "gated": "https://huggingface.co/Lightricks/LTX-2.5"
     },
     {
@@ -1672,14 +1718,16 @@
       "classes": [
         "H3FaceTrackCrop",
         "H3FaceMaskSAM",
-        "H3FaceStitch"
+        "H3FaceStitch",
+        "H3PerFrameDenoise",
+        "H3InjectVideoLatent"
       ],
       "url": "https://github.com/Carasibana/ComfyUI-H3-FaceRefine",
       "dir": "ComfyUI-H3-FaceRefine",
       "cloud": false,
       "git": "https://github.com/Carasibana/ComfyUI-H3-FaceRefine",
       "commit": "d8521d14fe0d721d80cd9417fff5a559cbc21aba",
-      "for": "Replace"
+      "for": "Refine faces and Replace"
     },
     {
       "label": "Image Detail Contrast",

@@ -26,6 +26,8 @@ import { infoFor, priceGraph } from './pricing.js'
 import { writeSeedance } from './seedwriter.js'
 import { REFINE_DEFAULTS, refineGraph } from './h3refine.js'
 import { explainFailure } from './failures.js'
+import { FACE_DETECTOR, FACE_NODES, FACE_STRENGTHS, FACE_TURBO, faceRefineGraph } from './facerefine.js'
+import { LTX, LTX_FILES, ltxGraph, ltxTakes, planLtx, writeLtx } from './ltx.js'
 
 const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
@@ -58,7 +60,7 @@ const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
 // Create -> Image jobs are 'picture:<family>' (see images.js), so switching image models unloads too.
 // A turnaround sheet (turnaround.js) loads its own H3 with the five-view LoRA patched in; kept beside a shot's H3 it
 // filled 64 GB of RAM and a 0.4 MP draft crawled for 10 minutes (2026-11-10), so it's a family of its own.
-const FAMILIES = { music: 'music', sound: 'sound', still: 'image', enhance: 'seedvr2', cutout: 'sam', 'clipfx:reshoot': 'h3', turnaround: 'turnaround' }
+const FAMILIES = { music: 'music', sound: 'sound', still: 'image', enhance: 'seedvr2', cutout: 'sam', 'clipfx:reshoot': 'h3', turnaround: 'turnaround', ltx: 'ltx' }
 // Clip effects (freefield.js) are their own families too: LTX-2.5 or Wan next to H3 would overflow the card.
 const familyOf = (kind) => FAMILIES[kind] || (/^(picture|clipfx):/.test(String(kind)) ? String(kind) : 'h3')
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
@@ -119,7 +121,7 @@ export function renderFacts({ job, jobs = [], output = {}, request = {}, charact
   const height = r.height || rr.height
   const seconds = r.seconds || rr.seconds
   const fps = (job.kind === 'finish' && fin?.plan?.finish?.fps) || r.fps || rr.fps
-  const model = seedance ? rr.model || 'Seedance 2.5' : 'MiniMax H3'
+  const model = seedance ? rr.model || 'Seedance 2.5' : engine === 'ltx' ? 'LTX 2.5' : 'MiniMax H3'
   const MODES = { text: 'Text', reference: 'References', frames: 'First / last frame', continue: 'Continue a video' }
   add('Model', model)
   add('Kind', MODES[request.mode] || request.mode)
@@ -142,7 +144,8 @@ export function renderFacts({ job, jobs = [], output = {}, request = {}, charact
     else add('Finish', `${f.megapixels || 2} MP from preview ${f.candidate || 1}${f.enhancer === 'seedvr2' ? ', then SeedVR2' : f.upscale2x ? ', DLSS 5 and RTX 2×' : ', DLSS 5'}${f.dlssStrength != null ? ` (strength ${f.dlssStrength}${f.dlssStyle && f.dlssStyle !== 'Default' ? `, ${f.dlssStyle}` : ''})` : ''}${f.fps ? `, ${f.fps} fps` : ''}`)
   }
   const e = job.kind === 'enhance' ? job.plan?.enhance : null
-  if (e) add('Enhanced', e.engine === 'dlss' ? `DLSS 5 ${e.scale}×${e.strength != null ? `, strength ${e.strength}` : ''}${e.style && e.style !== 'Default' ? `, ${e.style}` : ''}` : `SeedVR2 ${e.resolution}p${e.detail ? `, detail ${e.detail}` : ''}`)
+  if (e?.engine === 'faces') add('Enhanced', `Faces refined${e.strength ? `, strength ${e.strength}` : ''}`)
+  else if (e) add('Enhanced', e.engine === 'dlss' ? `DLSS 5 ${e.scale}×${e.strength != null ? `, strength ${e.strength}` : ''}${e.style && e.style !== 'Default' ? `, ${e.style}` : ''}` : `SeedVR2 ${e.resolution}p${e.detail ? `, detail ${e.detail}` : ''}`)
   if (job.seconds) add('Render time', job.seconds >= 90 ? `${Math.floor(job.seconds / 60)} min ${job.seconds % 60} s` : `${job.seconds} s`)
   const cost = job.plan?.cost
   add('Cost', cost?.usd != null ? `$${cost.usd.toFixed(2)} of Comfy credits` : seedance ? null : 'Free, on this PC')
@@ -398,6 +401,10 @@ export class Studio {
   // With @ mentions resolved as a render would (cast.js); notes says what they turned into.
   planRender(given, finish) {
     if (given.engine === SEEDANCE) return this.planSeedanceRender(given)
+    if (given.engine === LTX) {
+      const p = planLtx({ ...given, prompt: given.prompt || 'x', ...(given.mode === 'frames' && !(given.media || []).length ? { mode: 'text' } : {}) })
+      return { resolved: { ...p.resolved, model: 'LTX 2.5' }, groups: [], notes: [], mode: p.request.mode, engine: LTX, finish: { width: p.resolved.finalWidth, height: p.resolved.finalHeight, fps: p.resolved.fps, frames: p.resolved.frames, seconds: p.resolved.seconds } }
+    }
     const members = this.cast.members()
     const { request, notes } = resolveMentions(withCast(applySpeed(given), members), members)
     const plan = planPreviews(request, this.characters())
@@ -419,6 +426,7 @@ export class Studio {
   // characterOverride: a character that isn't a saved preset (a training's checkpoint under test).
   async generatePreviews(input) {
     if (input.engine === SEEDANCE) return this.seedancePreviews(input)
+    if (input.engine === LTX) return this.ltxPreviews(input)
     const { projectId, projectName, characterOverride, ...given } = input
     // a speed preset (speed.js) fills the preview size, steps and takes the request leaves out
     const asked = applySpeed(given)
@@ -465,6 +473,7 @@ export class Studio {
     const source = this.getJob(jobId, { refresh: false })
     if (source.kind !== 'previews') throw new Error('finish_candidate needs a previews job id.')
     if (source.plan?.engine === SEEDANCE) return this.seedanceFinish(source, given)
+    if (source.plan?.engine === LTX) return this.ltxFinish(source, given)
     const caps = await this.capabilities()
     const finish = applyFinishSpeed(given, speed || source.plan.request?.speed || fallbackSpeed, caps)
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
@@ -473,6 +482,51 @@ export class Studio {
     const plan = planFinish(source.plan, finish)
     plan.values['80'] = source.name
     return this.submit({ kind: 'finish', project: this.getProject(source.projectId), plan, name: source.name, parent: source.id, previewPlan: source.plan })
+  }
+
+  // ---------- LTX 2.5 (ltx.js): a second video model on this PC ----------
+  // Takes are LTX's half-size pass; a finish runs take n again (same seed) and its upscale stage. The job records
+  // engine 'ltx' so the window, the Library and Projects know which model made it.
+  async ltxCheck() {
+    if (this.comfy.hosted) throw new Error('LTX 2.5 runs on this PC\'s ComfyUI or your own cloud, not on Comfy Cloud.')
+    const info = await this.comfy.objectInfo().catch(() => ({}))
+    if (!info.LTXVLatentUpsampler || !info.EmptyLTXVLatentVideo) throw new Error('This ComfyUI has no LTX 2.5 nodes. Update ComfyUI (Settings → Setup).')
+    const listed = (node, input) => {
+      const v = info[node]?.input?.required?.[input]
+      return Array.isArray(v?.[0]) ? v[0] : v?.[1]?.options || []
+    }
+    const need = [['UNETLoader', 'unet_name', LTX_FILES.unet], ['CLIPLoader', 'clip_name', LTX_FILES.clip], ['VAELoader', 'vae_name', LTX_FILES.vae], ['VAELoader', 'vae_name', LTX_FILES.audioVae], ['LatentUpscaleModelLoader', 'model_name', LTX_FILES.upscaler]]
+    const missing = need.filter(([n, i, f]) => !listed(n, i).some((x) => fileBase(x) === f)).map(([, , f]) => f)
+    if (missing.length) throw new Error(`LTX 2.5 needs ${missing.join(', ')}. Download them in Settings → Setup (LTX 2.5 shots).`)
+  }
+  async ltxPreviews(input) {
+    const { projectId, projectName, ...asked } = input
+    const plan = planLtx(asked)
+    await this.ltxCheck()
+    const character = this.characters().find((c) => c.id === plan.request.character)
+    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(plan.request.prompt, character))
+    const run = project.jobs.length + 1
+    const name = `${slug(project.name)}_${project.id}_r${run}`
+    const pics = []
+    for (const f of plan.frames) pics.push(await this.comfy.upload(f, 'iv_studio/frames'))
+    const graph = ltxGraph(plan, { stage: 'previews', name, pics })
+    await this.makeRoom('ltx')
+    const promptId = await this.comfy.submit(graph, { iv_studio: { kind: 'ltx', project: project.id, engine: LTX } })
+    plan.asked = { prompt: asked.prompt, mode: plan.request.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), engine: LTX }
+    return this.recordJob({ kind: 'previews', projectId: project.id, name, promptId, plan: { ...plan, engine: LTX } })
+  }
+  async ltxFinish(source, { candidate = 1 } = {}) {
+    if (!(source.outputs || []).some((o) => o.kind === 'preview' && o.candidate === Number(candidate))) throw new Error(`Take ${candidate} hasn't finished.`)
+    await this.ltxCheck()
+    const plan = { request: source.plan.request, resolved: source.plan.resolved }
+    const name = `${source.name}_c${candidate}_final`
+    const pics = []
+    for (const f of source.plan.frames || []) pics.push(await this.comfy.upload(f, 'iv_studio/frames'))
+    const graph = ltxGraph(plan, { stage: 'final', candidate: Number(candidate), name, pics })
+    await this.makeRoom('ltx')
+    const promptId = await this.comfy.submit(graph, { iv_studio: { kind: 'ltx', project: source.projectId, engine: LTX } })
+    const r = source.plan.resolved
+    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: LTX, finish: { candidate: Number(candidate), engine: LTX }, request: source.plan.request, resolved: { width: r.finalWidth, height: r.finalHeight, frames: r.frames, seconds: r.seconds, fps: r.fps } } })
   }
 
   // ---------- Seedance 2.5 (seedance.js): the same shots on ComfyUI's ByteDance partner nodes ----------
@@ -748,7 +802,7 @@ export class Studio {
   // engine dlss: DLSS 5 with the finish's own settings (noise reduction Default 0.8), at scale 1 or 2.
   // strength (DLSS 5): its noise reduction, 0-2 (the finish uses 0.8); style: Default, Natural or Cinematic.
   // detail (SeedVR2): its latent noise, 0-1 (0 restores faithfully; more lets it invent detail).
-  async enhanceFinal({ jobId, engine = 'seedvr2', resolution = 1080, scale = 1, strength = null, style = null, detail = 0 }) {
+  async enhanceFinal({ jobId, engine = 'seedvr2', resolution = 1080, scale = 1, strength = null, style = null, detail = 0, face = null }) {
     if (this.comfy.hosted) throw new Error('Enhance runs on this PC\'s ComfyUI or your own cloud (RunPod, Modal).')
     const source = this.getJob(jobId)
     const out = source.outputs.find((o) => o.kind === 'final') || source.outputs.find((o) => o.kind === 'master')
@@ -759,6 +813,7 @@ export class Studio {
       if (this.comfy.ownCloud) throw new Error('DLSS 5 runs on Windows PCs only. In the cloud, enhance with SeedVR2.')
       return this.enhanceDlss(source, out, scale, { strength, style })
     }
+    if (engine === 'faces') return this.enhanceFaces(source, out, { strength, face })
     const noise = Math.min(1, Math.max(0, Number(detail) || 0))
     const info = await this.comfy.objectInfo('SeedVR2LoadDiTModel').catch(() => null)
     const dits = info?.SeedVR2LoadDiTModel?.input?.required?.model?.[1]?.options || info?.SeedVR2LoadDiTModel?.input?.required?.model?.[0] || []
@@ -777,6 +832,31 @@ export class Studio {
     }
     const project = source.projectId ? this.getProject(source.projectId) : null
     return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'seedvr2', resolution, model: dit, from: out.path || out.url, ...(noise ? { detail: noise } : {}) }, resolved: { ...source.plan?.resolved, fps } }, name, parent: source.id })
+  }
+
+  // Refine faces (facerefine.js): the face tracked, redrawn by H3 against the shot's character (their face picture and
+  // LoRA), or the face picture given, and stitched back. strength: H3's denoise for small faces (0.3 light to 0.55).
+  async enhanceFaces(source, out, { strength = null, face = null } = {}) {
+    const info = await this.comfy.objectInfo().catch(() => ({}))
+    if (FACE_NODES.some((n) => !info[n])) throw new Error('Refine faces needs the H3 FaceRefine node pack: press Install missing node packs in Settings → Setup, then restart ComfyUI.')
+    const det = info.H3FaceTrackCrop.input.required.detector
+    const detectors = Array.isArray(det?.[0]) ? det[0] : det?.[1]?.options || []
+    if (!detectors.some((d) => fileBase(d) === FACE_DETECTOR)) throw new Error(`Refine faces needs the ${FACE_DETECTOR} face finder: download it in Settings → Setup (Refine faces).`)
+    const loras = info.LoraLoaderModelOnly?.input?.required?.lora_name
+    const loraList = Array.isArray(loras?.[0]) ? loras[0] : loras?.[1]?.options || []
+    if (!loraList.some((l) => fileBase(l) === FACE_TURBO)) throw new Error('Refine faces needs the H3 ref2v turbo LoRA (8 steps, 768p): download it in Settings → Setup (Refine faces).')
+    const request = source.plan?.request || {}
+    const character = this.characters().find((c) => c.id === request.character) || null
+    const pic = face && fs.existsSync(face) ? face : character ? this.facePicture(character, this.resourcesDir) : null
+    const faceName = pic ? await this.comfy.upload(pic, 'iv_studio/faces') : null
+    const lora = character?.lora ? { name: character.lora, strength: Math.min(1, character.strength ?? 0.8) } : null
+    const s = Number(strength) > 0 ? Math.min(0.8, Math.max(0.1, Number(strength))) : FACE_STRENGTHS.normal
+    const fps = source.plan?.resolved?.fps || 24
+    const name = `${path.basename(out.path || 'final').replace(/\.[^.]+$/, '').replace(/-audio$/, '')}_faces`
+    const src = await this.videoSource(this.comfy.ownCloud && out.url ? out : out.path)
+    const graph = faceRefineGraph({ video: src, face: faceName, lora, strength: s, who: character?.name?.split(/\s+/)[0] || '', fps, prefix: `H3/enhanced/${name}` })
+    const project = source.projectId ? this.getProject(source.projectId) : null
+    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'faces', strength: s, face: pic, character: character?.id || null, lora: lora?.name || null, from: out.path || out.url }, resolved: source.plan?.resolved }, name, parent: source.id })
   }
 
   async enhanceDlss(source, out, scale, { strength = null, style = null } = {}) {
@@ -853,7 +933,7 @@ export class Studio {
         const n = jobs.filter((x) => x.kind === 'finish' && x.parent === j.parent && byAge(x, j) < 0).length + 1
         finishes.set(j.id, { run: j.parent, name: n > 1 ? `Final ${n}` : 'Final' })
       }
-      const enhanced = (e) => (e?.engine === 'dlss' ? `DLSS 5 ${e.scale}×` : `SeedVR2 ${e?.resolution || ''}p`)
+      const enhanced = (e) => (e?.engine === 'faces' ? 'Faces refined' : e?.engine === 'dlss' ? `DLSS 5 ${e.scale}×` : `SeedVR2 ${e?.resolution || ''}p`)
       for (const j of jobs) {
         // what was asked for (a finish or an enhance asks through its run), for the Library's filters
         const up = (x) => jobs.find((y) => y.id === x?.parent)
@@ -930,6 +1010,8 @@ export class Studio {
     let { idea, character: charId = 'none', mode = 'text', seconds = 5, aspect = '16:9', media = [], sequence = false, previous = null } = request
     if (!idea?.trim()) throw new Error('Describe the idea first.')
     // a Seedance 2.5 shot: its own guide and reference names (seedwriter.js); Context IR is H3's own rewriter
+    // an LTX 2.5 shot: one plain paragraph in LTX's own style (ltx.js)
+    if (request.engine === LTX) return writeLtx({ writer: { engine: engine === 'contextir' ? 'local' : engine, model: engine === 'contextir' ? undefined : model }, idea, mode, seconds, frames: mode === 'frames' ? media.map((m) => m.file || m.path).filter(Boolean) : [], cpu: engine === 'local' && (await this.gpuBusy()) })
     if (request.engine === SEEDANCE) {
       const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
       const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
@@ -1353,6 +1435,15 @@ export class Studio {
       } else {
         const f = finalFrom(outputs)
         if (f) list.push(file(f, 'final'))
+      }
+      return list
+    }
+    if (job.plan?.engine === LTX) {
+      // LTX 2.5 (ltx.js): take n saved by save<n>, a final by save
+      if (job.kind === 'previews') for (const t of ltxTakes(outputs, job.plan.resolved.previews)) list.push(file(t.file, 'preview', { candidate: t.candidate, seed: job.plan.resolved.seeds[t.candidate - 1] }))
+      else {
+        const v = videoOf(outputs.save)
+        if (v) list.push(file(v, 'final'))
       }
       return list
     }

@@ -17,4 +17,5 @@ iv_studio_cloud:
   frame_interpolation: frame_interpolation
   model_patches: model_patches
   refmods: refmods
+  ultralytics: ultralytics
   seedvr2: SEEDVR2

@@ -79,6 +79,7 @@ export function shortLabel(f, e = null) {
 }
 export const enhanceLabel = (e) => {
   const en = e.plan?.enhance || {}
+  if (en.engine === 'faces') return `Faces refined${en.strength != null && en.strength !== 0.4 ? ` · strength ${en.strength}` : ''}`
   if (en.engine === 'dlss') return `DLSS 5 ${en.scale}×${en.strength != null && en.strength !== 0.8 ? ` · strength ${en.strength}` : ''}${en.style && en.style !== 'Default' ? ` · ${en.style}` : ''}`
   return `SeedVR2 ${en.resolution}p${en.detail ? ` · detail ${en.detail}` : ''}`
 }
@@ -360,6 +361,34 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, ownCloud
   )
 }
 
+// Finishing an LTX 2.5 take (ltx.js): the take is made again with its own seed, then LTX's latent upscaler doubles
+// it and a short pass refines it, with its sound. Free, on this PC. Enhance (SeedVR2, DLSS 5, Refine faces) after.
+function LtxFinishPanel({ job, candidate, onStart, notify }) {
+  const r = job.plan.resolved || {}
+  const [busy, setBusy] = useState(false)
+  async function go() {
+    setBusy(true)
+    try {
+      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate }))
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="finish-panel">
+      <p className="dim small">LTX 2.5 makes take {candidate} again with the same seed, then its own 2× upscaler and a short refining pass bring it to full size, with its sound. Enhance it afterwards if you want it sharper.</p>
+      <div className="finish-go">
+        <span className="mono">{r.finalWidth} × {r.finalHeight} · {r.fps || 24} fps · free</span>
+        <button className="btn btn-primary" disabled={busy} onClick={go}>
+          {busy ? 'Starting…' : 'Finish'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
@@ -536,7 +565,7 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
   const [more, setMore] = useState(false)
   const [frameMenu, setFrameMenu] = useState(false)
   const [carrying, setCarrying] = useState(null) // 'continue' | 'frame' while the file is fetched or read
-  const [look, setLook] = useState({ dlssStrength: 0.8, dlssStyle: 'Default', detail: 0 })
+  const [look, setLook] = useState({ dlssStrength: 0.8, dlssStyle: 'Default', detail: 0, faces: 0.4 })
   const setL = (patch) => setLook((l) => ({ ...l, ...patch }))
   // the newest version that has a video, unless one was chosen
   const v = list.find((x) => x.key === chosen) || [...ready].reverse()[0] || list[list.length - 1]
@@ -545,7 +574,8 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
   // an enhanced copy's own size: DLSS scales the final, SeedVR2 sets its short side
   const base = f.plan.resolved || {}
   const en = v.kind === 'enhance' ? v.job.plan?.enhance : null
-  const res = !en
+  // Refine faces keeps the size; DLSS scales it; SeedVR2 sets the short side
+  const res = !en || en.engine === 'faces'
     ? base
     : en.engine === 'dlss'
       ? { width: Math.round((base.width * en.scale) / 2) * 2, height: Math.round((base.height * en.scale) / 2) * 2, fps: base.fps }
@@ -698,6 +728,20 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
                   </div>
                 </div>
               </div>
+              {/* H3 redraws the face against the character's picture and LoRA, stitched back (facerefine.js) */}
+              {!remote && (
+                <>
+                  <Strength label="Face strength" value={look.faces} min={0.2} max={0.6} step={0.05} def={0.4} onChange={(v) => setL({ faces: v })} hint={look.faces > 0.45 ? 'Stronger: closer to the character, but the expression can change.' : 'Keeps the expression; sharpens a small or blurry face toward the character.'} plain="How much of the face is redrawn." />
+                  <div className="row enhance-faces">
+                    <span className="row-label">Faces</span>
+                    <div className="enhancer-pick">
+                      <button className="btn btn-small" disabled={!!enhancing[f.id]} title="Tracks the face, redraws it with H3 at full size, matched to the shot's character, and puts it back. Best on wide shots with small faces." onClick={() => (enhance(f, { engine: 'faces', strength: look.faces }), setMore(false))}>
+                        Refine faces
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -797,7 +841,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
     setEnhancing((e) => ({ ...e, [f.id]: true }))
     try {
       onStart(await window.ivstudio.render.enhance({ jobId: f.id, ...opts }))
-      notify(`Enhancing with ${opts.engine === 'dlss' ? `DLSS 5 at ${opts.scale}×` : `SeedVR2 at ${opts.resolution}p`}. It shows here when it's done.`, 'info')
+      notify(opts.engine === 'faces' ? 'Refining the faces with H3 (about 5 minutes for 5 seconds). It shows here when it is done.' : `Enhancing with ${opts.engine === 'dlss' ? `DLSS 5 at ${opts.scale}×` : `SeedVR2 at ${opts.resolution}p`}. It shows here when it's done.`, 'info')
     } catch (err) {
       notify(err.message)
     } finally {
@@ -914,7 +958,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const started = (job) => (onStart(job), setFinishing(null))
         return (
           <FinishDialog onClose={() => setFinishing(null)}>
-            {run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} remote={remote} ownCloud={ownCloud} characters={characters} /> : <FinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} caps={caps} remote={remote} ownCloud={ownCloud} />}
+            {run.plan?.engine === 'ltx' ? <LtxFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} /> : run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} remote={remote} ownCloud={ownCloud} characters={characters} /> : <FinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} caps={caps} remote={remote} ownCloud={ownCloud} />}
           </FinishDialog>
         )
       })()}
@@ -937,7 +981,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const before = runs[i + 1]
         const changes = runChanges(req, before?.plan.request)
         const ch = characters.find((c) => c.id === req.character)
-        const findings = !req.prompt ? [] : run.plan?.engine === 'seedance' ? lintSeedance(req.prompt, { mode: req.mode, seconds: req.seconds, refs: run.plan.refs || {} }) : lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine })
+        const findings = !req.prompt || run.plan?.engine === 'ltx' ? [] : run.plan?.engine === 'seedance' ? lintSeedance(req.prompt, { mode: req.mode, seconds: req.seconds, refs: run.plan.refs || {} }) : lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine })
         const notes = findings.filter((f) => f.level !== 'info').length
         return (
           <section key={run.id} className="run run-card">

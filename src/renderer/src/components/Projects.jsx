@@ -758,6 +758,9 @@ function FilmSettings({ v, act }) {
   const s = v.settings || {}
   const save = (patch, ok) => act(() => P().update(v.id, { settings: { ...s, ...patch } }), ok)
   const picked = fams?.find((f) => f.id === s.picture)
+  // shots whose prompt was written for the other video model (productions.js writtenForOther)
+  const other = v.scenes.flatMap((x) => x.shots).filter((sh) => String(sh.prompt || '').trim() && (sh.promptFor || 'h3') !== (s.video || 'h3')).length
+  const [rewriting, setRewriting] = useState(false)
   return (
     <div className="wiz-settings">
       <label className="small" title="The picture model that draws this film's sketches, places and made-up faces. One that edits keeps each person's face and the place in every sketch.">
@@ -783,7 +786,21 @@ function FilmSettings({ v, act }) {
           ))}
         </select>
       </label>
-      <span className="small dim">Video: MiniMax H3</span>
+      <label className="small" title="The video model that films every shot. MiniMax H3 follows the prompt closely and keeps characters with their LoRAs and faces; LTX 2.5 is quicker and suits cartoons and animation, keeping people the same through each shot's sketch.">
+        <span className="dim">Video</span>
+        <select value={s.video || 'h3'} onChange={(e) => save({ video: e.target.value }, e.target.value === 'ltx' ? 'LTX 2.5 films this film now. Write the prompts again for it (Cast and places, or each shot).' : 'MiniMax H3 films this film now.')} aria-label="Video model for this film">
+          <option value="h3">MiniMax H3</option>
+          <option value="ltx">LTX 2.5 (quicker, for animation)</option>
+        </select>
+      </label>
+      {other > 0 && (
+        <span className="small wiz-settings-stale">
+          {other === 1 ? 'One shot was' : `${other} shots were`} written for {s.video === 'ltx' ? 'MiniMax H3' : 'LTX 2.5'}.{' '}
+          <button className="link-btn mono small" disabled={rewriting} onClick={async () => (setRewriting(true), await act(() => P().rewriteOutfitShots(v.id), 'Prompts written for this film’s video model.'), setRewriting(false))}>
+            {rewriting ? 'Writing…' : 'Write them again'}
+          </button>
+        </span>
+      )}
     </div>
   )
 }

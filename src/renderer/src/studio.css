@@ -16734,3 +16734,7 @@ html.chat-window body {
 .wiz-seed input {
   width: 130px;
 }
+
+.wiz-settings-stale {
+  color: var(--paper);
+}

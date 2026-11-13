@@ -21,6 +21,8 @@ const VIEW_KEY = 'iv.setupView'
 // where to find it (GitHub #21: a title alone wasn't enough to decide). First match wins, so the order matters.
 const AREAS = [
   ['Live preview', /live step/i, 'The Live preview switch above the queue', 'Step-by-step pictures of a shot while it renders (a tiny H3 decoder, 0.1 GB).'],
+  ['LTX 2.5 shots', /ltx 2\.5 shots/i, 'Create → Video → LTX 2.5, and a film\'s Video setting in Projects', 'A second video model on this PC: quicker takes with sound, good for cartoons and animation. Uses the LTX-2.5 files from Video effects, plus its 2× upscaler (1 GB) for finishing.'],
+  ['Refine faces', /refine faces/i, 'Shots → a finished version → Enhance → Refine faces', 'Finds the face in a finished shot so H3 can redraw it at full size, matched to the character. Best on wide shots with small faces. Also needs the H3 FaceRefine node pack (Node packs above).'],
   ['Picture tools', /relight|remove background|depth maps/i, 'Create → Image → Tools', 'Relight a picture, remove the background of a picture or a video clip (also in the editor), and make depth and normal maps.'],
   ['Replace', /^replace/i, 'Workflows → Replace', 'Swap a person in a video for one of your characters, or change the whole scene in words, keeping the motion and sound.'],
   ['Picture models', /create → image|pictures/i, 'Create → Image', 'Extra models for making pictures, each with its own look. Flux.2 Klein, Flux 3 Klein, Krea 2, Qwen Image 2.1 and MiniMax H3 Image can also edit a picture you give them. Z-Image Turbo also draws the design stills for training a character. Get only the ones you want: each card in Create → Image says what it needs.'],
@@ -244,7 +246,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
       m.get(a).push(i)
     }
     // shown in this order (AREAS is in match order); anything unknown last
-    const ORDER = ['Picture models', 'Picture tools', 'Video effects', 'Photo effects and transitions', 'Slow motion', 'Music and sounds', 'Replace', 'Places in Projects', 'Live preview']
+    const ORDER = ['Picture models', 'Picture tools', 'Video effects', 'Photo effects and transitions', 'Slow motion', 'Music and sounds', 'Replace', 'Places in Projects', 'LTX 2.5 shots', 'Refine faces', 'Live preview']
     const rank = (n) => (ORDER.includes(n) ? ORDER.indexOf(n) : ORDER.length)
     return [...m.entries()].sort((a, b) => rank(a[0]) - rank(b[0]))
   }, [optional])

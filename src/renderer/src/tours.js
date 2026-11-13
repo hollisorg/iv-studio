@@ -46,7 +46,7 @@ export const TOURS = {
     title: 'Create a shot',
     steps: [
       { at: '.create-kind', title: 'Video or picture', text: 'Make a shot with sound (Video) or a still picture (Image).' },
-      { at: '.engine-switch', title: 'The model', text: 'MiniMax H3 renders on this PC, free. Seedance 2.5 uses your Comfy.org credits: same modes and hunt, and you see the price and confirm first. Hunt in cheap 480p drafts, then finish your pick at 1080p.' },
+      { at: '.engine-switch', title: 'The model', text: 'MiniMax H3 renders on this PC, free. LTX 2.5 is free here too: quicker, good for cartoons, from words or a first frame. Seedance 2.5 uses your Comfy.org credits; you see the price and confirm first.' },
       { at: 'step:What kind of shot', title: 'What kind of shot', text: 'Text starts from words alone. References, Frames and Continue start from your pictures or a video.' },
       { at: "step:Who's in it", title: 'Who is in it', text: 'Pick a character so they look and sound the same in every shot. Click more than one to put them in the shot together: the first leads, the others come along as their face pictures. LoRAs and RefMods add a look, a style or a move.' },
       { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them. A video in References mode can get Soft mouth, so the new face doesn’t mouth the words spoken in it.' },
@@ -119,7 +119,7 @@ export const TOURS = {
       { at: '.take-clean', title: 'Cut around a cut', text: 'A take that cuts away can still be used: keep the part before or after the cut in an edit, or carry on from it in a Continue shot. Slow dissolves aren’t caught, only hard cuts.' },
       { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like: the Finish settings open over the page. Picking also teaches the scoring your taste.' },
       { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size. An H3 take starts from the shot’s speed preset (1 MP plus 2x is much quicker than 2 MP). A Seedance take finishes at 1080p, or free here with SeedVR2, DLSS 5 or H3, each with a strength slider.' },
-      { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy at the strength you set; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' },
+      { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip. Enhance adds a sharper copy, or Refine faces redraws small faces to match the character; Compare plays copies in sync, in a grid or a wipe.' },
       { at: '.version-carry', title: 'Keep it going', text: 'Continue from this opens a new Continue shot with this version as its source, keeping the character, LoRAs and shape. Say what happens next, hunt takes, and the finish is the whole continued video at full size.' },
       { at: '.version-lastframe', title: 'Its last frame', text: 'Use the last frame saves the version’s final frame as a picture in the Library. Start a new shot from it as its first frame, or change it in Create → Image first.' }
     ]

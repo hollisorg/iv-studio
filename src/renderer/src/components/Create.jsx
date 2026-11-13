@@ -84,8 +84,15 @@ const SD_HINTS = {
 }
 const ENGINES = [
   ['h3', 'MiniMax H3', 'On this PC · free'],
+  ['ltx', 'LTX 2.5', 'On this PC · free · quick'],
   ['seedance', 'Seedance 2.5', 'Comfy credits · priced first']
 ]
+// LTX 2.5 (service/ltx.js): words, or a first (and last) frame; no characters, LoRAs or voice lines
+const LX_HINTS = {
+  text: 'Just the prompt, in one plain paragraph.',
+  frames: 'Opens on picture 1 and, optionally, lands on picture 2. Keeps a person the same through their picture.'
+}
+const LTX_TEMPLATE = 'A 3D animated short in a warm, soft style. A ___ in ___, ___ light. ___ happens, step by step. The camera slowly ___. We hear ___, and ___ says, "___".'
 
 const base = (p) => p.split(/[\\/]/).pop()
 // The first <d>[Language] …</d> in a prompt takes the spoken words; a prompt without one is left alone.
@@ -182,11 +189,17 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const finishSpeed = speed || savedId
 
   const sd = form.engine === 'seedance'
+  const lx = form.engine === 'ltx'
+  // H3's own controls (LoRAs, RefMods, speed presets, the checker...) show for H3 only
+  const h3 = !sd && !lx
+  // the length each model makes: H3 1-15 s, LTX 2-20 s, Seedance 4-30 s
+  const lenMin = sd ? 4 : lx ? 2 : 1
+  const lenMax = sd ? 30 : lx ? 20 : 15
   // for the chat: how this shot is set up so far (selection.js); the prompt's own words stay here
   const charName = characters?.find?.((c) => c.id === form.character)?.name
   useSelection(
     'create',
-    { setup: `${sd ? 'Seedance 2.5' : 'MiniMax H3'}, ${form.mode} mode, ${charName || 'no character'}${!sd && form.with?.length ? ` with ${form.with.map((id) => characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}` : ''}, ${form.aspect}, ${form.seconds} s, ${form.media.length} reference${form.media.length === 1 ? '' : 's'}${form.extraLoras.length ? `, ${form.extraLoras.length} LoRA${form.extraLoras.length === 1 ? '' : 's'}` : ''}, prompt ${form.prompt.trim() ? `${form.prompt.trim().split(/\s+/).length} words` : 'empty'}` },
+    { setup: `${sd ? 'Seedance 2.5' : lx ? 'LTX 2.5' : 'MiniMax H3'}, ${form.mode} mode, ${charName || 'no character'}${h3 && form.with?.length ? ` with ${form.with.map((id) => characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}` : ''}, ${form.aspect}, ${form.seconds} s, ${form.media.length} reference${form.media.length === 1 ? '' : 's'}${form.extraLoras.length ? `, ${form.extraLoras.length} LoRA${form.extraLoras.length === 1 ? '' : 's'}` : ''}, prompt ${form.prompt.trim() ? `${form.prompt.trim().split(/\s+/).length} words` : 'empty'}` },
     [form.engine, form.mode, form.character, (form.with || []).join(','), form.aspect, form.seconds, form.media.length, form.extraLoras.length, form.prompt.length > 0, Math.round(form.prompt.length / 40)]
   )
   // the shot has a spoken line (or a voice line): a reference video's mouth can't be softened then (softmouth.js)
@@ -396,7 +409,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   // Seedance makes 4 to 30 seconds, H3 1 to 15: the length is kept inside the new engine's range
   function switchEngine(engine) {
-    setForm((f) => ({ ...f, engine, seconds: engine === 'seedance' ? Math.min(30, Math.max(4, Math.round(f.seconds))) : Math.min(15, f.seconds) }))
+    setForm((f) => {
+      // LTX makes text and first/last-frame shots only
+      const mode = engine === 'ltx' && !['text', 'frames'].includes(f.mode) ? 'text' : f.mode
+      const seconds = engine === 'seedance' ? Math.min(30, Math.max(4, Math.round(f.seconds))) : engine === 'ltx' ? Math.min(20, Math.max(2, Math.round(f.seconds))) : Math.min(15, f.seconds)
+      return { ...f, engine, mode, seconds, ...(mode !== f.mode ? { media: [] } : {}) }
+    })
   }
 
   async function hunt() {
@@ -441,7 +459,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     return { pictures: Array(n('picture') + face).fill(0), videos: Array(n('video')).fill(0), audios: Array(n('audio') + voice).fill(0), auto }
   }, [form.media, form.mode, form.voiceLine, char, catalog])
   const findings = useMemo(
-    () => (!form.prompt.trim() ? [] : sd ? lintSeedance(form.prompt, { mode: form.mode, seconds: form.seconds, refs: sdRefs, auto: sdRefs.auto }) : lintPrompt(form.prompt, { mode: form.mode, seconds: form.seconds, media: form.media, character: char ? { name: char.name, trigger: char.trigger } : null, voiceLine: form.voiceLine, mentions: members.map((m) => m.handle) })),
+    () => (!form.prompt.trim() ? [] : sd ? lintSeedance(form.prompt, { mode: form.mode, seconds: form.seconds, refs: sdRefs, auto: sdRefs.auto }) : lx ? [] : lintPrompt(form.prompt, { mode: form.mode, seconds: form.seconds, media: form.media, character: char ? { name: char.name, trigger: char.trigger } : null, voiceLine: form.voiceLine, mentions: members.map((m) => m.handle) })),
     [form.prompt, form.mode, form.seconds, form.media, form.voiceLine, char, members, sd, sdRefs]
   )
   const errors = blocking(findings)
@@ -505,7 +523,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       <div className="create-layout">
         <div className="create-steps">
           <section className="create-step">
-            <StepHead n={1} title="What kind of shot" sub={sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} subPlain={sd ? 'Seedance makes the video online and uses your Comfy credits. Start from words, your own pictures or clips, a first picture, or a video to carry on.' : 'Pick how the video starts: from words, from your own pictures and clips, from a first picture, or carrying on a video.'} />
+            <StepHead n={1} title="What kind of shot" sub={lx ? 'LTX 2.5, on this PC: quick takes with sound, good for cartoons and animation. It starts from words, or from a first frame (and a last).' : sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} subPlain={sd ? 'Seedance makes the video online and uses your Comfy credits. Start from words, your own pictures or clips, a first picture, or a video to carry on.' : 'Pick how the video starts: from words, from your own pictures and clips, from a first picture, or carrying on a video.'} />
             <div className="engine-switch" role="radiogroup" aria-label="Model">
               {ENGINES.map(([id, label, note]) => (
                 <button key={id} role="radio" aria-checked={form.engine === id} className={`engine-card ${form.engine === id ? 'on' : ''}`} onClick={() => switchEngine(id)}>
@@ -515,12 +533,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               ))}
             </div>
             <div className="mode-cards create-modes">
-              {MODES.map(([id, label, hint, plain]) => (
+              {MODES.filter(([id]) => !lx || LX_HINTS[id]).map(([id, label, hint, plain]) => (
                 <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id, media: [] })}>
                   <ModeIcon id={id} />
                   <span className="mode-name">{label}</span>
-                  <span className="dim small" data-plain={sd ? undefined : plain}>
-                    {sd ? SD_HINTS[id] : hint}
+                  <span className="dim small" data-plain={sd || lx ? undefined : plain}>
+                    {sd ? SD_HINTS[id] : lx ? LX_HINTS[id] : hint}
                   </span>
                 </button>
               ))}
@@ -529,6 +547,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
           <section className="create-step">
             <StepHead n={steps.who} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} subPlain={sd ? 'Pick a character and their face comes along, so they look the same.' : 'Pick a character and they keep the same face and voice in every shot. Looks add a style or a kind of movement; reference packs bring a saved face, voice or place.'} />
+            {lx && <p className="dim small engine-note">LTX 2.5 has no character LoRAs. To keep a person the same, start from a first frame of them (First / last frame).</p>}
+            {!lx && (
             <div className="cast-picker" role="group" aria-label="Characters">
               {characters.map((c) => {
                 const main = form.character === c.id
@@ -546,10 +566,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 <span className="cast-chip-name">Nobody</span>
               </button>
             </div>
-            {!sd && characters.length > 1 && !form.with?.length && <p className="dim small engine-note" data-plain="Click more than one to put them in the shot together.">Click more than one character to put them in the shot together.</p>}
-            {!sd && form.with?.length > 0 && <CastNote lead={char} others={form.with.map((id) => characters.find((c) => c.id === id)).filter(Boolean)} mode={form.mode} faceOf={faceOf} />}
+            )}
+            {h3 && characters.length > 1 && !form.with?.length && <p className="dim small engine-note" data-plain="Click more than one to put them in the shot together.">Click more than one character to put them in the shot together.</p>}
+            {h3 && form.with?.length > 0 && <CastNote lead={char} others={form.with.map((id) => characters.find((c) => c.id === id)).filter(Boolean)} mode={form.mode} faceOf={faceOf} />}
             {sd && <p className="dim small engine-note">Seedance takes a character as their face picture, named in the prompt. LoRAs and RefMods are for H3 only.</p>}
-            {!sd && (
+            {h3 && (
             <>
             <div className="create-field">
               <span className="create-label mono">LoRAs</span>
@@ -710,7 +731,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </section>
           )}
 
-          {!sd && !form.projectId && (!form.prompt.trim() || starter) && <Starters onPick={applyStarter} current={starter} />}
+          {h3 && !form.projectId && (!form.prompt.trim() || starter) && <Starters onPick={applyStarter} current={starter} />}
           <section className="create-step">
             <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
             <PromptWriter
@@ -731,7 +752,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <span className="create-label mono">
                 Prompt {char && <span className="dim">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]}</span>}
               </span>
-              <button className="link-btn mono" onClick={() => set({ prompt: sd ? SEEDANCE_TEMPLATE : form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
+              <button className="link-btn mono" onClick={() => set({ prompt: sd ? SEEDANCE_TEMPLATE : lx ? LTX_TEMPLATE : form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
                 Insert template
               </button>
             </div>
@@ -746,7 +767,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             />
             <MentionNotes notes={plan?.notes} />
             {form.prompt.trim() && <Findings findings={findings} onFix={(prompt) => set({ prompt })} />}
-            {!sd && (
+            {h3 && (
               <div className="create-craft" data-tour="create-craft">
                 <CinemaChips
                   value={cinema}
@@ -785,6 +806,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               />
             )}
 
+            {!lx && (
             <div className="create-voice">
               <div className="create-voice-head">
                 <span className="create-label mono">Voice line</span>
@@ -812,6 +834,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 )}
               </div>
             </div>
+            )}
           </section>
 
           <section className="create-step">
@@ -829,10 +852,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 Length <span className="create-value">{form.seconds} s</span>
               </span>
               <div className="length-slider">
-                <input type="range" min={sd ? 4 : 1} max={sd ? 30 : 15} step={sd ? 1 : 0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} aria-label="Length in seconds" />
+                <input type="range" min={lenMin} max={lenMax} step={sd || lx ? 1 : 0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} aria-label="Length in seconds" />
                 <div className="length-marks mono" aria-hidden="true">
-                  {(sd ? [4, 10, 20, 30] : [1, 5, 10, 15]).map((s) => (
-                    <span key={s} style={{ left: `${((s - (sd ? 4 : 1)) / (sd ? 26 : 14)) * 100}%` }}>
+                  {(sd ? [4, 10, 20, 30] : lx ? [2, 5, 10, 20] : [1, 5, 10, 15]).map((s) => (
+                    <span key={s} style={{ left: `${((s - lenMin) / (lenMax - lenMin)) * 100}%` }}>
                       {s}s
                     </span>
                   ))}
@@ -884,8 +907,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               </div>
             )}
-            {!sd && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
-            {!sd && (
+            {h3 && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
+            {h3 && (
             <div className="create-grid">
               <div className="create-field">
                 <span className="create-label mono">Preview size</span>
@@ -936,7 +959,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant" onChange={(e) => set({ projectName: e.target.value })} />
             </div>
 
-            {!sd && (
+            {h3 && (
             <div className={`more-settings ${advanced ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
                 {advanced ? '−' : '+'} Advanced: steps, sampler, scheduler
@@ -1005,10 +1028,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <dt>Who</dt>
               <dd>
                 {char ? char.name : 'Nobody in particular'}
-                {!sd && form.with?.length > 0 ? ` with ${form.with.map((id) => characters.find((c) => c.id === id)?.name.split(' ')[0]).filter(Boolean).join(', ')}` : ''}
+                {h3 && form.with?.length > 0 ? ` with ${form.with.map((id) => characters.find((c) => c.id === id)?.name.split(' ')[0]).filter(Boolean).join(', ')}` : ''}
               </dd>
             </div>
-            {!sd && form.extraLoras.length > 0 && (
+            {h3 && form.extraLoras.length > 0 && (
               <div>
                 <dt>LoRAs</dt>
                 <dd>{form.extraLoras.map((l) => loraInfo(l.name)?.civitai?.name || loraTitle(l.name)).join(', ')}</dd>
@@ -1035,7 +1058,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 <div>
                   <dt>Finish</dt>
                   <dd>
-                    {sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width}×${plan.finish.height}`}
+                    {lx ? `LTX's own 2× upscale → ${plan.finish.width}×${plan.finish.height}` : sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width}×${plan.finish.height}`}
                   </dd>
                 </div>
                 {sd && (
@@ -1052,7 +1075,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </div>
           </dl>
           {!r && planError && <p className="shot-card-error small">{planError}</p>}
-          {!sd && plan?.mode && plan.mode !== form.mode && <p className="dim small">Renders in References mode, for the @ pictures.</p>}
+          {h3 && plan?.mode && plan.mode !== form.mode && <p className="dim small">Renders in References mode, for the @ pictures.</p>}
           {errors.length > 0 && !anyway && (
             <button className="link-btn mono small go-anyway" onClick={() => setAnyway(true)}>
               Render anyway
@@ -1072,9 +1095,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             <>
               <span className="mono">
                 {r.previews} {sd ? 'take' : 'preview'}{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {sd ? 'Seedance 2.5' : r.model}
-                {!sd && plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
+                {h3 && plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
               </span>
-              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : `${r.frames} frames · finish at ${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width} × ${plan.finish.height}`}</span>
+              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : lx ? `${r.frames} frames · finish with LTX's 2× upscale → ${plan.finish.width} × ${plan.finish.height}` : `${r.frames} frames · finish at ${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width} × ${plan.finish.height}`}</span>
             </>
           ) : (
             <span className="mono pink">{planError}</span>

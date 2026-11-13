@@ -18,7 +18,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
-import { SPEED_IDS, applySpeed, finishFor, isSpeed } from './speed.js'
+import { SPEED_IDS, SPEEDS, applySpeed, finishFor, isSpeed } from './speed.js'
+import { LTX, writeLtx } from './ltx.js'
 import { DEFAULT_LOCAL_MODEL, jpegOf, writeHarness, writeLocal } from './prompter.js'
 import { askWriter, continuityCheck, writerSees, coverageRules, promptVariants, rewritePrompt, shotListCsv, shotListMarkdown } from './filmcraft.js'
 import { parseScript, sceneText } from './screenplay.js'
@@ -27,6 +28,8 @@ import { applyOps } from './timeline.js'
 const now = () => new Date().toISOString()
 const id6 = () => randomUUID().slice(0, 6)
 const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase() // people match by first name
+// the film's video model: MiniMax H3 (the default) or LTX 2.5 (GitHub #34)
+const videoOf = (p) => (p?.settings?.video === LTX ? LTX : 'h3')
 // a shot's own seed when it has one, else a new one each time it's filmed
 const shotSeed = (sh) => (Number.isInteger(sh?.seed) ? sh.seed : Math.floor(Math.random() * 1e9))
 // a script's cue in capitals ("KEEPER") reads as a name ("Keeper")
@@ -558,7 +561,8 @@ export class Productions {
     if (patch.settings !== undefined) {
       const s = { ...(p.settings || {}), ...(patch.settings || {}) }
       if (s.speed != null && !isSpeed(s.speed)) throw new Error(`speed must be one of ${SPEED_IDS.join(', ')}, or null for each shot's own.`)
-      p.settings = { picture: typeof s.picture === 'string' && s.picture ? s.picture : 'auto', speed: s.speed || null }
+      if (s.video != null && !['h3', 'ltx'].includes(s.video)) throw new Error('video must be h3 or ltx.')
+      p.settings = { picture: typeof s.picture === 'string' && s.picture ? s.picture : 'auto', speed: s.speed || null, video: s.video || 'h3' }
     }
     if (!ASPECTS[p.aspect]) throw new Error(`aspect must be ${Object.keys(ASPECTS).join(', ')}.`)
     if (!STEPS.includes(p.step || 'idea')) throw new Error(`step must be ${STEPS.join(', ')}.`)
@@ -584,13 +588,19 @@ export class Productions {
         }
   }
   // The shots written before an outfit changed (outfitStale), written again with it. Returns how many.
+  // Also the shots written for the other video model (a film switched between H3 and LTX 2.5).
   async rewriteOutfitShots(id) {
     const p = this.get(id)
-    const todo = p.scenes.flatMap((sc) => sc.shots.filter((sh) => sh.outfitStale).map((sh) => [sc.id, sh.id]))
+    const todo = p.scenes.flatMap((sc) => sc.shots.filter((sh) => sh.outfitStale || this.writtenForOther(p, sh)).map((sh) => [sc.id, sh.id]))
     const cpu = await this.studio().gpuBusy().catch(() => false)
     let n = 0
     for (const [sid, shid] of todo) if (await this.writeShotPrompt(id, sid, shid, { cpu }).then(() => true, () => false)) n++
     return { rewritten: n, of: todo.length }
+  }
+
+  // A shot whose prompt was written for the other video model: H3 reads sections and tags, LTX one paragraph.
+  writtenForOther(p, sh) {
+    return !!String(sh.prompt || '').trim() && (sh.promptFor || 'h3') !== videoOf(p)
   }
 
   // ---------- outfits (GitHub #37) ----------
@@ -910,6 +920,16 @@ export class Productions {
       .join(' ')
     const ch = this.character(sh.character)
     const w = this.writer()
+    // an LTX 2.5 film: one plain paragraph in LTX's style, opening on the shot's sketch when it has one (ltx.js)
+    if (videoOf(p) === LTX) {
+      const sketch = sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
+      const said = await writeLtx({ writer: w, idea: idea.replace(' It is one continuous take with no cuts: write a single [Shot 1].', ' It is one continuous take with no cuts.'), mode: sketch ? 'frames' : 'text', seconds: sh.seconds, frames: sketch ? [sketch] : [], cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
+      this.patch(id, (q) => {
+        const t = q.scenes.find((s) => s.id === sceneId)?.shots.find((s) => s.id === shotId)
+        if (t) (remember(t, 'written again'), (t.prompt = said), (t.promptFor = LTX), delete t.outfitStale)
+      })
+      return said
+    }
     const written =
       isHarness(w.engine)
         ? await writeHarness({ engine: w.engine, model: w.model, idea, mode: 'text', seconds: sh.seconds, character: ch })
@@ -917,7 +937,7 @@ export class Productions {
     const prompt = oneTake(withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line))
     this.patch(id, (q) => {
       const t = q.scenes.find((s) => s.id === sceneId)?.shots.find((s) => s.id === shotId)
-      if (t) (remember(t, 'written again'), (t.prompt = prompt), delete t.outfitStale)
+      if (t) (remember(t, 'written again'), (t.prompt = prompt), (t.promptFor = 'h3'), delete t.outfitStale)
     })
     return prompt
   }
@@ -1293,7 +1313,8 @@ export class Productions {
     this.onChange(id)
     try {
       for (const shotId of shotIds) {
-        if (!this.needsLine(this.find(this.get(id), shotId).sh, voice)) continue
+        // LTX 2.5 speaks the words in its prompt itself, so nothing is said first
+        if (videoOf(this.get(id)) === LTX || !this.needsLine(this.find(this.get(id), shotId).sh, voice)) continue
         run.speaking = shotId
         this.onChange(id)
         await this.speak(id, shotId).catch(() => {}) // without the voice engine, H3 voices the line itself
@@ -1334,6 +1355,15 @@ export class Productions {
       const shot = studio.createProject(`${p.name} · ${sc.location || sc.heading} · ${n}`)
       projectId = shot.id
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
+    }
+    // an LTX 2.5 film (GitHub #34): words, or the sketch as the first frame; no LoRAs, faces or voice lines
+    if (videoOf(p) === LTX) {
+      const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
+      const spec = isSpeed(p.settings?.speed) ? SPEEDS[p.settings.speed] : null
+      return {
+        input: { projectId, engine: LTX, mode: sketch ? 'frames' : 'text', prompt: sh.prompt, media: sketch ? [{ kind: 'picture', file: sketch }] : [], character: 'none', aspect: p.aspect, seconds: sh.seconds, previews: previews ?? spec?.previews ?? 2, seed: seed ?? shotSeed(sh) },
+        filmed: { filmedFrom: sketch ? 'sketch' : 'prompt', previs: null }
+      }
     }
     const said = oneTake(sh.line ? sh.prompt : withSilence(sh.prompt))
     previews = previews ?? (this.speedFor(p).speed ? undefined : 3)
