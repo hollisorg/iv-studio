@@ -1226,6 +1226,9 @@ app.whenReady().then(() => {
   handle('productions:setPrompt', (id, sceneId, shotId, prompt, why) => productions.setShotPrompt(id, sceneId, shotId, prompt, why))
   handle('productions:restorePrompt', (id, sceneId, shotId, index) => productions.restoreShotPrompt(id, sceneId, shotId, index))
   handle('productions:continuity', (id, sceneId) => productions.checkContinuity(id, sceneId))
+  // outfits (GitHub #37): the writer as costume designer, and shots written before an outfit changed written again
+  handle('productions:writeOutfits', (id, opts) => productions.writeOutfits(id, opts))
+  handle('productions:rewriteOutfitShots', (id) => productions.rewriteOutfitShots(id))
   // the shot list as Markdown or CSV, saved where the person picks
   handle('productions:shotList', async (id, format = 'md') => {
     const p = productions.get(id)

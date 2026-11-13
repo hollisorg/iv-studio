@@ -18,8 +18,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
-import { DEFAULT_LOCAL_MODEL, writeHarness, writeLocal } from './prompter.js'
-import { askWriter, continuityCheck, coverageRules, promptVariants, rewritePrompt, shotListCsv, shotListMarkdown } from './filmcraft.js'
+import { DEFAULT_LOCAL_MODEL, jpegOf, writeHarness, writeLocal } from './prompter.js'
+import { askWriter, continuityCheck, writerSees, coverageRules, promptVariants, rewritePrompt, shotListCsv, shotListMarkdown } from './filmcraft.js'
 import { parseScript, sceneText } from './screenplay.js'
 import { applyOps } from './timeline.js'
 
@@ -362,7 +362,7 @@ export function asFirstFrame(prompt) {
 // furnished room (outside: EXT. scenes, see isOutside).
 export const isOutside = (sc) => sc?.inside === false || /^\s*EXT\b/i.test(sc?.heading || '')
 
-export function withRoom(prompt, { place, description, people = [], sketch = true, room = true, previs = null, outside = false }) {
+export function withRoom(prompt, { place, description, people = [], sketch = true, room = true, previs = null, outside = false, outfits = {} }) {
   const body = String(prompt || '').trim().replace(`${FIRST_FRAME}\n\n`, '')
   const field = (name) => (body.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?=\\n\\s*\\n\\s*(?:overall_soundscape|non_diegetic_music):|$)`)) || [])[1]?.trim()
   const shots = (field('integrated_multimodal_description') ?? body).replace(/\s+(\[Shot \d+\])/g, '\n$1')
@@ -387,7 +387,12 @@ export function withRoom(prompt, { place, description, people = [], sketch = tru
     ...(sk ? [`<Picture ${sk}> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.`] : []),
     ...(rm ? [`<Subject 1> (appears in ${inShots}): fully_preserved - ${outside ? 'the place, its ground, plants and sky' : 'the room, its furniture'}, light and colours, wherever the camera looks; the framing is newly directed.`] : []),
     // (a drawn face is a studio portrait: H3 once cut to it whole, plain background and all)
-    ...people.map((name, i) => `<Subject ${subject(i)}> (appears in ${inShots}): partially_preserved - ${name}'s face and hair only; pose, clothes, light and background follow the shot, and the picture itself never appears as a frame.`),
+    // with an outfit, the clothes are named and held; without one they follow the shot (GitHub #37)
+    ...people.map((name, i) => {
+      const o = String(outfits[first(name)] || '').replace(/[.\s]+$/, '')
+      const kept = o ? `${name}'s face and hair, and ${name} wears ${o} throughout; pose, light and background follow the shot` : `${name}'s face and hair only; pose, clothes, light and background follow the shot`
+      return `<Subject ${subject(i)}> (appears in ${inShots}): partially_preserved - ${kept}, and the picture itself never appears as a frame.`
+    }),
     ...(previs ? ['<Video 1> (camera movement and blocking): partially_preserved - its camera path, speed and framing, and where the people stand and walk; not its look.'] : []),
     '',
     'detailed_description:',
@@ -401,10 +406,11 @@ export function withRoom(prompt, { place, description, people = [], sketch = tru
 }
 
 // A storyboard still's prompt: a film still of the shot, in the film's look.
-export function sketchPrompt({ action, camera, place, time, description, look, faces = [], staging }) {
+export function sketchPrompt({ action, camera, place, time, description, look, faces = [], staging, outfits = [] }) {
   return [
     `Cinematic film still, ${camera ? `${camera.replace(/[.\s]+$/, '').toLowerCase()} framing` : 'medium shot'}.`,
     faces.length ? `${faces.map((f, i) => `${f} is the person in picture ${i + 1}`).join('; ')}; keep their face.` : '',
+    ...outfits.map(([n, o]) => `${n} wears ${String(o).replace(/[.\s]+$/, '')}.`),
     action,
     staging ? `${staging.replace(/[.\s]+$/, '')}.` : '',
     place ? `${place}${time ? `, ${time.toLowerCase()}` : ''}${description ? `: ${description}` : ''}.` : '',
@@ -429,10 +435,11 @@ export function placePrompt({ place, time, description, look }) {
 }
 
 // A made-up person's face, drawn once so they look the same in every sketch and shot.
-export function facePrompt({ role, description, look }) {
+export function facePrompt({ role, description, look, outfit }) {
   return [
     `Cinematic film still, head-and-shoulders portrait of ${role || 'a person'}${description ? `: ${String(description).replace(/[.\s]+$/, '')}` : ''}.`,
     'Facing the camera, a calm everyday expression, the whole face clear and evenly lit, a plain soft background.',
+    outfit ? `Wearing ${String(outfit).replace(/[.\s]+$/, '')}.` : '',
     look ? `Look: ${look}.` : 'Natural light, realistic skin.',
     'One person only. One single frame: no split screen, no collage, no text, no captions, no borders.'
   ]
@@ -541,16 +548,81 @@ export class Productions {
   // The brief and the assets: any of name, logline, aspect, targetSeconds, look, cast, locations, props, step.
   update(id, patch) {
     const p = this.get(id)
+    const oldOutfits = new Map((p.cast || []).map((c) => [first(c.as), String(c.outfit || '').trim()]))
     const oldAngles = new Map((p.locations || []).map((l) => [l.id, l.angles || []]))
     for (const k of ['name', 'logline', 'aspect', 'targetSeconds', 'look', 'cast', 'locations', 'props', 'step']) if (patch[k] !== undefined) p[k] = patch[k]
     if (!ASPECTS[p.aspect]) throw new Error(`aspect must be ${Object.keys(ASPECTS).join(', ')}.`)
     if (!STEPS.includes(p.step || 'idea')) throw new Error(`step must be ${STEPS.join(', ')}.`)
     // a place keeps its drawn angles when the new list doesn't give them
     p.locations = (p.locations || []).map((l) => ({ id: l.id || id6(), name: l.name || 'Location', description: l.description || '', pictures: l.pictures || [], angles: l.angles || oldAngles.get(l.id) || [] }))
-    p.cast = (p.cast || []).map((c) => (c.characterId ? { characterId: c.characterId, as: c.as } : { as: c.as, characterId: null, description: c.description || '', face: c.face || null }))
+    // outfit: what they wear in this film, in every sketch and shot of them (GitHub #37)
+    p.cast = (p.cast || []).map((c) => ({ ...(c.characterId ? { characterId: c.characterId, as: c.as } : { as: c.as, characterId: null, description: c.description || '', face: c.face || null }), ...(String(c.outfit || '').trim() ? { outfit: String(c.outfit).trim() } : {}) }))
     p.props = (p.props || []).map((l) => ({ id: l.id || id6(), name: l.name || 'Prop', description: l.description || '', pictures: l.pictures || [] }))
+    // a changed outfit: their sketches redraw, and their shot prompts were written for the old clothes
+    const changed = p.cast.filter((c) => (oldOutfits.get(first(c.as)) || '') !== (c.outfit || '')).map((c) => first(c.as))
+    if (changed.length) this.markOutfitShots(p, changed)
     return this.write(p)
   }
+  // Shots that show or hear these people (first names): their sketches marked to redraw, their prompts to write again.
+  markOutfitShots(p, names) {
+    const presetNames = (c) => [c.as, this.character(c.characterId)?.name].filter(Boolean).map(first)
+    const all = new Set(p.cast.filter((c) => names.includes(first(c.as))).flatMap(presetNames))
+    for (const sc of p.scenes || [])
+      for (const sh of sc.shots || [])
+        if ([sh.speaker, ...(sh.characters || []), this.character(sh.character)?.name].some((n) => n && all.has(first(n)))) {
+          if (sh.sketch || sh.sketchSet) sh.sketchStale = true
+          if (sh.prompt) sh.outfitStale = true
+        }
+  }
+  // The shots written before an outfit changed (outfitStale), written again with it. Returns how many.
+  async rewriteOutfitShots(id) {
+    const p = this.get(id)
+    const todo = p.scenes.flatMap((sc) => sc.shots.filter((sh) => sh.outfitStale).map((sh) => [sc.id, sh.id]))
+    const cpu = await this.studio().gpuBusy().catch(() => false)
+    let n = 0
+    for (const [sid, shid] of todo) if (await this.writeShotPrompt(id, sid, shid, { cpu }).then(() => true, () => false)) n++
+    return { rewritten: n, of: todo.length }
+  }
+
+  // ---------- outfits (GitHub #37) ----------
+  // Everyone in the film (who speaks, plus the cast), as names.
+  roles(p) {
+    const speakers = [...new Set((p.scenes || []).flatMap((s) => (s.elements || []).filter((e) => e.type === 'dialogue').map((e) => e.who)))]
+    return [...speakers, ...(p.cast || []).filter((c) => !speakers.some((s) => first(s) === first(c.as))).map((c) => c.as)].filter(Boolean)
+  }
+  // The writer, as the film's costume designer, gives everyone one outfit for the film from the script, so the same
+  // clothes are drawn in every sketch and filmed in every shot. Fills only empty outfits unless redo.
+  async writeOutfits(id, { redo = false, cpu } = {}) {
+    let p = this.get(id)
+    const roles = this.roles(p)
+    const want = roles.filter((r) => redo || !this.outfitOf(p, r))
+    if (!want.length) return { written: 0, outfits: [] }
+    const who = roles.map((r) => {
+      const c = p.cast.find((x) => first(x.as) === first(r))
+      const ch = c?.characterId ? this.character(c.characterId) : null
+      return `- ${r}${ch ? ` (played by ${ch.name}${ch.description ? `: ${ch.description}` : ''})` : c?.description ? `: ${c.description}` : ''}${this.outfitOf(p, r) && !want.includes(r) ? ` (already wears: ${this.outfitOf(p, r)})` : ''}`
+    })
+    const script = (p.scenes || []).map((s) => `${s.heading || s.location || ''}\n${sceneText(s)}`).join('\n\n').slice(0, 14000)
+    const system = `You are a film's costume designer. For each person listed, write what they wear in this film in one line: the specific garments, their colours and materials, and anything they always carry or wear (glasses, a watch, a bag), from the script and what's known about them, so an AI video model draws exactly the same clothes in every shot. Concrete and visual, 8 to 24 words, no brand names, no other people's names, nothing about their face or body. Fit the story, the place, the weather and the time. If their clothes change during the script, describe what they wear first.`
+    const user = [`Film: ${p.name}${p.logline ? `. ${p.logline}` : ''}`, lookWords(p.look) ? `Look: ${lookWords(p.look)}` : '', `People (write an outfit for: ${want.join(', ')}):`, ...who, '', `Script:\n${script}`].filter(Boolean).join('\n')
+    const schema = { type: 'object', properties: { people: { type: 'array', items: { type: 'object', properties: { name: { type: 'string', maxLength: 60 }, outfit: { type: 'string', maxLength: 240 } }, required: ['name', 'outfit'] } } }, required: ['people'] }
+    const out = await askWriter(this.writer(), { system, user, schema, cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)), temperature: 0.4 })
+    const got = new Map((out?.people || []).filter((x) => String(x?.outfit || '').trim()).map((x) => [first(x.name), String(x.outfit).trim().replace(/\s+/g, ' ')]))
+    const written = []
+    p = this.get(id)
+    const cast = [...p.cast]
+    for (const r of want) {
+      const o = got.get(first(r))
+      if (!o) continue
+      const i = cast.findIndex((c) => first(c.as) === first(r))
+      if (i >= 0) cast[i] = { ...cast[i], outfit: o }
+      else cast.push({ as: r, characterId: null, description: '', face: null, outfit: o })
+      written.push({ name: r, outfit: o })
+    }
+    if (written.length) this.update(id, { cast })
+    return { written: written.length, outfits: written }
+  }
+
 
   // ---------- script ----------
   // New script text: scenes are re-read from it. Scenes that already have shots keep them when their heading
@@ -652,6 +724,8 @@ export class Productions {
   // With sketch, the new shots' storyboard stills are queued before the breakdown counts as done.
   async runBreakdown(id, sceneIds, { sketch = false } = {}) {
     const cpu = await this.studio().gpuBusy().catch(() => false)
+    // everyone gets an outfit before the first prompt is written (one the person typed is kept)
+    await this.writeOutfits(id, { cpu }).catch(() => null)
     for (const sid of sceneIds) {
       const p = this.get(id)
       const sc = p.scenes.find((s) => s.id === sid)
@@ -687,6 +761,12 @@ export class Productions {
       if (plan) out.shots = out.shots.slice(0, plan.shots.length)
       const sceneNo = p.scenes.findIndex((s) => s.id === sid) + 1
       if (!out.shots.length) throw new Error(`The writer gave no shots for scene ${sceneNo}. Try again, or pick another writer in Settings → Prompt writer.`)
+      const seenEnds = new Set()
+      for (const s of out.shots) {
+        const e = String(s.ends || '').trim().toLowerCase().replace(/\s+/g, ' ')
+        if (e && seenEnds.has(e)) s.ends = ''
+        else if (e) seenEnds.add(e)
+      }
       const shots = (out.shots || []).map((s, k) => ({
         id: id6(),
         action: String(s.action || '').trim(),
@@ -747,6 +827,17 @@ export class Productions {
   madeUp(p, name) {
     return (p.cast || []).find((c) => !c.characterId && first(c.as) === first(name)) || null
   }
+  // What someone wears in this film (their cast entry's outfit, found by role or by the preset's name), or ''.
+  outfitOf(p, name) {
+    if (!name) return ''
+    const c = (p.cast || []).find((x) => first(x.as) === first(name) || (x.characterId && first(this.character(x.characterId)?.name) === first(name)))
+    return String(c?.outfit || '').trim()
+  }
+  // [name, outfit] for each named person who has one, without repeats.
+  outfitsFor(p, names) {
+    const seen = new Set()
+    return names.filter(Boolean).map((n) => [n, this.outfitOf(p, n)]).filter(([n, o]) => o && !seen.has(first(n)) && seen.add(first(n)))
+  }
   // Everyone a set of shots shows or hears who no character preset plays: the people to draw faces for.
   madeUpRoles(p, shots) {
     const presets = this.studio().characters()
@@ -791,6 +882,8 @@ export class Productions {
       sh.continues && before ? 'This carries straight on from the previous shot as one unbroken take: no cut, the same camera.' : '',
       before?.ends ? `It opens as the previous shot ended: ${dot(before.ends)}` : '',
       looks.length ? looks.map((c) => `${c.as}: ${dot(c.description)}`).join(' ') : '',
+      // what each person wears, the same in every shot of the film (the clothes changed from shot to shot, GitHub #37)
+      ...this.outfitsFor(p, [sh.speaker, ...sh.characters, this.character(sh.character)?.name]).map(([n, o]) => `${n} wears ${o.replace(/[.\s]+$/, '')}, exactly the same as in every other shot.`),
       sh.action,
       sh.staging ? `Staging: ${dot(sh.staging)}` : '',
       sh.camera ? `Camera: ${sh.camera}.` : '',
@@ -811,7 +904,7 @@ export class Productions {
     const prompt = oneTake(withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line))
     this.patch(id, (q) => {
       const t = q.scenes.find((s) => s.id === sceneId)?.shots.find((s) => s.id === shotId)
-      if (t) (remember(t, 'written again'), (t.prompt = prompt))
+      if (t) (remember(t, 'written again'), (t.prompt = prompt), delete t.outfitStale)
     })
     return prompt
   }
@@ -882,10 +975,16 @@ export class Productions {
     if (!sc) throw new Error('No such scene.')
     const i = p.scenes.indexOf(sc)
     const shots = sc.shots.map((sh, j) => ({ name: `${i + 1}.${j + 1}`, prompt: sh.prompt, action: sh.action, staging: sh.staging, ends: sh.ends }))
-    const issues = await continuityCheck(this.writer(), { scene: sc.heading || sc.location || '', look: lookWords(p.look), shots, cpu: await this.studio().gpuBusy().catch(() => false) })
+    // the shots' current sketches, as pictures (Claude Code and Codex see up to 12, the local writer 6)
+    const sees = await writerSees(this.writer())
+    const drawn = sees ? sc.shots.map((sh, j) => ({ shot: `${i + 1}.${j + 1}`, file: sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null })).filter((x) => x.file) : []
+    const cap = isHarness(this.writer()?.engine) ? 12 : 6
+    const sketches = []
+    for (const x of drawn.slice(0, cap)) sketches.push({ shot: x.shot, data: await jpegOf({ file: x.file }) })
+    const issues = await continuityCheck(this.writer(), { scene: sc.heading || sc.location || '', look: lookWords(p.look), shots, cpu: await this.studio().gpuBusy().catch(() => false), sketches })
     this.patch(id, (q) => {
       const t = q.scenes.find((s) => s.id === sceneId)
-      if (t) t.continuity = { issues, at: now(), writer: this.writer()?.engine || 'local' }
+      if (t) t.continuity = { issues, at: now(), writer: this.writer()?.engine || 'local', sketches: sketches.length, sketchesDrawn: drawn.length }
     })
     return issues
   }
@@ -1027,7 +1126,7 @@ export class Productions {
         const place = placePicture(loc, sh)
         const refs = editor ? [...people.map((x) => x.face), place].filter(Boolean) : []
         const prompt =
-          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name), staging: sh.staging }) +
+          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name), staging: sh.staging, outfits: this.outfitsFor(p, [...people.map((x) => x.ch.name), sh.speaker, ...(sh.characters || [])]) }) +
           (place && refs.length ? ` The place looks like picture ${refs.length}.` : '')
         const fam = refs.length ? editor : drawer
         const rec = await images.create({ mode: refs.length ? 'edit' : 'generate', model: fam.models[0], prompt, aspect: p.aspect, megapixels: 0.5, count: 1, refs, keepAspect: true, name: `${p.name} · ${sc.location || 'scene'} · ${i + 1}`, tag: `film:${p.id}` })
@@ -1070,7 +1169,7 @@ export class Productions {
     const p = this.get(id)
     const entry = this.madeUp(p, role) || { as: role, characterId: null, description: '', face: null }
     if (entry.face && fs.existsSync(entry.face) && !again) return entry
-    const rec = await images.create({ mode: 'generate', model: drawer.models[0], prompt: facePrompt({ role: entry.as, description: entry.description, look: p.look?.notes }), aspect: '3:4', megapixels: 0.5, count: 1, seed: again ? Math.floor(Math.random() * 1e9) : null, name: `${p.name} · ${entry.as}`, tag: `film:${p.id}` })
+    const rec = await images.create({ mode: 'generate', model: drawer.models[0], prompt: facePrompt({ role: entry.as, description: entry.description, look: p.look?.notes, outfit: entry.outfit }), aspect: '3:4', megapixels: 0.5, count: 1, seed: again ? Math.floor(Math.random() * 1e9) : null, name: `${p.name} · ${entry.as}`, tag: `film:${p.id}` })
     const face = await this.picture(images, rec, 'face')
     const q = this.patch(id, (x) => {
       const old = this.madeUp(x, role)
@@ -1222,7 +1321,7 @@ export class Productions {
     const job = await studio.generatePreviews({
       projectId,
       mode: reference ? 'reference' : sketch ? 'frames' : 'text',
-      prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null, outside: isOutside(sc) }) : sketch ? asFirstFrame(said) : said,
+      prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), outfits: Object.fromEntries(others.map((x) => [first(x.ch.name), this.outfitOf(p, x.ch.name)])), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null, outside: isOutside(sc) }) : sketch ? asFirstFrame(said) : said,
       media: reference
         ? [...(sketch ? [{ kind: 'picture', file: sketch }] : []), ...(room ? [{ kind: 'picture', file: room }] : []), ...others.map((x) => ({ kind: 'picture', file: x.face })), ...(clip ? [{ kind: 'video', file: clip.file, hasAudio: false }] : [])]
         : sketch

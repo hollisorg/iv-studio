@@ -680,11 +680,13 @@ export function salvageJson(text) {
 // (Projects' scene breakdown uses it). Unloads afterwards like every write. An unreadable answer is asked for once
 // more, cooler; with salvage, a second answer that was cut off keeps what it finished (salvageJson) instead of
 // failing (GitHub #27: long scenes of a 5-minute film).
-export async function ollamaJson({ system, user, schema, model, cpu = false, ctx = 16384, temperature = 0.5, maxTokens = 8000, salvage = false }) {
-  const { name } = await localWriterModel(model)
+// images: base64 JPEGs, shown only to a model that sees pictures.
+export async function ollamaJson({ system, user, schema, model, cpu = false, ctx = 16384, temperature = 0.5, maxTokens = 8000, salvage = false, images = [] }) {
+  const { name, vision } = await localWriterModel(model)
+  const message = { role: 'user', content: user, ...(images.length && vision ? { images } : {}) }
   let last = ''
   for (let i = 0; i < 2; i++) {
-    last = await localChat({ model: name, system, messages: [{ role: 'user', content: user }], schema, temperature: i ? Math.min(temperature, 0.3) : temperature, ctx, maxTokens, cpu, timeoutMs: 900000, raw: true })
+    last = await localChat({ model: name, system, messages: [message], schema, temperature: i ? Math.min(temperature, 0.3) : temperature, ctx, maxTokens, cpu, timeoutMs: 900000, raw: true })
     try {
       return parseJson(last)
     } catch {}

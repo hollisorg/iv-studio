@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     setPrompt: call('productions:setPrompt'),
     restorePrompt: call('productions:restorePrompt'),
     continuity: call('productions:continuity'),
+    writeOutfits: call('productions:writeOutfits'),
+    rewriteOutfitShots: call('productions:rewriteOutfitShots'),
     shotList: call('productions:shotList'),
     list: call('productions:list'),
     get: call('productions:get'),

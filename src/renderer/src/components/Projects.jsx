@@ -507,9 +507,18 @@ function Cast({ v, act, characters, notify, go, setStep }) {
   // a speaker no character plays gets a face drawn for this film (kept with its description); anyone else is taken out
   const castRole = (role, characterId) => {
     const old = madeUp(role)
-    const drawn = { as: role, characterId: null, description: old?.description || '', face: old?.face || null }
-    save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), ...(characterId ? [{ characterId, as: role }] : speakers.includes(role) ? [drawn] : [])] })
+    // their outfit stays with the role whoever plays it
+    const wears = playedBy(role)?.outfit ? { outfit: playedBy(role).outfit } : {}
+    const drawn = { as: role, characterId: null, description: old?.description || '', face: old?.face || null, ...wears }
+    save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), ...(characterId ? [{ characterId, as: role, ...wears }] : speakers.includes(role) ? [drawn] : [])] })
   }
+  // what someone wears in this film: in every sketch and shot of them (the clothes changed from shot to shot, GitHub #37)
+  const setOutfit = (role, outfit) => {
+    const c = playedBy(role)
+    const entry = c ? { ...c, outfit } : { as: role, characterId: null, description: '', face: null, outfit }
+    save({ cast: [...v.cast.filter((x) => first(x.as) !== first(role)), entry] }, outfit ? `${role}'s outfit is saved. Their sketches are marked to redraw.` : undefined)
+  }
+  const outfitStale = v.scenes.flatMap((s) => s.shots).filter((sh) => sh.outfitStale).length
   const setMade = (role, patch) => save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), { as: role, characterId: null, description: '', face: null, ...madeUp(role), ...patch }] })
   const [drawing, setDrawing] = useState('')
   const draw = (key, fn, ok) => async () => (setDrawing(key), await act(fn, ok), setDrawing(''))
@@ -546,6 +555,22 @@ function Cast({ v, act, characters, notify, go, setStep }) {
         .
       </p>
       {!roles.length && <p className="dim small">No one speaks in the script yet. Add anyone who appears below.</p>}
+      {roles.length > 0 && (
+        <div className="wiz-outfits">
+          <span className="small dim">An outfit keeps the same clothes in every sketch and shot. The storyboard writes any that are empty.</span>
+          <button className="btn btn-small" disabled={!!drawing} onClick={draw('outfits', () => P().writeOutfits(v.id, { redo: false }), 'Outfits written from the script.')}>
+            {drawing === 'outfits' ? 'Writing…' : 'Write outfits from the script'}
+          </button>
+          {outfitStale > 0 && (
+            <span className="wiz-outfits-stale small">
+              {outfitStale === 1 ? 'One shot was' : `${outfitStale} shots were`} written before an outfit changed.{' '}
+              <button className="link-btn mono small" disabled={!!drawing} onClick={draw('rewrite', () => P().rewriteOutfitShots(v.id), 'Their prompts are written with the new outfits.')}>
+                {drawing === 'rewrite' ? 'Writing…' : 'Write their prompts again'}
+              </button>
+            </span>
+          )}
+        </div>
+      )}
       <div className="wiz-cast">
         {roles.map((role) => {
           const c = playedBy(role)
@@ -567,7 +592,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
               {ch && !ch.voiceId && <span className="mono small dim">No voice yet: H3 gives them one.</span>}
               {!ch && (speakers.includes(role) || made) && (
                 <>
-                  <textarea rows={2} key={`d${made?.description || ''}`} defaultValue={made?.description || ''} placeholder="What do they look like? Age, hair, clothes." aria-label={`What ${role} looks like`} onBlur={(e) => e.target.value !== (made?.description || '') && setMade(role, { description: e.target.value })} />
+                  <textarea rows={2} key={`d${made?.description || ''}`} defaultValue={made?.description || ''} placeholder="What do they look like? Age, face, hair." aria-label={`What ${role} looks like`} onBlur={(e) => e.target.value !== (made?.description || '') && setMade(role, { description: e.target.value })} />
                   <span className="wiz-role-acts">
                     <button className="link-btn mono small" disabled={!!drawing} onClick={draw(role, () => P().drawFace(v.id, role, { again: !!made?.face }), `${role}'s face is drawn. Their sketches are marked to redraw.`)}>
                       {drawing === role ? 'Drawing…' : made?.face ? 'Draw a new face' : 'Draw their face now'}
@@ -578,6 +603,12 @@ function Cast({ v, act, characters, notify, go, setStep }) {
                   </span>
                   {!made?.face && drawing !== role && <span className="mono small dim">Or it's drawn when the storyboard is sketched. A picture of just their face works best.</span>}
                 </>
+              )}
+              {(ch || speakers.includes(role) || made) && (
+                <label className="wiz-role-outfit">
+                  <span className="mono small dim">Wears</span>
+                  <textarea rows={2} key={`o${c?.outfit || ''}`} defaultValue={c?.outfit || ''} placeholder="e.g. a dark green button-up shirt, grey jeans, a black watch" aria-label={`What ${role} wears`} onBlur={(e) => e.target.value.trim() !== (c?.outfit || '') && setOutfit(role, e.target.value.trim())} />
+                </label>
               )}
             </div>
           )

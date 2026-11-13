@@ -15,16 +15,23 @@ import { isHarness } from './harness.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { harnessJson } from './harness.js'
-import { ollamaJson } from './prompter.js'
+import { localWriterModel, ollamaJson } from './prompter.js'
 
 // ---------- the writer ----------
 // writer: { engine, model } from writerOf (paths.js). Claude Code and Codex answer through harness.js; anything else
 // (the local writer in Ollama or on an OpenAI-compatible server; Context IR, which only writes H3 prompts) through
 // the local writer. Returns the parsed JSON object of `schema`'s shape.
-export async function askWriter(writer, { system, user, schema, cpu = false, temperature = 0.5, ctx = 16384, timeoutMs = 600000, maxTokens, salvage = false }) {
+// images: [{ name, data }] (base64 JPEGs): Claude Code and Codex get them as files, the local writer only if it sees pictures.
+export async function askWriter(writer, { system, user, schema, cpu = false, temperature = 0.5, ctx = 16384, timeoutMs = 600000, maxTokens, salvage = false, images = [] }) {
   const w = writer || { engine: 'local' }
-  if (isHarness(w.engine)) return harnessJson({ engine: w.engine, model: w.model, system, user: `${user}\n\nAnswer with the JSON object only.`, schema, timeoutMs })
-  return ollamaJson({ system, user, schema, model: w.engine === 'local' ? w.model || undefined : undefined, cpu, temperature, ctx, salvage, ...(maxTokens ? { maxTokens } : {}) })
+  if (isHarness(w.engine)) return harnessJson({ engine: w.engine, model: w.model, system, user: `${user}\n\nAnswer with the JSON object only.`, schema, images, timeoutMs })
+  return ollamaJson({ system, user, schema, model: w.engine === 'local' ? w.model || undefined : undefined, cpu, temperature, ctx, salvage, images: images.map((im) => im.data), ...(maxTokens ? { maxTokens } : {}) })
+}
+// Whether the chosen writer can look at pictures (Claude Code, Codex and Hermes can; the local one if its model does).
+export async function writerSees(writer) {
+  const w = writer || { engine: 'local' }
+  if (isHarness(w.engine)) return true
+  return localWriterModel(w.engine === 'local' ? w.model || undefined : undefined).then((m) => !!m.vision, () => false)
 }
 export const writerName = (w) => ({ claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes' })[w?.engine] || (w?.provider === 'openai' ? 'the OpenAI-compatible writer' : 'the local writer')
 
@@ -167,12 +174,18 @@ export async function promptVariants(writer, { prompt, context = {}, cpu = false
 // ---------- continuity ----------
 const CONTINUITY_SCHEMA = { type: 'object', properties: { issues: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string', enum: ['error', 'warn'] }, shots: { type: 'array', items: { type: 'string' } }, issue: { type: 'string' }, fix: { type: 'string' } }, required: ['severity', 'shots', 'issue', 'fix'] } } }, required: ['issues'] }
 // shots: [{ name, prompt, action?, staging?, ends? }] in order. Returns [{ severity, shots: [names], issue, fix }].
-export async function continuityCheck(writer, { scene = '', look = '', shots = [], cpu = false }) {
+// sketches: [{ shot, data }] (base64 JPEGs of the shots' storyboard sketches), looked at as well when the writer
+// sees pictures: a backwards phone or a changed shirt is in the picture, not the words (GitHub #37).
+export async function continuityCheck(writer, { scene = '', look = '', shots = [], cpu = false, sketches = [] }) {
   const list = shots.filter((s) => String(s.prompt || s.action || '').trim())
   if (list.length < 2) throw new Error('A continuity check needs at least two shots with prompts.')
+  const images = sketches.map((s) => ({ name: `sketch-${s.shot}.jpg`, data: s.data }))
+  const eyes = images.length
+    ? `\n\nThe storyboard sketches of these shots are attached as pictures named sketch-<shot>.jpg${writer?.engine === 'claude' ? ' in your working folder: open each one with the Read tool' : ''}. Look at them too, and report what they show wrong, naming the shot: a person whose face, hair, age or clothes differ between sketches or from the words; a phone, screen, book or sign facing the wrong way (a screen faces the person using it); a prop in the wrong hand or that appears or vanishes; a person standing inside a wall, a table or furniture, or a body that's physically wrong; the place or light changing. A sketch's mistake carries into its video, so its fix is "redraw the sketch" or which words to change.`
+    : ''
   const system = `You are a film's script supervisor. You read every shot prompt of one scene, in order, and find continuity mistakes between them: a person's look, hair, age or wardrobe that changes; props that appear, vanish or move between hands; the light, time of day or weather that changes; the place that changes; screen sides and eyelines that flip (someone on the left in one shot on the right in the next without moving); where one shot ends against where the next begins. Report only real mismatches, most serious first, each with a concrete fix (which words to change in which shot). "error" breaks the cut; "warn" is likely to be noticed. An empty list when it's clean.`
-  const user = [scene && `Scene: ${scene}`, look && `Look: ${look}`, '', ...list.map((s) => `--- ${s.name} ---\n${[s.prompt || s.action, s.staging && `Staging: ${s.staging}`, s.ends && `Ends: ${s.ends}`].filter(Boolean).join('\n')}`)].filter((l) => typeof l === 'string').join('\n')
-  const out = await askWriter(writer, { system, user, schema: CONTINUITY_SCHEMA, cpu, temperature: 0.2, ctx: 24576 })
+  const user = [scene && `Scene: ${scene}`, look && `Look: ${look}`, '', ...list.map((s) => `--- ${s.name} ---\n${[s.prompt || s.action, s.staging && `Staging: ${s.staging}`, s.ends && `Ends: ${s.ends}`].filter(Boolean).join('\n')}`)].filter((l) => typeof l === 'string').join('\n') + eyes
+  const out = await askWriter(writer, { system, user, schema: CONTINUITY_SCHEMA, cpu, temperature: 0.2, ctx: 24576, images })
   const names = new Set(list.map((s) => s.name))
   return (out?.issues || [])
     .map((i) => ({ severity: i.severity === 'error' ? 'error' : 'warn', shots: (i.shots || []).map(String).filter((n) => names.has(n) || /\d/.test(n)), issue: String(i.issue || '').trim(), fix: String(i.fix || '').trim() }))

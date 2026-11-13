@@ -319,4 +319,38 @@ ok('#27: every line of the script ends up in a shot; a line the writer left out 
   // a plan with no shots at all gets one shot per line
   assert.equal(keepLines([], script).shots.length, 3)
 })
+
+// ---------- outfits (GitHub #37: the clothes changed from shot to shot) ----------
+ok('an outfit goes into the sketch, the drawn face and the H3 references', () => {
+  const s = sketchPrompt({ action: 'Tom reads his phone.', camera: 'Close-up', faces: ['Tom'], outfits: [['Tom', 'a dark green button-up shirt.']] })
+  assert.match(s, /keep their face\. Tom wears a dark green button-up shirt\. Tom reads his phone\./)
+  assert.ok(!sketchPrompt({ action: 'A.', faces: ['Tom'] }).includes('wears'), 'no outfit, no words')
+  assert.match(facePrompt({ role: 'Tom', description: 'thirties, curly brown hair', outfit: 'a dark green button-up shirt' }), /curly brown hair\. .*Wearing a dark green button-up shirt\./)
+  const r = withRoom(asFirstFrame(P), { place: 'Ramen bar', people: ['Tom'], outfits: { tom: 'a dark green button-up shirt.' } })
+  assert.match(r, /Tom's face and hair, and Tom wears a dark green button-up shirt throughout; pose, light and background follow the shot, and the picture itself never appears as a frame\./)
+  assert.match(withRoom(asFirstFrame(P), { place: 'Ramen bar', people: ['Tom'] }), /Tom's face and hair only; pose, clothes, light and background follow the shot/, 'without an outfit, as before')
+})
+ok('an outfit is kept on the cast, found by role or preset name, and changing it marks that person\'s shots', () => {
+  const dir = tmp()
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [{ id: 'tess', name: 'Tess Marlow' }] }) })
+  const p = films.create({ name: 'Outfits' })
+  films.patch(p.id, (q) => (q.scenes = [{ id: 's1', shots: [
+    { id: 'a', speaker: 'TOM', characters: ['TOM'], sketch: 'x.png', prompt: 'p' },
+    { id: 'b', speaker: '', characters: ['Tess'], character: 'tess', sketch: 'y.png', prompt: 'p' },
+    { id: 'c', speaker: '', characters: [], prompt: 'p' }
+  ] }]))
+  films.update(p.id, { cast: [{ characterId: 'tess', as: 'Tess', outfit: '  a yellow raincoat ' }, { characterId: null, as: 'Tom', description: '', face: null }] })
+  let q = films.get(p.id)
+  assert.equal(q.cast[0].outfit, 'a yellow raincoat', 'trimmed and kept on a played role')
+  assert.equal(films.outfitOf(q, 'Tess Marlow'), 'a yellow raincoat', 'found by the preset\'s name too')
+  assert.equal(films.outfitOf(q, 'TOM'), '')
+  assert.ok(films.find(q, 'b').sh.sketchStale && films.find(q, 'b').sh.outfitStale, 'Tess\'s shot was written for no outfit')
+  assert.ok(!films.find(q, 'a').sh.sketchStale && !films.find(q, 'c').sh.outfitStale, 'the others are untouched')
+  films.update(p.id, { cast: [q.cast[0], { ...q.cast[1], outfit: 'a dark green button-up shirt' }] })
+  q = films.get(p.id)
+  assert.ok(films.find(q, 'a').sh.sketchStale && films.find(q, 'a').sh.outfitStale, 'Tom\'s outfit marks Tom\'s shot')
+  assert.deepEqual(films.outfitsFor(q, ['TOM', 'Tom', 'Tess', 'Nobody']), [['TOM', 'a dark green button-up shirt'], ['Tess', 'a yellow raincoat']], 'once each, only people with one')
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 console.log(`${n} checks passed`)

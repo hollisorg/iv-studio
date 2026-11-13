@@ -16690,3 +16690,26 @@ html.chat-window body {
 .cast-note {
   margin-top: 8px;
 }
+
+/* Projects: outfits on Cast and places (GitHub #37) */
+.wiz-outfits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 12px;
+}
+.wiz-outfits-stale {
+  flex-basis: 100%;
+  color: var(--paper);
+}
+.wiz-role-outfit {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+}
+.wiz-role-outfit textarea {
+  width: 100%;
+  font-size: 13px;
+}

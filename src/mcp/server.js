@@ -710,7 +710,7 @@ tool('create_film', `Start a short-film project. script (optional) is screenplay
   script: z.string().optional()
 }, (args) => films.create(args))
 tool('get_film', 'A short-film project with its brief, cast, locations, props, look, scenes and every shot (what we see, camera, speaker and line, seconds, prompt, character) and where each shot is: state.status draft, ready, rendering, pick (previews to choose from, in state.candidates), finishing, finished (state.final) or error. Totals add it up.', { filmId: z.string() }, ({ filmId }) => films.view(filmId))
-tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}] (a made-up person no preset plays is {characterId: null, as, description, face}), locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole. ${LIVE_FILM}`, {
+tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as, outfit}] (a made-up person no preset plays is {characterId: null, as, description, face, outfit}; outfit is what they wear in every sketch and shot of the film, and changing it marks their sketches to redraw and their prompts to write again), locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole. ${LIVE_FILM}`, {
   filmId: z.string(),
   name: z.string().optional(),
   logline: z.string().optional(),
@@ -718,7 +718,7 @@ tool('update_film', `Change a film's brief or assets: name, logline, aspect, tar
   targetSeconds: z.number().min(10).max(3600).optional(),
   step: z.enum(['idea', 'story', 'cast', 'board', 'film', 'watch']).optional().describe('The wizard step the person sees'),
   look: z.object({ notes: z.string().optional(), loras: z.array(z.object({ name: z.string(), strength: z.number() })).optional() }).optional(),
-  cast: z.array(z.object({ characterId: z.string().nullable(), as: z.string().optional(), description: z.string().optional(), face: z.string().nullable().optional() })).optional(),
+  cast: z.array(z.object({ characterId: z.string().nullable(), as: z.string().optional(), description: z.string().optional(), face: z.string().nullable().optional(), outfit: z.string().optional().describe('What they wear in this film: garments, colours, materials') })).optional(),
   locations: z.array(z.object({ id: z.string().optional(), name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional(),
   props: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional()
 }, ({ filmId, ...patch }) => films.update(filmId, patch))
@@ -801,7 +801,12 @@ tool('restore_film_shot_prompt', "Put back a prompt from a Projects shot's histo
   shotId: z.string(),
   index: z.number().int().min(0).default(0)
 }, ({ filmId, sceneId, shotId, index }) => films.restoreShotPrompt(filmId, sceneId, shotId, index))
-tool('check_film_continuity', "A script supervisor's read of one scene's shot prompts, with the writer chosen in Settings: a person's look or wardrobe, props, light, time of day, weather, place, screen sides and eyelines, and where each shot ends against where the next begins. Returns issues with a concrete fix each; kept on the scene.", {
+tool('write_film_outfits', "The writer chosen in Settings, as the film's costume designer, gives everyone in the cast one outfit for the film from the script (garments, colours, materials), so the same clothes are drawn in every sketch and filmed in every shot. Fills only empty outfits unless redo. The storyboard does this by itself before writing prompts. With rewritePrompts, shots written before an outfit changed are written again with it (about a minute each with the local writer).", {
+  filmId: z.string(),
+  redo: z.boolean().default(false),
+  rewritePrompts: z.boolean().default(false)
+}, async ({ filmId, redo, rewritePrompts }) => ({ ...(await films.writeOutfits(filmId, { redo })), ...(rewritePrompts ? await films.rewriteOutfitShots(filmId) : {}) }))
+tool('check_film_continuity', "A script supervisor's read of one scene's shot prompts, with the writer chosen in Settings: a person's look or wardrobe, props, light, time of day, weather, place, screen sides and eyelines, and where each shot ends against where the next begins. When the writer sees pictures it also looks at the shots' storyboard sketches (a changed shirt, a phone facing the wrong way, someone inside a table). Returns issues with a concrete fix each; kept on the scene.", {
   filmId: z.string(),
   sceneId: z.string()
 }, async ({ filmId, sceneId }) => ({ issues: await films.checkContinuity(filmId, sceneId) }))
