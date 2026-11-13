@@ -2,6 +2,16 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.11',
+    items: [
+      { text: 'LTX 2.5, a second video model on your PC: pick it in Create → Video beside MiniMax H3. Quick takes with sound, good for cartoons and animation, from words or a first frame, 2 to 20 seconds.' },
+      { text: 'Refine faces: Enhance on a finished shot redraws small faces at full size, matched to the character.' },
+      { text: 'Projects: each film picks its video model, picture model and speed, every shot keeps a seed, and Open in Create gives a film shot every one of Create’s controls (its takes come back to the storyboard).' },
+      { text: 'Projects: outfits keep the same clothes in every sketch and shot, and Check continuity looks at the sketches too.' },
+      { text: 'Fixed: DLSS 5 finishes failing with “Could not find VE_CLI.exe”. Install missing node packs now downloads its runtime.' }
+    ]
+  },
+  {
     version: '1.1.10',
     items: [
       { text: 'ChatGPT Images in Create → Image: if Codex is installed and signed in to ChatGPT, pick ChatGPT Images beside your ComfyUI models. It makes pictures from a prompt or edits one (up to four pictures), in any shape, on your own ChatGPT plan, even with ComfyUI off.' },
