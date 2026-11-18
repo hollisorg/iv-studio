@@ -116,3 +116,16 @@ flashes (photosensitive safety), and Cloud is dreamy, not stormy.
   `Stage.jsx`): it pauses off screen and in a hidden window and holds still under Reduce motion. Every banner was
   measured against the WCAG 2.3.1 flash threshold (a 0.10 relative-luminance swing within half a second, in
   341 x 256 px patches): all 23 stay under 0.07.
+
+## Music video and Keyframes cards (2026-11-18)
+
+The Workflows page's Music video and Keyframes cards get their own pictures, in the same recipe as the other cards.
+
+- ChatGPT image generation through the Codex CLI (codex-images.ps1), the card prompt the others used, no text.
+- Music video: a vintage stage microphone whose cable unspools into a filmstrip rippling with sound-wave lines.
+  References: the Shinobi card and the Music banner. Keyframes: three blank photograph prints with one ribbon of film
+  running through them, motion swirls between. References: the Reel card and the Sequences banner.
+- Two of each were drawn; Music video A and Keyframes B were picked (Matthew: "Use your picks").
+- The app copies are `assets/workflows/musicvideo.webp` and `keyframes.webp`, 800 x 533, WebP quality 80. The
+  1536 x 1024 masters, the prompts (`jobs.json`) and the review sheet are in `D:\H3Characters\_art\workflows-20261118`.
+
