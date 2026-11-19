@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.22',
+    items: [
+      { text: 'Refine faces keeps the face steady: with the H3 FaceRefine Plus node pack, the redrawn face no longer slides on the head, and it stays in the shot’s colours. On our test shots the wobble dropped by a third to more than half, and the finish takes seconds instead of minutes.' },
+      { text: 'Settings → Setup offers H3 FaceRefine Plus under Node packs: Install missing node packs, then restart ComfyUI. Without it, Refine faces works as before.' }
+    ]
+  },
+  {
     version: '1.1.21',
     items: [
       { text: 'Fixed: Qwen Image 2.1 failed with “normalized_shape=[4096] … got … 2560” when the only Qwen3-VL text encoder in ComfyUI was one sold as 8B that is really the 4B (GitHub #46). IV Studio now uses only ComfyUI’s own qwen3vl_8b_int8_convrot and offers to download it.' },
