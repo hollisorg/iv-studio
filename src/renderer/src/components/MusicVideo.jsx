@@ -245,9 +245,11 @@ function Editor({ id, back, notify, characters = [], jobs: live = {}, openEdit }
     <div className="musicvideo mv-editor flow-page">
       <audio ref={audio} src={fileUrl(v.song.file)} preload="auto" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
       <header className="mv-top">
-        <button className="link-btn mono small mv-back" onClick={back}>
-          ← Music videos
-        </button>
+        <div className="mv-back-row">
+          <button className="link-btn mono small mv-back" onClick={back}>
+            ← Music videos
+          </button>
+        </div>
         <div className="mv-title">
           <h1>{v.name}</h1>
           <span className="mono small dim">

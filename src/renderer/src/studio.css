@@ -17080,8 +17080,11 @@ html.chat-window body {
   padding: 0 0 16px;
   border-bottom: 1px solid var(--line);
 }
-.mv-back {
+/* the back link has a row of its own, but the button (and its hover underline) is only as wide as its words */
+.mv-back-row {
   flex-basis: 100%;
+}
+.mv-back {
   text-align: left;
 }
 .mv-title {

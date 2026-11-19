@@ -28,7 +28,8 @@ const CASES = [
   ['bad-input', 'VHS_LoadVideo: moov atom not found'],
   ['validation', 'prompt_outputs_failed_validation: Required input is missing: latent_image'],
   ['shape', 'KSampler: Sizes of tensors must match except in dimension 1. Expected size 64 but got size 60'],
-  ['shape', 'LoraLoader: size mismatch for diffusion_model.blocks.0.attn.weight']
+  ['shape', 'LoraLoader: size mismatch for diffusion_model.blocks.0.attn.weight'],
+  ['shape', 'KSampler: Given normalized_shape=[4096], expected input with shape [*, 4096], but got input of size[1, 17, 2560]']
 ]
 for (const [want, text] of CASES) check(`${want}: ${text.slice(0, 60)}`, id(text) === want)
 

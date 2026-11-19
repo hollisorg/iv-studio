@@ -103,7 +103,7 @@ export default function Replace({ notify, characters, replaceSeed, go }) {
     if (max === 1 && f.characterId) setCharacterId(f.characterId)
   }
 
-  async function go(kind) {
+  async function start(kind) {
     setBusy(kind === 'mask' ? 'Checking the mask' : 'Starting')
     try {
       const m = kind === 'mask' ? 'mask' : flowMode
@@ -370,11 +370,11 @@ export default function Replace({ notify, characters, replaceSeed, go }) {
       {!remake && (
       <div className="replace-go">
         {mode !== 'finish' && (
-          <button className="btn btn-small" disabled={!video || !check?.ready || !!busy || (mode === 'object' && !obj.target)} onClick={() => go('mask')}>
+          <button className="btn btn-small" disabled={!video || !check?.ready || !!busy || (mode === 'object' && !obj.target)} onClick={() => start('mask')}>
             Check the mask
           </button>
         )}
-        <button className="btn btn-primary" disabled={!can || !!busy} onClick={() => go('run')}>
+        <button className="btn btn-primary" disabled={!can || !!busy} onClick={() => start('run')}>
           {busy ? `${busy}…` : mode === 'finish' ? (finish === 'faces' ? 'Fix the faces' : 'Fix the colours') : 'Replace'}
         </button>
       </div>

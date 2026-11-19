@@ -151,9 +151,11 @@ function Editor({ id, back, notify, jobs: live = {}, openEdit }) {
   return (
     <div className="keyframes mv-editor flow-page">
       <header className="mv-top">
-        <button className="link-btn mono small mv-back" onClick={back}>
-          ← Keyframes
-        </button>
+        <div className="mv-back-row">
+          <button className="link-btn mono small mv-back" onClick={back}>
+            ← Keyframes
+          </button>
+        </div>
         <div className="mv-title">
           <h1>{v.name}</h1>
           <span className="mono small dim">

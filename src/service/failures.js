@@ -110,10 +110,10 @@ const RULES = [
   },
   {
     id: 'shape',
-    test: /sizes of tensors must match|shape mismatch|mat1 and mat2 shapes cannot be multiplied|expected .* channels|size mismatch for/i,
+    test: /sizes of tensors must match|shape mismatch|mat1 and mat2 shapes cannot be multiplied|expected .* channels|size mismatch for|normalized_shape/i,
     say: () => ({
       title: 'A model didn’t fit this render',
-      why: 'A LoRA or model made for a different model family was used here, so the pieces didn’t line up. Take the last LoRA you added off and try again.',
+      why: 'A LoRA, text encoder or model made for a different model family was used here, so the pieces didn’t line up. Take the last LoRA you added off and try again; if there is none, check the text encoder in Setup.',
       fixes: [{ id: 'try-again', label: 'Try again' }]
     })
   }

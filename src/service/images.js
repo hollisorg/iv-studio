@@ -136,7 +136,9 @@ export const IMAGE_FAMILIES = [
     id: 'qwen21',
     label: 'Qwen Image 2.1',
     unet: /qwen[-_ ]image[-_ ]2\.1/i,
-    te: { type: 'qwen_image', files: ['qwen3vl_8b_int8_convrot.safetensors', 'qwen3vl_8b_int8_uncensored.safetensors'] },
+    // only ComfyUI's own Qwen3-VL 8B: a file called qwen3vl_8b_int8_uncensored that goes round is really the 4B (2560
+    // wide), and Qwen Image 2.1 then fails in the sampler (GitHub #46)
+    te: { type: 'qwen_image', files: ['qwen3vl_8b_int8_convrot.safetensors'] },
     vae: ['qwen_image_2.1_vae_bf16.safetensors'],
     steps: 25,
     cfg: 1,
