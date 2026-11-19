@@ -16,24 +16,24 @@ import { comboOptions } from './setup.js'
 
 export const CIVITAI_SITES = { safe: 'https://civitai.com', mature: 'https://civitai.red' }
 export const LORA_BASE = 'MiniMax H3'
-// Every model family IV Studio runs, as Civitai names its base models (checked against civitai.com/api/v1 on
-// 2026-11-09), how its LoRAs on this PC are recognised when Civitai doesn't know them (the folder or file name;
+// Every model family IV Studio runs, as Civitai names its base models (checked against civitai.com/api/v1/enums on
+// 2026-11-19; a model's -base or Turbo sibling is listed too, since its LoRAs load on the model IV Studio runs), how its LoRAs on this PC are recognised when Civitai doesn't know them (the folder or file name;
 // the same patterns as images.js), and the folder a download goes to under loras/Civitai/. ids match images.js's
 // families, so Create -> Image's LoRA tray and the LoRAs page share them. Order matters for names: Flux 3 before
 // Flux.2, whose "klein" would catch it.
 export const LORA_FAMILIES = [
   // "H3 Image" names belong to H3 Image below, not to the video model
   { id: 'h3', label: 'MiniMax H3', kind: 'video', bases: ['MiniMax H3'], pattern: 'minimax[ _-]?h3(?![ _-]?image)|(^|[\\/_ -])h3(?![ _-]?image)([\\/_ -]|$)|mmh3|t3ss4', folder: 'MiniMax H3', uses: 'Shots, sequences, films and H3 stills' },
-  { id: 'h3image', label: 'MiniMax H3 Image', kind: 'image', bases: [], pattern: 'minimax[ _-]?h3[ _-]?image|(^|[\\/_ -])h3[ _-]?image', folder: 'MiniMax H3 Image', uses: 'Pictures: make and edit (Civitai has no H3 Image category yet; yours show under Yours)' },
+  { id: 'h3image', label: 'MiniMax H3 Image', kind: 'image', bases: ['MiniMax H3 Image'], pattern: 'minimax[ _-]?h3[ _-]?image|(^|[\\/_ -])h3[ _-]?image', folder: 'MiniMax H3 Image', uses: 'Pictures: make and edit' },
   { id: 'ltx', label: 'LTX-2.5', kind: 'video', bases: ['LTXV 2.5'], pattern: 'ltx[ _-]?(v|video)?[ _-]?2\\.?5', folder: 'LTX-2.5', uses: 'Your own ComfyUI workflows (IV Studio’s LTX effects bring their own LoRAs)' },
   { id: 'wan', label: 'Wan 2.1', kind: 'video', bases: ['Wan Video 14B i2v 480p', 'Wan Video 14B i2v 720p', 'Wan Video 14B t2v'], pattern: 'wan[ _-]?2\\.?1|wan_?14b', folder: 'Wan 2.1', uses: 'Your own ComfyUI workflows (the Effects gallery brings its own LoRAs)' },
-  { id: 'flux3', label: 'Flux 3 Klein', kind: 'image', bases: ['Flux.3 Klein'], pattern: 'flux ?\\.?3', folder: 'Flux 3 Klein', uses: 'Pictures: make and edit, inpaint' },
-  { id: 'flux2', label: 'Flux.2 Klein 9B', kind: 'image', bases: ['Flux.2 Klein 9B'], pattern: 'flux ?\\.?2|klein|klien', folder: 'Flux.2 Klein', uses: 'Pictures: make and edit' },
-  { id: 'krea2', label: 'Krea 2', kind: 'image', bases: ['Krea 2'], pattern: 'krea', folder: 'Krea 2', uses: 'Pictures: make and edit' },
+  { id: 'flux3', label: 'Flux 3 Klein', kind: 'image', bases: ['Flux.3 Klein', 'Flux.3 Klein-base'], pattern: 'flux ?\\.?3', folder: 'Flux 3 Klein', uses: 'Pictures: make and edit, inpaint' },
+  { id: 'flux2', label: 'Flux.2 Klein 9B', kind: 'image', bases: ['Flux.2 Klein 9B', 'Flux.2 Klein 9B-base'], pattern: 'flux ?\\.?2|klein|klien', folder: 'Flux.2 Klein', uses: 'Pictures: make and edit' },
+  { id: 'krea2', label: 'Krea 2', kind: 'image', bases: ['Krea 2', 'Krea 2 Turbo'], pattern: 'krea', folder: 'Krea 2', uses: 'Pictures: make and edit' },
   { id: 'qwen21', label: 'Qwen Image 2.1', kind: 'image', bases: ['Qwen 2.1'], pattern: 'qwen[ _-]?(image[ _-]?)?2\\.1', folder: 'Qwen 2.1', uses: 'Pictures: make and edit, relight' },
-  { id: 'zimage', label: 'Z-Image Turbo', kind: 'image', bases: ['ZImageTurbo'], pattern: 'z[-_ ]?image|\\bzit\\b', folder: 'Z-Image', uses: 'Pictures: make, character design' },
-  { id: 'sdxl', label: 'SDXL', kind: 'image', bases: ['SDXL 1.0', 'Pony', 'Illustrious'], pattern: 'sdxl|\\bxl\\b|[-_]xl[-_.]|pony|illustrious|noob', folder: 'SDXL', uses: 'Pictures: make' },
-  { id: 'moss', label: 'Moss', kind: 'image', bases: [], pattern: 'moss', folder: 'Moss', uses: 'Pictures: make (Civitai has no Moss category; yours show under Yours)' }
+  { id: 'zimage', label: 'Z-Image Turbo', kind: 'image', bases: ['ZImageTurbo', 'ZImageBase'], pattern: 'z[-_ ]?image|\\bzit\\b', folder: 'Z-Image', uses: 'Pictures: make, character design' },
+  { id: 'sdxl', label: 'SDXL', kind: 'image', bases: ['SDXL 1.0', 'Pony', 'Illustrious', 'NoobAI'], pattern: 'sdxl|\\bxl\\b|[-_]xl[-_.]|pony|illustrious|noob', folder: 'SDXL', uses: 'Pictures: make' },
+  { id: 'moss', label: 'Moss', kind: 'image', bases: ['MOSS Image'], pattern: 'moss', folder: 'Moss', uses: 'Pictures: make' }
 ]
 const FAMILY_BY_BASE = new Map(LORA_FAMILIES.flatMap((f) => f.bases.map((b) => [b, f.id])))
 const ALL_BASES = LORA_FAMILIES.flatMap((f) => f.bases)

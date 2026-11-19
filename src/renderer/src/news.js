@@ -2,6 +2,16 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.21',
+    items: [
+      { text: 'Fixed: Qwen Image 2.1 failed with “normalized_shape=[4096] … got … 2560” when the only Qwen3-VL text encoder in ComfyUI was one sold as 8B that is really the 4B (GitHub #46). IV Studio now uses only ComfyUI’s own qwen3vl_8b_int8_convrot and offers to download it.' },
+      { text: 'Fixed: “← Workflows” on Replace showed “Cannot read properties of null (reading ‘path’)” instead of going back (GitHub #47).' },
+      { text: 'Fixed: the hover underline of “← Keyframes” (and “← Music videos”) ran the whole width of the window (GitHub #48).' },
+      { text: 'LoRAs from Civitai for every picture model: Moss and MiniMax H3 Image have their own Civitai categories now, and Flux.2 Klein, Flux 3 Klein, Krea 2, Z-Image and SDXL also show LoRAs made for their base, Turbo and NoobAI versions.' },
+      { text: 'Music video and Keyframes have their own pictures on the Workflows page.' }
+    ]
+  },
+  {
     version: '1.1.20',
     items: [
       { text: 'New: Keyframes (Workflows). Pictures in order become one video: one smooth take through up to six pictures, or a chain of moves that carries the motion from one to the next. Loop back to the first, then Make the edit.' },
