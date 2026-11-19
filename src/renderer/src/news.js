@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.23',
+    items: [
+      { text: 'Join The IV Newsletter from Settings → The IV Newsletter: one email a week from Matt about what’s new in the IV apps, how things are made, and free tools. Nothing is sent unless you type your email and press Join, Kit sends a confirm email first, and IV Studio doesn’t keep your address.' },
+      { text: 'New copies also offer it once at the end of the welcome setup, with Not now. Your projects, characters and settings are left exactly as they are.' }
+    ]
+  },
+  {
     version: '1.1.22',
     items: [
       { text: 'Refine faces keeps the face steady: with the H3 FaceRefine Plus node pack, the redrawn face no longer slides on the head, and it stays in the shot’s colours. On our test shots the wobble dropped by a third to more than half, and the finish takes seconds instead of minutes.' },
