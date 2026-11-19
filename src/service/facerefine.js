@@ -4,8 +4,16 @@
 // tracking, the per-frame strength and the stitch; IV Studio builds its graph on IV Studio's own H3 files.
 // Tested on a wide Tess shot (2026-11-13): likeness to her face picture went from 0.00 to 0.35 on a small face, 0.42
 // to 0.47 on a close one, in about 5 minutes for 124 frames with the model load.
+// The finish: AnniCodex's FaceRefine Plus (MIT), when it's installed, instead of the plain stitch: Stitch Plus (light
+// and colour from the shot, detail from the redraw), Flow Lock (pins the redrawn eyes and mouth to the head, frame by
+// frame, so the face doesn't slide) and Tone Match (colour and lips back to the shot). Measured 2026-11-19 on two
+// shots with this graph: wobble down 33% on a 49-64 px face and 58% on a 150-180 px one; likeness 3% lower on the
+// medium face (0.393 to 0.380) and 10% lower on the tiny one; sharper on the medium face; the finish took 17-20 s
+// against 26-231 s for the plain stitch. Its crop upscale (SR before the redraw) is left out: it only works on tiny
+// faces, and there it cost more likeness.
 
 export const FACE_NODES = ['H3FaceTrackCrop', 'H3FaceStitch', 'H3PerFrameDenoise', 'H3InjectVideoLatent']
+export const PLUS_NODES = ['H3FaceStitchPlus', 'H3FaceFlowLock', 'H3FaceToneMatch']
 export const FACE_DETECTOR = 'face_yolov8m.pt'
 export const FACE_TURBO = 'minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors'
 // how strongly the face is redrawn: H3's denoise, scaled down per frame for faces already big in the frame
@@ -29,8 +37,9 @@ export function facePromptFor({ who = '', picture = false } = {}) {
 
 // The ComfyUI graph. video: a path VHS_LoadVideoPath reads (or { cls, video } from Studio.videoSource); face: the
 // uploaded face picture's name in ComfyUI's input, or null (then the largest face is refined, with no reference);
-// lora: { name, strength } for the person's character LoRA, or null; strength: H3's denoise for small faces.
-export function faceRefineGraph({ video, face = null, lora = null, strength = FACE_STRENGTHS.normal, who = '', fps = 24, prefix = 'H3/enhanced/faces' }) {
+// lora: { name, strength } for the person's character LoRA, or null; strength: H3's denoise for small faces;
+// plus: finish with FaceRefine Plus (its nodes are in this ComfyUI) instead of the plain stitch.
+export function faceRefineGraph({ video, face = null, lora = null, strength = FACE_STRENGTHS.normal, who = '', fps = 24, prefix = 'H3/enhanced/faces', plus = false }) {
   const src = typeof video === 'string' ? { cls: 'VHS_LoadVideoPath', video } : video
   const model = lora ? 'lora' : 'turbo'
   return {
@@ -65,7 +74,13 @@ export function faceRefineGraph({ video, face = null, lora = null, strength = FA
     guider: { class_type: 'BasicGuider', inputs: { model: ['per', 2], conditioning: ['cond', 0] } },
     sample: { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['noise', 0], guider: ['guider', 0], sampler: ['sampler', 0], sigmas: ['sigmas', 0], latent_image: ['per', 0] } },
     decode: { class_type: 'VAEDecode', inputs: { samples: ['sample', 0], vae: ['vae', 0] } },
-    stitch: { class_type: 'H3FaceStitch', inputs: { base_images: ['load', 0], refined_crops: ['decode', 0], transform: ['track', 1], paste_region: 'face_only', mask_dilation: 24, feather: 24, colour_match: 1, blend: 1, undetected_frames: 'fade_out' } },
-    save: { class_type: 'VHS_VideoCombine', inputs: { images: ['stitch', 0], audio: ['load', 2], frame_rate: fps, loop_count: 0, filename_prefix: prefix, format: 'video/h264-mp4', pix_fmt: 'yuv420p', crf: 16, save_metadata: true, trim_to_audio: false, pingpong: false, save_output: true } }
+    ...(plus
+      ? {
+          stitch: { class_type: 'H3FaceStitchPlus', inputs: { base_images: ['load', 0], refined_crops: ['decode', 0], transform: ['track', 1], paste_region: 'face_only', mask_dilation: 24, feather: 24, tone_mode: 'freq_sep', lowpass_face_frac: 0.15, detail_gain: 1, blend: 1, undetected_frames: 'fade_out' } },
+          lock: { class_type: 'H3FaceFlowLock', inputs: { base_images: ['load', 0], refined_images: ['stitch', 0], sigma_frac: 1 / 150, threshold: 4, base_offset: 0 } },
+          tone: { class_type: 'H3FaceToneMatch', inputs: { source_images: ['load', 0], processed_images: ['lock', 0], sigma_luma_frac: 0.01, sigma_chroma_frac: 1 / 300, source_offset: 0, lip_fix: true, face_detector: FACE_DETECTOR } }
+        }
+      : { stitch: { class_type: 'H3FaceStitch', inputs: { base_images: ['load', 0], refined_crops: ['decode', 0], transform: ['track', 1], paste_region: 'face_only', mask_dilation: 24, feather: 24, colour_match: 1, blend: 1, undetected_frames: 'fade_out' } } }),
+    save: { class_type: 'VHS_VideoCombine', inputs: { images: [plus ? 'tone' : 'stitch', 0], audio: ['load', 2], frame_rate: fps, loop_count: 0, filename_prefix: prefix, format: 'video/h264-mp4', pix_fmt: 'yuv420p', crf: 16, save_metadata: true, trim_to_audio: false, pingpong: false, save_output: true } }
   }
 }

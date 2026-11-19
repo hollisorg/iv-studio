@@ -96,6 +96,7 @@ export const CREDITS = [
       { name: 'MiniMax H3 Context Loop', by: 'ethanfel', use: 'Replace and Reframe', url: 'https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop' },
       { name: 'H3 One-Click Swap', by: 'D3voz', use: 'Replace’s earlier engine', url: 'https://github.com/D3voz/comfyui-h3-oneclick-swap' },
       { name: 'H3 Face Refine', by: 'Carasibana', use: 'Refine faces (Enhance), and Replace: faces', licence: 'MIT', url: 'https://github.com/Carasibana/ComfyUI-H3-FaceRefine' },
+      { name: 'H3 FaceRefine Plus', by: 'AnniCodex', use: 'Refine faces: the finish that keeps the face steady and in the shot’s colours', licence: 'MIT', url: 'https://github.com/AnniCodex/ComfyUI-H3-FaceRefine-Plus' },
       { name: 'Image Detail Contrast', by: 'D3voz', use: 'Replace: finishing', url: 'https://github.com/D3voz/comfyui-image-detail-contrast' },
       { name: 'Orion4D FXMax', by: 'orion4d', use: 'Replace: colours', url: 'https://github.com/orion4d/Orion4D_FXMax' },
       { name: 'Spectrum for MiniMax H3', by: 'xmarre', use: 'Replace', url: 'https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3' },

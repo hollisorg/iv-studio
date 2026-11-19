@@ -27,7 +27,7 @@ import { infoFor, priceGraph } from './pricing.js'
 import { writeSeedance } from './seedwriter.js'
 import { REFINE_DEFAULTS, refineGraph } from './h3refine.js'
 import { explainFailure } from './failures.js'
-import { FACE_DETECTOR, FACE_NODES, FACE_STRENGTHS, FACE_TURBO, faceRefineGraph } from './facerefine.js'
+import { FACE_DETECTOR, FACE_NODES, FACE_STRENGTHS, FACE_TURBO, PLUS_NODES, faceRefineGraph } from './facerefine.js'
 import { LTX, LTX_FILES, ltxGraph, ltxTakes, planLtx, writeLtx } from './ltx.js'
 
 const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
@@ -947,9 +947,11 @@ export class Studio {
     const fps = source.plan?.resolved?.fps || 24
     const name = `${path.basename(out.path || 'final').replace(/\.[^.]+$/, '').replace(/-audio$/, '')}_faces`
     const src = await this.videoSource(this.comfy.ownCloud && out.url ? out : out.path)
-    const graph = faceRefineGraph({ video: src, face: faceName, lora, strength: s, who: character?.name?.split(/\s+/)[0] || '', fps, prefix: `H3/enhanced/${name}` })
+    // FaceRefine Plus's finish when its nodes are here (facerefine.js), else the plain stitch
+    const plus = PLUS_NODES.every((n) => info[n])
+    const graph = faceRefineGraph({ video: src, face: faceName, lora, strength: s, who: character?.name?.split(/\s+/)[0] || '', fps, prefix: `H3/enhanced/${name}`, plus })
     const project = source.projectId ? this.getProject(source.projectId) : null
-    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'faces', strength: s, face: pic, character: character?.id || null, lora: lora?.name || null, from: out.path || out.url }, resolved: source.plan?.resolved }, name, parent: source.id })
+    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'faces', finish: plus ? 'plus' : 'stitch', strength: s, face: pic, character: character?.id || null, lora: lora?.name || null, from: out.path || out.url }, resolved: source.plan?.resolved }, name, parent: source.id })
   }
 
   async enhanceDlss(source, out, scale, { strength = null, style = null } = {}) {

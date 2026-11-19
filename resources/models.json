@@ -1730,6 +1730,20 @@
       "for": "Refine faces and Replace"
     },
     {
+      "label": "H3 FaceRefine Plus",
+      "classes": [
+        "H3FaceStitchPlus",
+        "H3FaceFlowLock",
+        "H3FaceToneMatch"
+      ],
+      "url": "https://github.com/AnniCodex/ComfyUI-H3-FaceRefine-Plus",
+      "dir": "ComfyUI-H3-FaceRefine-Plus",
+      "cloud": false,
+      "git": "https://github.com/AnniCodex/ComfyUI-H3-FaceRefine-Plus",
+      "commit": "681708c34571951a79d59b7ba2be85bfafef6152",
+      "for": "Refine faces (a steadier face)"
+    },
+    {
       "label": "Image Detail Contrast",
       "classes": [
         "ImageDetailContrast"
