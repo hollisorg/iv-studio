@@ -10,6 +10,7 @@ import { highContrast, setContrast } from '../a11y'
 import { applyAccent } from '../accent'
 import AccentPicker from './AccentPicker'
 import { UsageAsk } from './Privacy'
+import NewsletterBox from './NewsletterBox'
 import { openStarter } from './Starters'
 import { AgentRows, useAgentSetup } from './AgentSetup'
 import { openH3Terms, useH3Terms } from './H3Terms'
@@ -902,11 +903,31 @@ function Done({ rec, way, prefs, writer, started, onTour, count, setCount }) {
         <WelcomeTerms />
         <UsageAsk on={count} onChange={setCount} />
       </section>
+      {/* The IV Newsletter, once: gone after Join or Not now (src/service/newsletter.js) */}
+      <NewsletterSection />
     </>
   )
 }
 
 // MiniMax H3's terms (terms.js): read and agreed here, or at the first H3 render
+// The IV Newsletter on the last page, once: hidden for good after Join or Not now (src/service/newsletter.js).
+function NewsletterSection() {
+  const api = window.ivstudio?.newsletter
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    let alive = true
+    api?.status().then((s) => alive && setShow(!s.joinedAt && !s.cardClosedAt), () => {})
+    return () => (alive = false)
+  }, [])
+  if (!show) return null
+  return (
+    <section className="block create-step">
+      <StepHead title="The IV Newsletter" sub="Optional. One email a week, only if you join." />
+      <NewsletterBox api={api} variant="card" title={false} onClose={() => setShow(false)} />
+    </section>
+  )
+}
+
 function WelcomeTerms() {
   const terms = useH3Terms()
   if (!terms) return null

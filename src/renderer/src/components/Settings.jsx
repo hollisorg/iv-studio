@@ -16,6 +16,7 @@ import { SAFEGUARDS_URL } from '../../../service/terms'
 import { FirstRenders, SpeedCards } from './Speed'
 import { savedSpeed } from '../../../service/speed'
 import { PrivacyCard } from './Privacy'
+import NewsletterBox from './NewsletterBox'
 import { AgentRows, useAgentSetup } from './AgentSetup'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
@@ -37,6 +38,7 @@ const SECTIONS = [
   ['civitai', 'Civitai'],
   ['agents', 'Agents'],
   ['privacy', 'Privacy'],
+  ['newsletter', 'Newsletter'],
   ['updates', 'Updates'],
   ['about', 'About']
 ]
@@ -1339,6 +1341,9 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <CivitaiCard n={n('civitai')} {...common} />
           <AgentCard n={n('agents')} mcp={info?.mcp} {...common} />
           <PrivacyCard n={n('privacy')} notify={notify} />
+          <SetCard id="newsletter" n={n('newsletter')} title="The IV Newsletter" sub="Optional. Nothing is sent unless you join here.">
+            <NewsletterBox api={window.ivstudio.newsletter} title={false} />
+          </SetCard>
           <UpdateSettings n={n('updates')} notify={notify} />
           <AboutCard n={n('about')} info={info} />
         </div>

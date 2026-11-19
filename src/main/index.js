@@ -81,6 +81,7 @@ import { makeDailies } from '../service/dailies'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 import { Usage } from '../service/usage'
+import { createNewsletter, fileStore, NEWSLETTER_PAGE } from '../service/newsletter'
 import { estimate, estimateLine, samples, shapeOfPlan } from '../service/timing'
 
 // An app opened from Finder gets a short PATH (/usr/bin:/bin:/usr/sbin:/sbin), so the tools IV Studio runs (Claude
@@ -596,6 +597,18 @@ app.whenReady().then(() => {
   handle('usage:preview', () => usage.preview())
   handle('usage:joinBeta', (email) => usage.joinBeta(email))
   usage.count('app_opened')
+  // The IV Newsletter (src/service/newsletter.js, shared by every IV app): sends only an address typed and joined,
+  // keeps only the join date. A test copy only ever sends to IV_NEWSLETTER_URL (a local stand-in), never the live one.
+  const newsletter = createNewsletter({
+    app: 'iv-studio',
+    version: app.getVersion(),
+    store: fileStore(path.join(BASE, 'newsletter.json')),
+    url: TEST_COPY ? process.env.IV_NEWSLETTER_URL || 'http://127.0.0.1:9/iv-newsletter' : undefined
+  })
+  handle('newsletter:status', () => newsletter.status())
+  handle('newsletter:join', (input) => newsletter.join(input))
+  handle('newsletter:closeCard', () => newsletter.closeCard())
+  handle('newsletter:openPage', () => shell.openExternal(NEWSLETTER_PAGE))
   setTimeout(() => usage.flush(), 20000)
   setInterval(() => usage.flush(), 6 * 60 * 60 * 1000)
   // How long a hunt or a finish will take here, from this machine's own finished renders (timing.js).
