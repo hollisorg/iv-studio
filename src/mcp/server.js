@@ -26,7 +26,7 @@ import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
 import { parseHeaders, setLlmSource } from '../service/llm'
-import { LOOK_FIELDS, PROMPT_TOOLS, loadSlate, lookbook, promptVariants, rewritePrompt, setupSnippets, withSetups } from '../service/filmcraft'
+import { LOOK_FIELDS, PROMPT_TOOLS, askWriter, loadSlate, lookbook, promptVariants, rewritePrompt, setupSnippets, withSetups } from '../service/filmcraft'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -36,6 +36,7 @@ import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { MusicVideos, MV_ASPECTS, MV_CAST, MV_REF_KINDS, MV_REFS, MV_SCENE_REFS } from '../service/musicvideo'
 import { Keyframes, KF_ASPECTS, KF_JOINS, KF_SOUNDS } from '../service/keyframes'
+import { AC_EXTRAS, AC_STEPS, AnimalCams, BEATS, DISTANCES, GENRES, LOADS, MOVES, SPECIES, STATES } from '../service/animalcam'
 import { KEYFRAME_MAX } from '../service/plan'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
@@ -1144,6 +1145,49 @@ tool('finish_keyframes', 'Finish the picked take (candidate 1-3) of a move, or o
   speed: z.string().optional()
 }, ({ id, move, candidate, speed }) => keyframes.finish(id, move, { candidate, speed }))
 tool('assemble_keyframes', 'Put a finished keyframes video in a new edit: the video on V1, and the song on A1 if it has one. Export it with export_edit.', { id: z.string(), name: z.string().optional() }, ({ id, name }) => keyframes.assemble(id, { name }))
+// Animal Cam (animalcam.js): animal videos that look filmed on a phone, as the window's seven-step wizard
+const animalCams = new AnimalCams({ dataDir: DATA, studio, edits, images: () => images, ask: async (req) => askWriter(writerNow(), { ...req, cpu: await busy() }) })
+const acOut = (v) => ({
+  ...v,
+  jobLog: undefined,
+  take: undefined,
+  state: { previews: v.state.previews && { id: v.state.previews.id, status: v.state.previews.status, takes: (v.state.previews.outputs || []).filter((o) => o.kind === 'preview').map((o) => ({ candidate: o.candidate, path: o.path })) }, finish: v.state.finish && { id: v.state.finish.id, status: v.state.finish.status }, clip: v.state.clip?.path || null, finished: v.state.fresh, changed: v.state.changed },
+  check: { misses: v.check.misses, items: v.check.items.map((x) => ({ key: x.key, label: x.label, ok: x.ok, step: AC_STEPS[x.step], why: x.why || undefined })) }
+})
+const acParts = {
+  name: z.string().optional(),
+  genre: z.enum(Object.keys(GENRES)).optional().describe(`Sets defaults for the place, light and sound where they're empty: ${Object.entries(GENRES).map(([k, g]) => `${k} (${g.label})`).join(', ')}`),
+  idea: z.string().optional(),
+  seconds: z.union([z.literal(5), z.literal(10), z.literal(15)]).optional(),
+  animal: z.object({ name: z.string().optional(), species: z.enum(Object.keys(SPECIES)).optional(), characterId: z.string().nullable().optional().describe('A character to use: its H3 LoRA, or its picture'), describe: z.string().optional().describe('The animal in words, for a sheet made without a photo'), outfit: z.array(z.string()).optional().describe('Everything it wears, one item each'), cm: z.number().nullable().optional().describe('Real size: shoulder height in cm (standing height for a bird)'), state: z.enum(Object.keys(STATES)).optional() }).optional(),
+  filmer: z.object({ distance: z.enum(Object.keys(DISTANCES)).optional(), side: z.string().optional().describe('Where the filmer stands, like "on the machine’s right side"'), facing: z.string().optional().describe('Which way the animal faces: frame left or frame right'), move: z.enum(Object.keys(MOVES)).optional(), trigger: z.string().optional().describe('What in the scene causes the special move'), at: z.number().nullable().optional() }).optional(),
+  scene: z.object({ place: z.string().optional(), floor: z.string().optional(), light: z.string().optional(), time: z.string().optional(), anchor: z.string().optional().describe('The size anchor: the animal against something in the shot'), extras: z.array(z.object({ who: z.string(), task: z.string().describe('One task, no "and"'), thing: z.string() })).max(AC_EXTRAS).optional(), bystander: z.string().optional().describe('Someone in frame who doesn’t care'), reactor: z.string().optional(), reactAt: z.number().nullable().optional() }).optional(),
+  action: z.object({ what: z.string().optional(), equipment: z.string().optional(), paws: z.string().optional(), object: z.string().optional().describe('What the object does back'), load: z.enum(Object.keys(LOADS)).optional() }).optional(),
+  beats: z.object(Object.fromEntries(Object.keys(BEATS).map((k) => [k, z.string().optional()]))).optional().describe('The timed beats (get_animal_cam gives their times). Write what is seen and heard, positively: H3 shows every noun'),
+  sound: z.object({ hook: z.string().optional(), hookAt: z.number().optional(), room: z.string().optional(), animal: z.string().optional().describe('Its one sound with kind and pitch, like "a short low strained meow"'), animalAt: z.number().nullable().optional(), random: z.string().optional(), randomAt: z.number().nullable().optional(), more: z.array(z.string()).optional(), breathing: z.boolean().optional() }).optional(),
+  phone: z.boolean().optional().describe('Make the edit from a phone-style 1080x1920 file (default on)')
+}
+tool('list_animal_cams', 'The Animal Cam clips (Workflows → Animal Cam): animal videos that look filmed on a phone.', {}, () => animalCams.list())
+tool('create_animal_cam', 'Start an Animal Cam clip: an animal video that looks like ordinary phone footage, rendered by H3 on this PC (free), vertical 9:16, 5, 10 or 15 s. Then set_animal_cam (or make_animal_sheet and draft_animal_beats), check_animal_cam, render_animal_cam, finish_animal_cam and assemble_animal_cam. The animal needs a reference sheet (sheet: a picture file) or a character.', { ...acParts, sheet: z.string().optional().describe('A reference sheet picture of the animal'), photo: z.string().optional().describe('A photo of the animal, to make a sheet from') }, async ({ sheet, photo, ...args }) => {
+  const c = animalCams.create(args)
+  animalCams.save(c.id, args)
+  if (photo) animalCams.setPhoto(c.id, photo)
+  if (sheet) animalCams.setSheet(c.id, sheet)
+  return acOut(await animalCams.refresh(c.id))
+})
+tool('get_animal_cam', 'An Animal Cam clip: every step, the beat times on H3’s real length, the checklist, its takes and whether it is finished.', { id: z.string() }, async ({ id }) => acOut(await animalCams.refresh(id)))
+tool('set_animal_cam', 'Change an Animal Cam clip: any part (animal, filmer, scene, action, beats, sound) is merged into what is there. sheet / photo: a picture file ("" takes it off).', { id: z.string(), ...acParts, sheet: z.string().optional(), photo: z.string().optional() }, async ({ id, sheet, photo, ...patch }) => {
+  if (Object.keys(patch).length) animalCams.save(id, patch)
+  if (photo !== undefined) animalCams.setPhoto(id, photo || null)
+  if (sheet !== undefined) animalCams.setSheet(id, sheet || null)
+  return acOut(await animalCams.refresh(id))
+})
+tool('make_animal_sheet', 'Make reference sheets of the animal with a picture model: an edit of its photo, or from its description. model: a checkpoint from list_image_models that can edit (or ChatGPT Images). Poll get_animal_cam: the pictures appear under sheets; pick one with set_animal_cam sheet.', { id: z.string(), model: z.string(), count: z.number().int().min(1).max(4).default(2) }, async ({ id, model, count }) => (await animalCams.makeSheet(id, { model, count }), acOut(await animalCams.refresh(id))))
+tool('draft_animal_beats', 'The prompt writer (Settings) drafts the timed beats, a hook sound and the animal’s sound from the other steps. overwrite: replace beats already written.', { id: z.string(), overwrite: z.boolean().default(false) }, async ({ id, overwrite }) => (await animalCams.draftBeats(id, { overwrite }), acOut(await animalCams.refresh(id))))
+tool('check_animal_cam', 'The checklist for an Animal Cam clip, with what to change for each miss, and the H3 prompt it would render.', { id: z.string() }, ({ id }) => animalCams.check(id))
+tool('render_animal_cam', 'Hunt takes on this PC (free). A checklist miss stops it unless anyway is true. Returns the job; poll get_job.', { id: z.string(), anyway: z.boolean().default(false), seed: z.number().int().optional(), speed: z.string().optional() }, ({ id, ...opts }) => animalCams.hunt(id, opts))
+tool('finish_animal_cam', 'Finish the picked take (candidate 1-3). Returns the job; poll get_job.', { id: z.string(), candidate: z.number().int().min(1).default(1), speed: z.string().optional() }, ({ id, candidate, speed }) => animalCams.finish(id, { candidate, speed }))
+tool('assemble_animal_cam', 'Put the finished clip in a new vertical edit (as a phone-style 1080x1920 file unless phone is off). Export it with export_edit.', { id: z.string(), name: z.string().optional() }, ({ id, name }) => animalCams.assemble(id, { name }))
 tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\IV Studio\\Edits, or outDir. Returns at once; follow with get_edit_export. The export runs inside this MCP server, so it stops if the server stops.`, {
   editId: z.string(),
   outDir: z.string().optional()

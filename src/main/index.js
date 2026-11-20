@@ -35,6 +35,7 @@ import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { MusicVideos } from '../service/musicvideo'
 import { Keyframes } from '../service/keyframes'
+import { AnimalCams } from '../service/animalcam'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
 import { offeredFx, CLIP_FX, FreefieldApps } from '../service/freefield'
@@ -47,7 +48,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller, hfLoginFrom, setSavedHfToken } from '../service/models'
 import { CONTEXT_IR_PRICE, localChat, localWriterModel, normalizeOllamaUrl, ollamaExe, ollamaIsLocal, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
-import { loadSlate, lookbook, promptVariants, rewritePrompt, writerName } from '../service/filmcraft'
+import { askWriter, loadSlate, lookbook, promptVariants, rewritePrompt, writerName } from '../service/filmcraft'
 import { Studio } from '../service/studio'
 import { cleanStretchFile, Ranker } from '../service/ranking'
 import { exportInterchange } from '../service/interchange'
@@ -2927,6 +2928,28 @@ app.whenReady().then(() => {
   })
   handle('kf:finish', (id, index, opts) => track(keyframes.finish(id, index, opts)))
   handle('kf:assemble', (id, opts) => keyframes.assemble(id, opts))
+  // Animal Cam: animal videos that look filmed on a phone, as a seven-step wizard (Workflows → Animal Cam; animalcam.js)
+  const animalCams = new AnimalCams({ dataDir: DATA, studio: () => studio, edits, images: () => images, ask: async (req) => askWriter(writerNow(), { ...req, cpu: await busyGpu() }) })
+  handle('ac:list', () => animalCams.list())
+  handle('ac:get', (id) => animalCams.refresh(id))
+  handle('ac:create', (opts) => animalCams.view(animalCams.create(opts).id))
+  handle('ac:save', (id, patch) => (animalCams.save(id, patch), animalCams.view(id)))
+  handle('ac:setPhoto', (id, file) => (animalCams.setPhoto(id, file), animalCams.view(id)))
+  handle('ac:setSheet', (id, file) => (animalCams.setSheet(id, file), animalCams.view(id)))
+  handle('ac:makeSheet', async (id, opts) => {
+    await voices.release()
+    await animalCams.makeSheet(id, opts)
+    return animalCams.view(id)
+  })
+  handle('ac:draftBeats', async (id, opts) => (await animalCams.draftBeats(id, opts), animalCams.view(id)))
+  handle('ac:ideas', (id) => animalCams.ideas(id))
+  handle('ac:check', (id) => animalCams.check(id))
+  handle('ac:hunt', (id, opts) => track(animalCams.hunt(id, opts)))
+  handle('ac:finish', (id, opts) => track(animalCams.finish(id, opts)))
+  handle('ac:phone', (id) => animalCams.phoneFinish(id))
+  handle('ac:assemble', (id, opts) => animalCams.assemble(id, opts))
+  handle('ac:saveCharacter', (id) => (animalCams.saveAsCharacter(id), animalCams.view(id)))
+  handle('ac:delete', (id) => animalCams.delete(id))
   handle('projects:get', (id) => ({ project: studio.getProject(id), jobs: studio.listJobs(id) }))
   handle('projects:rename', (id, name) => studio.renameProject(id, name))
   handle('projects:delete', (id) => studio.deleteProject(id))

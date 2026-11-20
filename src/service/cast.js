@@ -94,12 +94,15 @@ const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // Members are characters and places (the cast), or a music video's references (musicvideo.js): a person, a product,
 // a place or a thing, each with a picture. How each is named, defined and kept in a references prompt:
+// An animal (Animal Cam, animalcam.js) is named like a person and keeps its look and everything it wears.
 const isPerson = (m) => m.kind === 'character' || m.kind === 'person'
-const wordFor = (m) => (isPerson(m) ? m.name.split(/\s+/)[0] : m.name)
-const shortFor = (m) => (isPerson(m) ? m.name.split(/\s+/)[0] : m.kind === 'place' ? `the place ${m.name}` : m.kind === 'product' ? `the product ${m.name}` : `the ${m.name}`)
+const isNamed = (m) => isPerson(m) || m.kind === 'animal'
+const wordFor = (m) => (isNamed(m) ? m.name.split(/\s+/)[0] : m.name)
+const shortFor = (m) => (isNamed(m) ? m.name.split(/\s+/)[0] : m.kind === 'place' ? `the place ${m.name}` : m.kind === 'product' ? `the product ${m.name}` : `the ${m.name}`)
 function refLines(m, subject, label, inShots) {
   const about = m.description ? `, ${m.description.replace(/[.\s]+$/, '')}` : ''
   const keep = (what) => `${subject} (appears in ${inShots}): fully_preserved - ${what}`
+  if (m.kind === 'animal') return [`${subject} is ${m.name}, the animal in ${label}${about}.`, keep(`${wordFor(m)}'s species, face, fur, markings, build and real size, and everything it wears, exactly as pictured; its pose follows the shot, and the place and light are newly directed.`)]
   if (m.kind === 'character') return [`${subject} is ${m.name}, the person in ${label}.`, keep(`${wordFor(m)}'s face, hair and build; pose and clothes follow the shot.`)]
   if (m.kind === 'person') return [`${subject} is ${m.name}, the person in ${label}${about}.`, keep(`${wordFor(m)}'s face, hair and build; pose and clothes follow the shot.`)]
   if (m.kind === 'place') return [`${subject} is the place in ${label}: ${m.name}${about}.`, keep('the place, its furniture, light and colours; the framing is newly directed.')]

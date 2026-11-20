@@ -1,0 +1,293 @@
+/* Animal Cam (AnimalCam.jsx): seven steps, one panel at a time. Built on the Music video and Keyframes editors'
+   classes in studio.css (.mv-*, .kf-*). */
+.ac-genre-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ac-name {
+  width: 100%;
+  max-width: 520px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cream);
+  font: 800 32px/1.05 var(--display);
+  text-transform: uppercase;
+}
+.ac-name:focus {
+  outline: 1px solid var(--line);
+}
+.ac-steps {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin: 16px 0;
+}
+.ac-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--paper-dim);
+  text-align: left;
+  cursor: pointer;
+}
+.ac-step.on {
+  border-color: var(--red);
+  color: var(--cream);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.ac-step-n {
+  font-size: 12px;
+  color: var(--red);
+}
+.ac-step-label {
+  font: 700 14px/1.15 var(--display);
+  text-transform: uppercase;
+}
+.ac-step-miss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--red);
+  color: #0b0b0b;
+  font: 700 11px/18px var(--mono);
+  text-align: center;
+}
+.ac-panel {
+  gap: 16px;
+}
+.ac-panel-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ac-step-body {
+  display: grid;
+  gap: 14px;
+}
+.ac-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.ac-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ac-field input,
+.ac-field textarea,
+.ac-field select {
+  width: 100%;
+  min-width: 0;
+}
+.ac-field textarea {
+  resize: vertical;
+}
+.ac-pills {
+  flex-wrap: wrap;
+}
+.ac-pills .mv-shape-btn {
+  flex: 0 1 auto;
+  justify-content: center;
+  min-width: 84px;
+}
+.ac-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.ac-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.ac-sheet {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+}
+.ac-sheet-now,
+.ac-sheet-make {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.ac-sheet-now img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+  border: 1px solid var(--line);
+}
+.ac-empty {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  text-align: center;
+}
+.ac-photo {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.ac-sheets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.ac-sheet-pick {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--cream);
+  cursor: pointer;
+}
+.ac-sheet-pick:hover {
+  border-color: var(--red);
+}
+.ac-sheet-pick img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+}
+.ac-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ac-idea {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--cream);
+  text-align: left;
+  cursor: pointer;
+}
+.ac-idea:hover,
+.ac-idea.on {
+  border-color: var(--red);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.ac-extra {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) 44px;
+  align-items: end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+}
+.ac-extra-x {
+  position: static;
+  width: 44px;
+  height: 44px;
+}
+.ac-beats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ac-beat {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+}
+.ac-beat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ac-beat-head strong {
+  font: 700 15px/1.2 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.ac-beat textarea {
+  width: 100%;
+  resize: vertical;
+}
+.ac-checklist {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ac-checklist li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--line);
+}
+.ac-checklist li.miss {
+  border-left-color: var(--red);
+  background: rgba(var(--accent-rgb), 0.06);
+}
+.ac-tick {
+  font: 700 14px/1.4 var(--mono);
+  color: var(--paper-dim);
+}
+.ac-checklist li.miss .ac-tick {
+  color: var(--red);
+}
+.ac-prompt {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  font: 12px/1.5 var(--mono);
+  color: var(--paper-dim);
+}
+.ac-takes video,
+.ac-final video {
+  max-height: 520px;
+  aspect-ratio: 9 / 16;
+  background: #000;
+}
+.ac-broke {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 1100px) {
+  .ac-steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .ac-grid2,
+  .ac-sheet,
+  .ac-beats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ac-extra {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+}

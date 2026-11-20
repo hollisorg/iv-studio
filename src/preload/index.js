@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
   // Music video (src/service/musicvideo.js)
   musicVideos: { list: call('mv:list'), get: call('mv:get'), create: call('mv:create'), save: call('mv:save'), edit: call('mv:edit'), map: call('mv:map'), remove: call('mv:delete'), hunt: call('mv:hunt'), huntAll: call('mv:huntAll'), finish: call('mv:finish'), write: call('mv:write'), assemble: call('mv:assemble'), addRef: call('mv:addRef'), updateRef: call('mv:updateRef'), removeRef: call('mv:removeRef') },
   // Keyframes (src/service/keyframes.js)
+  // Animal Cam (src/service/animalcam.js)
+  animalcam: { list: call('ac:list'), get: call('ac:get'), create: call('ac:create'), save: call('ac:save'), setPhoto: call('ac:setPhoto'), setSheet: call('ac:setSheet'), makeSheet: call('ac:makeSheet'), draftBeats: call('ac:draftBeats'), ideas: call('ac:ideas'), check: call('ac:check'), hunt: call('ac:hunt'), finish: call('ac:finish'), phone: call('ac:phone'), assemble: call('ac:assemble'), saveCharacter: call('ac:saveCharacter'), remove: call('ac:delete') },
   keyframes: { list: call('kf:list'), get: call('kf:get'), create: call('kf:create'), save: call('kf:save'), addPictures: call('kf:addPictures'), removePicture: call('kf:removePicture'), reorder: call('kf:reorder'), setSong: call('kf:setSong'), remove: call('kf:delete'), hunt: call('kf:hunt'), huntAll: call('kf:huntAll'), finish: call('kf:finish'), assemble: call('kf:assemble') },
   cutouts: {
     make: call('cutouts:make')

@@ -52,6 +52,13 @@ export const WORKFLOWS = [
     needs: ['H3 on this PC', 'Your pictures']
   },
   {
+    page: 'animalcam',
+    name: 'Animal Cam',
+    tag: 'Animal videos that look filmed on a phone',
+    about: 'Seven steps from your pet to a clip that looks like a stranger filmed it: a reference sheet from a photo, an unseen filmer, one task for everyone in frame, timed beats, only real sounds and a checklist before H3 films it.',
+    needs: ['H3 on this PC', 'A picture model to make the reference sheet (or your own sheet)']
+  },
+  {
     page: 'shinobi',
     name: 'Shinobi',
     tag: 'Edits your agent cuts',
