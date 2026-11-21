@@ -291,13 +291,29 @@ export async function findComfyElsewhere(url, { ports = COMFY_PORTS, timeoutMs =
   return Promise.any(tries).catch(() => null)
 }
 
-// Waits until ComfyUI answers (a first start with custom nodes can take a few minutes).
-export async function waitUp(url, { timeoutMs = 6 * 60 * 1000, every = 2000 } = {}) {
+// Waits until ComfyUI answers (a first start with custom nodes can take a few minutes). signal: an AbortSignal
+// that stops the wait (Stop waiting / Check again, GitHub #50: a launcher that asks something before it starts
+// ComfyUI kept Start ComfyUI greyed out for the whole 6 minutes); it then throws an error with code 'stopped'.
+// up: stands in for comfyUp in tests.
+export const STOPPED_WAITING = 'Stopped waiting for ComfyUI. If its window is asking you something, answer it, then press Check again; or press Start ComfyUI to start it again.'
+export async function waitUp(url, { timeoutMs = 6 * 60 * 1000, every = 2000, signal = null, up = comfyUp } = {}) {
   const t0 = Date.now()
+  const stopped = () => Object.assign(new Error(STOPPED_WAITING), { code: 'stopped' })
   while (Date.now() - t0 < timeoutMs) {
-    if (await comfyUp(url)) return { seconds: Math.round((Date.now() - t0) / 1000) }
-    await new Promise((r) => setTimeout(r, every))
+    if (signal?.aborted) throw stopped()
+    if (await up(url)) return { seconds: Math.round((Date.now() - t0) / 1000) }
+    if (signal?.aborted) throw stopped()
+    await new Promise((r) => {
+      const done = () => {
+        clearTimeout(t)
+        signal?.removeEventListener('abort', done)
+        r()
+      }
+      const t = setTimeout(done, every)
+      signal?.addEventListener('abort', done)
+    })
   }
+  if (signal?.aborted) throw stopped()
   throw new Error('ComfyUI didn’t answer within 6 minutes. Check its window for errors.')
 }
 

@@ -193,6 +193,10 @@
 .run-changes {
   color: var(--pink);
 }
+/* when the run finished (runTime.js, GitHub #49) */
+.run-time {
+  white-space: nowrap;
+}
 .run-edit {
   margin-left: auto;
 }

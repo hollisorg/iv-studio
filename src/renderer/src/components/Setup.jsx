@@ -296,7 +296,8 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
               label={waitingPacks.length ? `Restart ComfyUI to load ${waitingPacks.length} node pack${waitingPacks.length === 1 ? '' : 's'}` : 'Restart ComfyUI'}
             />
           )}
-          <button className="btn" disabled={checking} onClick={recheck}>
+          {/* Check again also ends a Start ComfyUI that is still waiting while ComfyUI isn't answering (GitHub #50) */}
+          <button className="btn" disabled={checking} onClick={() => window.ivstudio.comfy.stopWaiting().catch(() => {}).finally(recheck)}>
             {checking ? 'Checking…' : 'Check again'}
           </button>
         </div>

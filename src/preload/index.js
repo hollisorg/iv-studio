@@ -269,7 +269,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onNodes: on('setup:nodes'),
     updates: { check: call('setup:updates:check'), run: call('setup:updates:run'), undo: call('setup:updates:undo'), installManager: call('setup:updates:installManager'), onProgress: on('setup:updates') }
   },
-  comfy: { launcher: call('comfy:launcher'), chooseLauncher: call('comfy:chooseLauncher'), chooseFolder: call('comfy:chooseFolder'), start: call('comfy:start'), restart: call('comfy:restart'), onState: on('comfy:state'), installPlan: call('comfy:installPlan'), chooseInstallFolder: call('comfy:chooseInstallFolder'), installCheck: call('comfy:installCheck'), install: call('comfy:install'), installCancel: call('comfy:installCancel'), onInstall: on('comfy:install') },
+  comfy: { launcher: call('comfy:launcher'), chooseLauncher: call('comfy:chooseLauncher'), chooseFolder: call('comfy:chooseFolder'), start: call('comfy:start'), stopWaiting: call('comfy:stopWaiting'), restart: call('comfy:restart'), onState: on('comfy:state'), installPlan: call('comfy:installPlan'), chooseInstallFolder: call('comfy:chooseInstallFolder'), installCheck: call('comfy:installCheck'), install: call('comfy:install'), installCancel: call('comfy:installCancel'), onInstall: on('comfy:install') },
   hardware: { scan: call('hardware:scan'), apply: call('hardware:apply') },
   samplers: call('h3:samplers'),
   h3Models: call('models:h3'),

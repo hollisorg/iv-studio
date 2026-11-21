@@ -9,6 +9,7 @@ import Failure from './Failure'
 import { shapeOfPlan } from '../../../service/timing'
 import { LiveFrame } from './Live'
 import { CompareViewer, PromptDiff, runChanges } from './Compare'
+import { runTime } from '../runTime'
 import { askAgent, useAgentName } from './ChatPanel'
 import { lintPrompt } from '../../../service/lint'
 import { lintSeedance } from '../../../service/seedlint'
@@ -1014,6 +1015,14 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                   {seqRuns ? 'Edit in the sequence' : 'Edit and run again'}
                 </button>
               )}
+              {(() => {
+                const t = runTime(run)
+                return t && (
+                  <time className="run-time mono small dim" dateTime={t.at} title={t.title}>
+                    {t.label}
+                  </time>
+                )
+              })()}
               {changes.length > 0 && <span className="run-changes mono small">Changed: {changes.join(' · ')}</span>}
               {agent && (
                 <button className="btn btn-small run-ask" onClick={() => askAgent({ about: `run ${runs.length - i} of this shot (previews job ${run.id})` })} title={`Ask ${agent} about this run in the chat`}>

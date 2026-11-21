@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 
 // "Start ComfyUI": runs the person's own ComfyUI launcher (Settings → ComfyUI) and rechecks once it answers.
-// Shown in the title bar and on Setup while ComfyUI on this PC isn't running.
+// Shown in the title bar and on Setup while ComfyUI on this PC isn't running. While it waits for ComfyUI to answer,
+// "Stop waiting" ends the wait (GitHub #50: a launcher that asks something first kept the button greyed out for up
+// to 6 minutes); nothing is closed, and Start ComfyUI can be pressed again.
 export default function StartComfy({ notify, recheck, className = 'btn btn-small' }) {
   const [state, setState] = useState(null)
   useEffect(() => {
@@ -15,18 +17,35 @@ export default function StartComfy({ notify, recheck, className = 'btn btn-small
   async function start() {
     setState('starting')
     try {
-      await window.ivstudio.comfy.start()
-      recheck?.()
+      const r = await window.ivstudio.comfy.start()
+      if (!r?.stopped) recheck?.()
     } catch (err) {
       notify?.(err.message)
     } finally {
       setState(null)
     }
   }
+  async function stopWaiting() {
+    try {
+      const r = await window.ivstudio.comfy.stopWaiting()
+      if (r?.stopped) notify?.(r.message)
+      else if (r?.up) recheck?.()
+      else setState(null)
+    } catch (err) {
+      notify?.(err.message)
+    }
+  }
   return (
-    <button className={className} disabled={state === 'starting'} onClick={start} title="Start ComfyUI with your own launcher (Settings → ComfyUI)">
-      {state === 'starting' ? 'Starting ComfyUI…' : 'Start ComfyUI'}
-    </button>
+    <>
+      <button className={className} disabled={state === 'starting'} onClick={start} title="Start ComfyUI with your own launcher (Settings → ComfyUI)">
+        {state === 'starting' ? 'Starting ComfyUI…' : 'Start ComfyUI'}
+      </button>
+      {state === 'starting' && (
+        <button className={`${className} comfy-stop-wait`} onClick={stopWaiting} title="Stop waiting for ComfyUI to answer, e.g. when its launcher is asking you something first. Nothing is closed.">
+          Stop waiting
+        </button>
+      )}
+    </>
   )
 }
 

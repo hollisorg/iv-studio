@@ -26,7 +26,7 @@ import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed, savedPreviewMp } from '../service/speed'
 import { comboOptions } from '../service/setup'
 import { managerReq } from '../service/comfyupdate'
-import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, stopComfy, waitDown, waitUp } from '../service/comfylauncher'
+import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, STOPPED_WAITING, stopComfy, waitDown, waitUp } from '../service/comfylauncher'
 import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
 import { createHash, randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
@@ -2034,8 +2034,10 @@ app.whenReady().then(() => {
   // ---------- starting ComfyUI (comfylauncher.js) ----------
   // The launcher is comfylauncher.js launcherFor: the one picked in Settings, else the best one in the ComfyUI
   // folder picked there, else the best one found on this PC. The window hears
-  // comfy:state ({state: 'starting' | 'up' | 'failed', detail}) and rechecks when ComfyUI is up.
+  // comfy:state ({state: 'starting' | 'up' | 'failed' | 'stopped', detail}) and rechecks when ComfyUI is up.
   let comfyStarting = null
+  let comfyWait = null // the AbortController of startComfy's wait (comfy:stopWaiting, GitHub #50)
+  const launchMarker = () => path.join(BASE, 'comfy-launch.json')
   const launcherOf = launcherFor
   const startComfy = () =>
     (comfyStarting ||= (async () => {
@@ -2045,7 +2047,7 @@ app.whenReady().then(() => {
       const file = launcherOf(s)
       if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings → ComfyUI.')
       // already starting (IV Studio reopened while it booted, another window, or started by hand): wait for that one
-      const marker = path.join(BASE, 'comfy-launch.json')
+      const marker = launchMarker()
       const running = recentLaunch(marker) ? null : sameComfy(await comfyProcesses(), { home: comfyHome(file, { readLink: (p) => shell.readShortcutLink(p) }), url: s.comfyUrl, launcher: file })
       const joining = !!(recentLaunch(marker) || running)
       send('comfy:state', { state: 'starting', detail: joining ? 'ComfyUI is already starting' : path.basename(file) })
@@ -2054,14 +2056,26 @@ app.whenReady().then(() => {
           noteLaunch(marker, file)
           launchComfy(file, { logFile: path.join(DATA, 'comfyui.log') })
         }
-        const up = { ...(await waitUp(s.comfyUrl)), joined: joining }
+        comfyWait = new AbortController()
+        const up = { ...(await waitUp(s.comfyUrl, { signal: comfyWait.signal })), joined: joining }
         send('comfy:state', { state: 'up', detail: `ComfyUI started in ${up.seconds} s.` })
         return up
       } catch (err) {
-        send('comfy:state', { state: 'failed', detail: err.message })
+        send('comfy:state', { state: err.code === 'stopped' ? 'stopped' : 'failed', detail: err.message })
         throw err
       }
-    })().finally(() => (comfyStarting = null)))
+    })().finally(() => ((comfyStarting = null), (comfyWait = null))))
+  // Stop waiting for a start: the window's Stop waiting, and Check again while ComfyUI isn't answering. Nothing is
+  // closed (a launcher still asking its questions stays open). The launch note goes, so the next Start ComfyUI runs
+  // the launcher again instead of joining the old wait. A ComfyUI that already answers is left to finish the wait.
+  handle('comfy:stopWaiting', async () => {
+    if (!comfyWait) return { stopped: false }
+    if (await comfyUp(readSettings(BASE).comfyUrl)) return { stopped: false, up: true }
+    if (!comfyWait) return { stopped: false }
+    comfyWait.abort()
+    fs.rmSync(launchMarker(), { force: true })
+    return { stopped: true, message: STOPPED_WAITING }
+  })
   handle('comfy:launcher', () => {
     const s = readSettings(BASE)
     const folder = s.comfyFolder && fs.existsSync(s.comfyFolder) ? s.comfyFolder : null
@@ -2088,7 +2102,14 @@ app.whenReady().then(() => {
     writeSettings({ comfyFolder: dir, comfyLauncher: '' }, BASE)
     return dir
   })
-  handle('comfy:start', () => startComfy())
+  handle('comfy:start', async () => {
+    try {
+      return await startComfy()
+    } catch (err) {
+      if (err.code === 'stopped') return { stopped: true, message: err.message } // the person stopped the wait
+      throw err
+    }
+  })
   // Restart: ComfyUI-Manager's own restart when it's there (ComfyUI keeps its window and flags), else IV Studio
   // stops this ComfyUI (and the console of its .bat) and starts it again with the person's launcher. A ComfyUI
   // that is rendering or has work waiting isn't restarted unless force: the window asks first.
