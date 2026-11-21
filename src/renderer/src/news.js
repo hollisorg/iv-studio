@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.24',
+    items: [
+      { text: 'New: Animal Cam (Workflows). Animal videos that look filmed on a phone, in seven steps: your animal and its reference sheet (made here from a pet photo or from words), the idea, who’s filming, the place and people, what happens, the sounds, then a checklist before you film. Three takes on H3, pick one, finish it, and get a vertical phone-style clip.' },
+      { text: 'Animal Cam’s “What broke?” points at the one setting behind each common fault (size drifting, the outfit changing, slow motion, a wrong sound), so you change one line and film again.' },
+      { text: 'Fixed: Start ComfyUI stayed on “Starting…” for up to 6 minutes when your launcher asks something before it starts ComfyUI (GitHub #50). Stop waiting ends the wait, and so does Check again in Settings → Setup.' },
+      { text: 'Each run on a shot’s page shows when it finished (GitHub #49).' }
+    ]
+  },
+  {
     version: '1.1.23',
     items: [
       { text: 'Join The IV Newsletter from Settings → The IV Newsletter: one email a week from Matt about what’s new in the IV apps, how things are made, and free tools. Nothing is sent unless you type your email and press Join, Kit sends a confirm email first, and IV Studio doesn’t keep your address.' },
