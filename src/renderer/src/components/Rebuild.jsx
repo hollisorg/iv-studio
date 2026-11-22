@@ -6,6 +6,7 @@ import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
+import VoiceLines from './VoiceLines'
 
 // Rebuild: a video the person made (or may rework), read into shots and made again on this PC. IV Studio reads it
 // (cuts, frames, captions, tempo); your agent (Claude Code or Codex, through IV Studio's tools) says what each shot
@@ -122,10 +123,17 @@ function StripTile({ s }) {
 export function RebuildProject({ rebuildId, notify, go, openEdit }) {
   const [r, setR] = useState(null)
   const [busy, setBusy] = useState(null)
+  const [voices, setVoices] = useState([])
+  const [voiceState, setVoiceState] = useState(null)
+  const [voiceStep, setVoiceStep] = useState(null)
   const load = () => B().get(rebuildId).then(setR, (err) => notify(clean(err)))
   useEffect(() => {
     load()
-    return B().onLog((line) => setBusy(line))
+    window.ivstudio.voices.list().then(setVoices, () => {})
+    window.ivstudio.remake.voiceStatus().then(setVoiceState, () => {})
+    const off = B().onVoiceProgress((u) => u.id === rebuildId && setVoiceStep(u.step))
+    const off2 = B().onLog((line) => setBusy(line))
+    return () => (off?.(), off2?.())
   }, [rebuildId])
   // keep it current: the agent works through the tools, and renders finish in ComfyUI
   useEffect(() => {
@@ -151,6 +159,22 @@ export function RebuildProject({ rebuildId, notify, go, openEdit }) {
   const unread = r.shots.filter((s) => !s.reading).length
   const takes = h3.filter((s) => s.take)
   const done = takes.filter((s) => s.take.final).length
+  // the voice swap: the person painted in says the same words in their saved voice
+  const swap = r.plan ? r.plan.swap : r.swap
+  const voiceId = swap?.voiceId || ''
+  const voiceReady = !!voiceState?.installed
+  const voiceName = voices.find((v) => v.id === voiceId)?.name
+  const withVoice = (label, fn) =>
+    act(label, async () => {
+      setVoiceStep('starting')
+      try {
+        return await fn()
+      } finally {
+        setVoiceStep(null)
+      }
+    })
+  const voiceN = swap ? 3 : null
+  const shift = swap ? 1 : 0
 
   return (
     <div className="rebuild create-v2 flow-page">
@@ -215,8 +239,28 @@ export function RebuildProject({ rebuildId, notify, go, openEdit }) {
           )}
         </Step>
 
+        {swap && (
+          <Step n={voiceN} title="The voice" sub={voiceId ? `The same words, at the same moments, in ${voiceName ? `${voiceName}’s voice` : 'the chosen voice'}. Each remade shot's lips follow its piece of it, and it goes on A1 in the first cut.` : 'Who goes in can speak in their own saved voice, or keep the original voice.'}>
+            <div className="row">
+              <span className="row-label">Voice</span>
+              <select className="small remake-voice-pick" value={voiceId} disabled={!!busy} aria-label="The voice who goes in speaks with" onChange={(e) => act('Saving the voice', () => B().setVoice(r.id, { voiceId: e.target.value || null, name: swap.name || voices.find((v) => v.id === e.target.value)?.name || '' }))}>
+                <option value="">Keep the original voice</option>
+                {voices.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    Voice: {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {voiceId && !voiceReady && <p className="small pink">Swapping the voice needs IV Studio’s voice engine: set it up once on Audio › Voices.</p>}
+            {voiceId && voiceReady && (
+              <VoiceLines voice={r.voice?.peopleKey === voiceId ? r.voice : r.voice && { ...r.voice, track: null }} busy={busy} step={voiceStep} names={[swap.name || voiceName]} onMake={(opts) => withVoice('Making the voice', () => B().voice(r.id, opts))} onPhrase={(i, patch) => withVoice('Saying it again', () => B().setPhrase(r.id, i, patch))} onSetupSplitter={() => act('Setting up the voice splitter', async () => (await window.ivstudio.remake.setupSplitter(), setVoiceState(await window.ivstudio.remake.voiceStatus()), B().voice(r.id, { rehear: true })))} settingUp={busy === 'Setting up the voice splitter'} />
+            )}
+          </Step>
+        )}
+
         {r.planApprovedAt && (
-          <Step n={3} title="The frames" sub="Each remade shot starts from its own first frame (and ends on its last), with any writing painted out and your change painted in.">
+          <Step n={3 + shift} title="The frames" sub="Each remade shot starts from its own first frame (and ends on its last), with any writing painted out and your change painted in.">
             {h3.length === 0 && <p className="small dim">No shot is remade with H3, so there are no frames to make. Approve to go on to the cut.</p>}
             <div className="rb-frames">
               {h3.map((s) => (
@@ -247,7 +291,7 @@ export function RebuildProject({ rebuildId, notify, go, openEdit }) {
         )}
 
         {r.framesApprovedAt && (
-          <Step n={4} title="The shots, made again" sub={takes.length ? `${done} of ${h3.length} finished · H3 shots take 3-5 min each` : 'Two previews per shot (three with a change); pick one and it is finished at 1 MP.'}>
+          <Step n={4 + shift} title="The shots, made again" sub={takes.length ? `${done} of ${h3.length} finished · H3 shots take 3-5 min each` : 'Two previews per shot (three with a change); pick one and it is finished at 1 MP.'}>
             <div className="rb-takes">
               {takes.map((s) => (
                 <div key={s.index} className="rb-take">
@@ -290,11 +334,11 @@ export function RebuildProject({ rebuildId, notify, go, openEdit }) {
                 </button>
               )}
             </div>
-            {r.editId && <p className="small dim">The original sound is on A1 as a guide for timing. Replace it before you publish.</p>}
+            {r.editId && <p className="small dim">{voiceId && r.voice?.track ? `A1 is the new voice track, in ${voiceName ? `${voiceName}’s voice` : 'the chosen voice'}.` : 'The original sound is on A1 as a guide for timing. Replace it before you publish.'}</p>}
           </Step>
         )}
 
-        <Step n={r.framesApprovedAt ? 5 : r.planApprovedAt ? 4 : 3} title="Your agent" sub="Paste this into Claude or ChatGPT, connected to IV Studio (Settings → Agents).">
+        <Step n={(r.framesApprovedAt ? 5 : r.planApprovedAt ? 4 : 3) + shift} title="Your agent" sub="Paste this into Claude or ChatGPT, connected to IV Studio (Settings → Agents).">
           <SetCode text={agentMessage(r)} label="Copy message" tall />
         </Step>
       </div>

@@ -15,7 +15,7 @@ import path from 'node:path'
 import { FORMATS } from './edits.js'
 import { harnessJson } from './harness.js'
 import { IMAGE_ASPECTS } from './images.js'
-import { blocking, FIRST_FRAME_LINE, firstLastLine } from './lint.js'
+import { blocking, FIRST_FRAME_LINE, firstLastLine, withLine } from './lint.js'
 import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
 import { localChat, localWriterModel } from './prompter.js'
@@ -27,6 +27,7 @@ export const WHERE = ['top', 'middle', 'bottom']
 export const NO_TEXT = 'There is no writing anywhere in the picture.'
 export const CLEAN_TEXT = 'Remove every caption, title, label, sticker and on-screen text. Keep everything else exactly as it is: people, objects, framing, light and colours.'
 export const GUIDE_WARNING = "A1 is the reference video's own sound, as a guide. Replace it before you publish."
+export const voiceNote = (name, mode) => `A1 is the new voice track: the words in ${name || 'the new'}'s voice${mode === 'split' ? ', with the room sound and music kept' : '; the room sound dips under the new lines (set up the voice splitter to keep it)'}.`
 export const MAX_SECONDS = 120
 const MAX_FRAMES = 345 // 14.4 s, the longest take generate_previews makes; with a 1.25x slow-down, an 18 s shot
 const REPLACE_SECONDS = 14
@@ -74,6 +75,35 @@ export function retime(takeSeconds, slotSeconds) {
   return { speed, trim: takeSeconds / speed > slotSeconds + 0.001 }
 }
 
+// ---------- the voice (remakevoice.js on the whole source) ----------
+// How a shot's piece of the new voices goes into its H3 take, so the lips land on the real timing once the cut has
+// fitted the take to its slot: the slot's piece, slowed by the speed the cut plays the take at (retime), padded to
+// the take's length. A short shot (trimTo) plays at its own speed, so its piece is only padded.
+export function shotVoicePiece(shot, planShot) {
+  const L = planShot.h3
+  const slot = shot.duration
+  const speed = L.trimTo ? 1 : retime(L.seconds, slot).speed
+  return { from: r3(shot.start), slot: r3(slot), tempo: r3(1 / speed), padTo: L.seconds }
+}
+// The ffmpeg arguments that cut that piece out of the voices (voice.stem) and fit it.
+export function shotVoiceArgs({ stem, from, slot, tempo, padTo, out }) {
+  const stretch = Math.abs(tempo - 1) > 0.001 ? `rubberband=tempo=${tempo}:formant=preserved,` : ''
+  return ['-y', '-v', 'error', '-ss', from.toFixed(3), '-t', slot.toFixed(3), '-i', stem, '-af', `${stretch}apad,atrim=end=${padTo.toFixed(4)}`, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', out]
+}
+// The lines said during a shot (any part of them inside it).
+export const shotLines = (voice, shot) => (voice?.phrases || []).filter((p) => p.end > shot.start + 0.05 && p.start < shot.start + shot.duration - 0.05)
+// A shot's prompt with the swapped person's lines in it, so H3 knows the words it lip-syncs (lint.js withLine skips
+// a line already written).
+export function voicedPrompt(prompt, lines, who) {
+  return lines.filter((l) => l.swap).reduce((text, l) => withLine(text, who, l.text), prompt)
+}
+// Shots whose picture isn't remade while the swapped person talks in them: the old face with the new voice.
+export function keptWithVoice(rebuild) {
+  const voice = rebuild.voice
+  if (!voice?.phrases) return []
+  return (rebuild.plan?.shots || []).filter((p) => p.route !== 'h3' && shotLines(voice, rebuild.shots.find((s) => s.index === p.index)).some((l) => l.swap)).map((p) => p.index)
+}
+
 // The captions the reading found, as titles on T1 at their place in the film (a caption's from/to are seconds
 // into its shot).
 export function captionsToTitles(shots) {
@@ -119,8 +149,15 @@ const swapOf = (swap, exists, where = 'swap') => {
   const ask = String(swap.ask || '').trim()
   if (!ask) throw new Error(`${where}: say what changes (ask).`)
   if (swap.picture && !exists(swap.picture)) throw new Error(`${where}: picture not found: ${swap.picture}`)
-  return { ask, picture: swap.picture || null }
+  const out = { ask, picture: swap.picture || null }
+  // the voice the person painted in speaks with (a voice from Audio > Voices), and their name for the prompts
+  if (swap.voiceId) out.voiceId = String(swap.voiceId)
+  if (swap.name) out.name = String(swap.name).trim()
+  if (swap.who) out.who = String(swap.who).trim()
+  return out
 }
+// What the painter sees of a swap (a change of voice alone repaints nothing).
+const paintKey = (swap) => JSON.stringify(swap ? { ask: swap.ask, picture: swap.picture || null } : null)
 
 // Checks a plan against the rebuild's shots; returns it tidied, or throws naming the shot.
 export function validatePlan(rebuild, plan, { lint, exists = fs.existsSync }) {
@@ -182,9 +219,11 @@ captions: every piece of writing laid over the picture, word for word, with when
 
 // ---------- the service ----------
 export class Rebuilds {
+  // voice: a VoiceSwap on rebuildHost(this) (remakevoice.js), set after construction; without it nothing is voiced.
   constructor({ dataDir, reader, studio, images, remake, edits, writer, lint, onLog }) {
     this.dir = path.join(dataDir, 'rebuild')
     Object.assign(this, { reader, studio, images, remake, edits, writer, lint })
+    this.voice = null
     this.onLog = onLog || (() => {})
   }
 
@@ -336,7 +375,7 @@ export class Rebuilds {
     const next = validatePlan(r, plan, { lint: this.lint, exists: fs.existsSync })
     const before = new Map((r.plan?.shots || []).map((p) => [p.index, p]))
     // a changed swap repaints every frame; a shot whose route, prompt or character changed loses its take
-    if (JSON.stringify(next.swap) !== JSON.stringify(r.plan ? r.plan.swap : r.swap)) r.frames = {}
+    if (paintKey(next.swap) !== paintKey(r.plan ? r.plan.swap : r.swap)) r.frames = {}
     for (const p of next.shots) {
       const b = before.get(p.index)
       if (p.route !== 'h3') delete r.frames[p.index]
@@ -418,18 +457,66 @@ export class Rebuilds {
   }
 
   // ---------- 5 the shots ----------
+  // The voice swap for the whole source (remakevoice.js): who goes in says the same words in their saved voice.
+  async makeVoice(id, opts = {}) {
+    if (!this.voice) throw new Error('The voice swap isn’t set up here.')
+    return this.voice.make(id, opts)
+  }
+  setPhrase(id, index, patch, opts) {
+    if (!this.voice) throw new Error('The voice swap isn’t set up here.')
+    return this.voice.setPhrase(id, index, patch, opts)
+  }
+  // The voice the swapped-in person speaks with (a voice from Audio > Voices; null keeps the original voice), and
+  // their name for the prompts. The frames and approvals stay: a voice changes no picture.
+  setSwapVoice(id, { voiceId = null, name } = {}) {
+    const r = this.get(id)
+    const swap = r.plan ? r.plan.swap : r.swap
+    if (!swap) throw new Error('This rebuild changes no one: say what changes first (the plan’s swap).')
+    const next = { ...swap }
+    if (voiceId) next.voiceId = String(voiceId)
+    else delete next.voiceId
+    if (name != null) {
+      if (String(name).trim()) next.name = String(name).trim()
+      else delete next.name
+    }
+    r.swap = next
+    if (r.plan) r.plan.swap = next
+    return this.write(r)
+  }
+  // The voice the shots use, when the swap wants one and it's made for the current swap.
+  voiced(r) {
+    return !!(this.voice?.wanted(r) && r.voice?.stem && !this.voice.stale(r) && fs.existsSync(r.voice.stem))
+  }
+
   async makeShots(id) {
     let r = this.get(id)
     if (!r.framesApprovedAt) throw new Error("The frames need the person's OK first (approve_rebuild_frames once they say yes).")
+    // a swap with a voice: the new voice track first, so each shot's lips follow its piece of it
+    if (this.voice?.wanted(r) && !this.voiced(r)) r = await this.voice.make(id)
+    const voiced = this.voiced(r)
+    const voiceKey = voiced ? r.voice.madeAt : null
+    const who = r.plan.swap?.name || 'The person'
     const aspect = this.h3Aspect(r)
     for (const p of this.h3Shots(r)) {
       const t = r.takes[p.index]
-      if (t && !['error', 'cancelled'].includes(t.status)) continue
+      const s = this.shot(r, p.index)
+      const lines = voiced ? shotLines(r.voice, s) : []
+      // a take stays unless it failed, or its lips were drawn to another voice than the shot now has
+      const needsVoice = lines.some((l) => l.swap)
+      if (t && !['error', 'cancelled'].includes(t.status) && (!needsVoice || t.voiceKey === voiceKey)) continue
       const f = r.frames[p.index]
       const media = [{ kind: 'picture', file: f.first }, ...(p.h3.useLast ? [{ kind: 'picture', file: f.last }] : [])]
-      const job = await this.studio.generatePreviews({ mode: 'frames', prompt: p.prompt, character: p.character || 'none', aspect, seconds: p.h3.seconds, previews: r.plan.swap ? 3 : 2, seed: Math.floor(Math.random() * 1e6), steps: 8, media, projectName: `Rebuild · ${r.name} · shot ${p.index}` })
+      let voiceLine = null
+      let prompt = p.prompt
+      if (needsVoice) {
+        voiceLine = this.folder(id, 'voice', `shot_${pad3(p.index)}.wav`)
+        fs.mkdirSync(path.dirname(voiceLine), { recursive: true })
+        await this.edits.run(shotVoiceArgs({ stem: r.voice.stem, ...shotVoicePiece(s, p), out: voiceLine }))
+        prompt = voicedPrompt(p.prompt, lines, p.character && p.character !== 'none' ? '{char}' : who)
+      }
+      const job = await this.studio.generatePreviews({ mode: 'frames', prompt, character: p.character || 'none', aspect, seconds: p.h3.seconds, previews: r.plan.swap ? 3 : 2, seed: Math.floor(Math.random() * 1e6), steps: 8, media, ...(voiceLine ? { voiceLine } : {}), projectName: `Rebuild · ${r.name} · shot ${p.index}` })
       r = this.get(id)
-      r.takes[p.index] = { previewJob: job.id, status: job.status, previews: [], candidate: null, finishJob: null, final: null, error: null }
+      r.takes[p.index] = { previewJob: job.id, status: job.status, previews: [], candidate: null, finishJob: null, final: null, error: null, ...(needsVoice ? { voiceKey, voiceLine } : {}) }
       r.status = 'rendering'
       this.write(r)
     }
@@ -548,7 +635,9 @@ export class Rebuilds {
       segs.push({ s, file: out })
     }
     let guide = null
-    if (r.source.hasAudio) {
+    const voiced = this.voiced(r)
+    if (voiced) guide = r.voice.track
+    else if (r.source.hasAudio) {
       guide = path.join(cutDir, 'guide.wav')
       await this.edits.run(['-y', '-v', 'error', '-i', sourceFile, '-vn', '-ac', '2', '-ar', '48000', guide])
     }
@@ -562,7 +651,7 @@ export class Rebuilds {
       ops.push({ op: 'add_clip', media: m.id, track: 'V1', start: s.start, in: 0, out: r3(Math.min(s.duration, m.duration || s.duration)), muted: true })
     }
     if (guide) {
-      const m = await this.edits.addMedia(guide, { type: 'rebuild', rebuildId: id, guide: true })
+      const m = await this.edits.addMedia(guide, { type: 'rebuild', rebuildId: id, ...(voiced ? { voice: true } : { guide: true }) })
       media[m.id] = m
       ops.push({ op: 'add_clip', media: m.id, track: 'A1', start: 0, in: 0, out: r3(Math.min(r.source.duration, m.duration || r.source.duration)) })
     }
@@ -570,7 +659,14 @@ export class Rebuilds {
     const res = applyOps({ ...e, media }, ops)
     Object.assign(e, { clips: res.clips, media: res.media, tracks: res.tracks, markers: res.markers })
     this.edits.write(e)
-    const warnings = [GUIDE_WARNING]
+    const name = r.plan.swap?.name || r.voice?.people?.[0]?.name || r.voice?.people?.[0]?.voiceName
+    const warnings = [voiced ? voiceNote(name, r.voice.mode) : GUIDE_WARNING]
+    if (voiced) {
+      const old = keptWithVoice(r)
+      if (old.length) warnings.push(`Shot ${old.join(', ')} ${old.length === 1 ? 'isn’t' : 'aren’t'} remade, but ${old.length === 1 ? 'its' : 'their'} words are now in ${name || 'the new'}'s voice: render ${old.length === 1 ? 'it' : 'them'} with H3 so the face matches.`)
+      const before = this.h3Shots(r).filter((p) => shotLines(r.voice, this.shot(r, p.index)).some((l) => l.swap) && r.takes[p.index]?.final && r.takes[p.index].voiceKey !== r.voice.madeAt).map((p) => p.index)
+      if (before.length) warnings.push(`Shot ${before.join(', ')} ${before.length === 1 ? 'was' : 'were'} rendered before this voice, so the lips follow the old sound: make the shots again to redo ${before.length === 1 ? 'it' : 'them'}.`)
+    }
     if (kept.length) warnings.push(`Shot ${kept.join(', ')} ${kept.length === 1 ? 'is' : 'are'} still the original footage.`)
     if (missing.length) warnings.push(`Shot ${missing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} no new take yet, so the original footage stands in.`)
     r = this.get(id)

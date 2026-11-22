@@ -1812,6 +1812,7 @@
       "url": "https://huggingface.co/Viggle/Viggle-Remake/tree/main/comfyui/ComfyUI-Viggle-Remake",
       "dir": "ComfyUI-Viggle-Remake",
       "bundled": "comfy-nodes/ComfyUI-Viggle-Remake",
+      "version": 2,
       "for": "Replace"
     },
     {

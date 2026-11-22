@@ -6,7 +6,8 @@ three things Viggle Remake does differently, each written to reproduce `inferenc
 
 RemakeConditioning   the source clip as <Video 1>, each image as <Picture N> and, with `pins`, also as a keyframe at
                      that real frame of the output; a text-only presentation; the source soundtrack held as the
-                     clean target audio for the whole denoise
+                     clean target audio for the whole denoise; optionally (IV Studio's voice swap) a voice clip
+                     as <Audio 1> and time spans where the audio is made new instead of kept
 RemakeKeyframeUntil  drops the keyframes once sigma falls below `keyframe_until` (0.9 = the last two of six forwards)
 RemakeNoise          draws the starting noise in the reference script's order, so a seed gives the same video
 
@@ -77,6 +78,10 @@ class RemakeConditioning:
                 "ref_2": ("IMAGE",),
                 "ref_3": ("IMAGE",),
                 "ref_4": ("IMAGE",),
+                "ref_audio": ("AUDIO", {"tooltip": "Optional: a voice clip, given to the model as <Audio 1> (name it in "
+                                                   "the prompt). Only heard where `regen` lets the audio be made new."}),
+                "regen": ("STRING", {"default": "", "tooltip": "Optional: seconds where the soundtrack is made new "
+                                                             "instead of kept, e.g. '1.2-3.9, 5.0-6.4'. Empty keeps it all."}),
             },
         }
 
@@ -86,7 +91,7 @@ class RemakeConditioning:
     CATEGORY = "Viggle Remake"
 
     def run(self, clip, vae, audio_vae, source, prompt, ref_1, pins, frames, short_edge,
-            audio=None, ref_2=None, ref_3=None, ref_4=None):
+            audio=None, ref_2=None, ref_3=None, ref_4=None, ref_audio=None, regen=""):
         nf, se = frames, short_edge
         refs = [r[:1, ..., :3] for r in (ref_1, ref_2, ref_3, ref_4) if r is not None]
         pins = [int(p) for p in pins.replace(",", " ").split()]
@@ -107,7 +112,7 @@ class RemakeConditioning:
 
         # text only: one label per 2 fps block of the source, one per reference, then the prompt, each tokenized on its own
         segments = ["<Video 1>: ", *["<%.1f seconds>" % s for s in stamps(nf)],
-                    *["<Picture %d>: " % (i + 1) for i in range(len(refs))], prompt]
+                    *["<Picture %d>: " % (i + 1) for i in range(len(refs))], *(["<Audio 1>: "] if ref_audio is not None else []), prompt]
         tokens = {"qwen3vl_32b": [[t for s in segments for t in clip.tokenize(s)["qwen3vl_32b"][0]]]}
         positive = clip.encode_from_tokens_scheduled(tokens)
 
@@ -123,6 +128,15 @@ class RemakeConditioning:
             blocks.append({"kind": "image", "latent_h": th // 16, "latent_w": tw // 16, "latent": vae.encode(r)})
 
         # keyframes on the output canvas: the first stretched, the rest cover-cropped
+        # the voice clip as an audio reference, encoded the way the stock reference node does it
+        if ref_audio is not None:
+            v, vsr = ref_audio["waveform"][0].float(), ref_audio["sample_rate"]
+            v = v.repeat(2, 1) if v.shape[0] == 1 else v[:2]
+            v = comfy.audio.resample(v, vsr, AUDIO_SR) if vsr != AUDIO_SR else v
+            v = torch.nn.functional.pad(v, (0, -v.shape[1] % 800))
+            zv = audio_vae.encode(v[None].movedim(1, -1))
+            blocks.append({"kind": "audio", "ref_audio_t": zv.shape[-1], "audio_latent": zv})
+
         keyframes = []
         for i, (r, p) in enumerate(zip(refs, pins)):
             if (r.shape[1], r.shape[2]) != (h, w):
@@ -147,8 +161,16 @@ class RemakeConditioning:
 
         # the target: video to generate, audio held clean (noise_mask 0)
         video = torch.zeros(1, 24, (nf - 5) // 17 * 5 + 2, h // 16, w // 16)
+        audio_mask = torch.zeros_like(za)
+        for span in regen.replace(";", ",").split(","):
+            if "-" not in span:
+                continue
+            a, b = (float(x) for x in span.strip().split("-", 1))
+            lo, hi = max(0, round(a * AUDIO_LATENT_FPS)), min(za.shape[-1], round(b * AUDIO_LATENT_FPS))
+            if hi > lo:
+                audio_mask[..., lo:hi] = 1
         latent = {"samples": comfy.nested_tensor.NestedTensor((video, za)),
-                  "noise_mask": comfy.nested_tensor.NestedTensor((torch.ones_like(video), torch.zeros_like(za)))}
+                  "noise_mask": comfy.nested_tensor.NestedTensor((torch.ones_like(video), audio_mask))}
         return (positive, latent)
 
 

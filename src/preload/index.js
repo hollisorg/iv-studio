@@ -89,7 +89,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     setPrompt: call('remake:setPrompt'),
     render: call('remake:render'),
     faces: call('remake:faces'),
-    onProgress: on('remake:progress')
+    onProgress: on('remake:progress'),
+    voice: call('remake:voice'),
+    setPhrase: call('remake:setPhrase'),
+    voiceStatus: call('remake:voiceStatus'),
+    setupSplitter: call('remake:setupSplitter'),
+    onVoiceProgress: on('remake:voiceProgress')
   },
   sizzle: {
     meta: call('sizzle:meta'),
@@ -117,6 +122,10 @@ contextBridge.exposeInMainWorld('ivstudio', {
     pick: call('rebuild:pick'),
     firstCut: call('rebuild:firstCut'),
     delete: call('rebuild:delete'),
+    setVoice: call('rebuild:setVoice'),
+    voice: call('rebuild:voice'),
+    setPhrase: call('rebuild:setPhrase'),
+    onVoiceProgress: on('rebuild:voiceProgress'),
     onLog: on('rebuild:log')
   },
   shinobi: {

@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
 import { Step } from './FlowKit'
+import VoiceLines from './VoiceLines'
 
 // Replace's Remake engine (remake.js): swap people or change the scene. IV Studio paints a frame of each shot, the
 // person approves them, the writer writes the prompt, and Remake renders with the source's motion and soundtrack.
+// The voice swap (remakevoice.js): who goes in says the source's words in their character's saved voice.
 export default function RemakeFlow({ kind, video, notify, onStarted }) {
   const X = window.ivstudio.remake
   const [check, setCheck] = useState(null)
   const [faces, setFaces] = useState([])
-  const [people, setPeople] = useState([]) // [{picture, name, characterId, lora, who}], up to two
+  const [people, setPeople] = useState([]) // [{picture, name, characterId, lora, who, voiceId}], up to two
+  const [voices, setVoices] = useState([])
+  const [voiceState, setVoiceState] = useState(null) // the voice engine and splitter
+  const [voiceStep, setVoiceStep] = useState(null)
+  const [useTrack, setUseTrack] = useState(false) // the voice track instead of H3 speaking the lines
   const face = people[0]
   const [ask, setAsk] = useState('')
   const [session, setSession] = useState(null)
@@ -20,7 +26,11 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
 
   useEffect(() => {
     X.faces().then(setFaces)
-    return X.onProgress((u) => setProgress((p) => ({ ...p, [u.frame]: u.step })))
+    window.ivstudio.voices.list().then(setVoices, () => {})
+    X.voiceStatus().then(setVoiceState, () => {})
+    const off = X.onVoiceProgress((u) => setVoiceStep(u.step))
+    const off2 = X.onProgress((u) => setProgress((p) => ({ ...p, [u.frame]: u.step })))
+    return () => (off?.(), off2?.())
   }, [])
   useEffect(() => {
     setCheck(null)
@@ -32,7 +42,16 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
 
   const section = video?.section || { start: 0, length: 0 }
   const ready = !!video && check?.ready && (kind === 'swap' ? people.length > 0 : ask.trim().length > 2)
-  const addPerson = (p) => setPeople((list) => (list.some((x) => x.picture === p.picture) ? list : [...list, { ...p, who: '' }].slice(-2)))
+  const addPerson = (p) => setPeople((list) => (list.some((x) => x.picture === p.picture) ? list : [...list, { ...p, who: '', voiceId: p.voiceId || null }].slice(-2)))
+  const voiced = kind === 'swap' && people.some((p) => p.voiceId)
+  const voiceName = (id) => {
+    const n = voices.find((v) => v.id === id)?.name
+    return n ? `${n}’s voice` : 'their own voice'
+  }
+  const voiceReady = !!voiceState?.installed
+  // H3 speaks the lines (the default when Replace's nodes can); the track only when chosen or the nodes are older
+  const h3voice = kind === 'swap' && !!check?.h3voice && !useTrack
+  const v = session?.voice
   const painted = session?.keyframes?.filter((k) => k.painted && !k.skip) || []
 
   async function step(label, fn) {
@@ -48,15 +67,51 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
   // soft mouth (softmouth.js): the source's mouths blurred first, so the new person doesn't mouth its words
   const [soft, setSoft] = useState(false)
   useEffect(() => setSoft(false), [video?.path])
-  const paintInput = () => (kind === 'swap' ? { people: people.map(({ picture, name, who }) => ({ picture, name, who })) } : { ask })
+  const paintInput = () => (kind === 'swap' ? { people: people.map(({ picture, name, who, voiceId }) => ({ picture, name, who, voiceId: voiceReady ? voiceId || null : null })) } : { ask })
+  // the voice: made right after painting (ComfyUI is free then), again after a line changes
+  const makeVoice = (id, opts = {}) =>
+    step('Making the voice', async () => {
+      setVoiceStep('starting')
+      try {
+        setSession(await X.voice(id, opts))
+      } finally {
+        setVoiceStep(null)
+      }
+    })
+  const setPhrase = (i, patch) =>
+    step('Making the voice', async () => {
+      setVoiceStep('saying it')
+      try {
+        setSession(await X.setPhrase(session.id, i, patch))
+      } finally {
+        setVoiceStep(null)
+      }
+    })
+  const setupSplitter = () =>
+    step('Setting up the voice splitter', async () => {
+      await X.setupSplitter()
+      setVoiceState(await X.voiceStatus())
+      if (session?.voice) setSession(await X.voice(session.id, { rehear: true }))
+    })
   const paint = () =>
     step('Painting the frames', async () => {
       setProgress({})
       const src = kind === 'swap' && soft ? (await window.ivstudio.softMouth.make(video.path)).path : video.path
       // the session was prepared from the softened source or not; a change of mind starts it again (setSoft clears it)
-      const s = session && session.kind === kind ? session : await X.prepare({ video: src, section, kind })
+      const s = session && session.kind === kind ? session : await X.prepare({ video: src, section, kind, origin: video.path })
       setSession(s)
-      setSession(await X.paint(s.id, paintInput()))
+      const done = await X.paint(s.id, paintInput())
+      setSession(done)
+      if (voiced && voiceReady) {
+        setVoiceStep('starting')
+        try {
+          setSession(await X.voice(done.id))
+        } catch (err) {
+          notify(`The voice: ${err.message}`)
+        } finally {
+          setVoiceStep(null)
+        }
+      }
     })
   const repaint = (frame) => step('Painting again', async () => setSession(await X.paint(session.id, { ...paintInput(), only: [frame] })))
   const own = (frame) =>
@@ -69,7 +124,9 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
   const render = () =>
     step('Starting', async () => {
       if (prompt && prompt !== session.prompt) await X.setPrompt(session.id, prompt)
-      const r = await X.render(session.id, { takes, characterId: kind === 'swap' && useLora && people.length === 1 ? face?.characterId : null })
+      // a voice chosen after painting goes on the session first
+      if (kind === 'swap' && JSON.stringify((session.people || []).map((p) => p.voiceId || null)) !== JSON.stringify(people.map((p) => (voiceReady ? p.voiceId || null : null)))) await X.paint(session.id, { ...paintInput(), only: [] })
+      const r = await X.render(session.id, { takes, characterId: kind === 'swap' && useLora && people.length === 1 ? face?.characterId : null, voice: true, h3voice: voiced && voiceReady && h3voice })
       setSession(r.session)
       notify(`Started ${r.jobs.length === 1 ? 'the remake' : `${r.jobs.length} takes`}: it shows under Runs when it’s done (a few minutes each).`, 'info')
       onStarted?.()
@@ -123,12 +180,26 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
                   </div>
                   <input className="small" value={p.name || ''} placeholder="their name (optional)" onChange={(e) => setPeople(people.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
                   <input className="small" value={p.who} placeholder={people.length > 1 ? 'replaces: the woman on the left' : 'replaces: the main person'} onChange={(e) => setPeople(people.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))} />
+                  <select className="small remake-voice-pick" value={p.voiceId || ''} title="The voice they speak the source's words in" onChange={(e) => setPeople(people.map((x, j) => (j === i ? { ...x, voiceId: e.target.value || null } : x)))}>
+                    <option value="">Keep the original voice</option>
+                    {voices.map((vv) => (
+                      <option key={vv.id} value={vv.id}>
+                        Voice: {vv.name}
+                      </option>
+                    ))}
+                  </select>
                   <button className="media-remove" onClick={() => setPeople(people.filter((_, j) => j !== i))}>
                     ×
                   </button>
                 </div>
               ))}
             </div>
+          )}
+          {voiced && !voiceReady && <p className="small pink">Swapping the voice needs IV Studio’s voice engine: set it up once on Audio › Voices. Until then the original voice stays.</p>}
+          {kind === 'swap' && people.some((p) => !p.voiceId && p.voiceNote) && (
+            <p className="small dim">
+              {people.find((p) => !p.voiceId && p.voiceNote).name} has no saved voice yet. Make one from “{people.find((p) => !p.voiceId && p.voiceNote).voiceNote}” on Audio › Voices and pick it on their character page; it’s then used everywhere.
+            </p>
           )}
           {people.length === 1 && face?.lora && (
             <label className="me-snap small">
@@ -177,8 +248,14 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
         )}
       </Step>
 
+      {painted.length > 0 && voiced && voiceReady && (
+        <Step n={4} title="The voice" sub={h3voice ? `The same words, at the same moments: H3 says them in ${people.filter((p) => p.voiceId).map((p) => voiceName(p.voiceId)).join(' and ')} while it remakes, so the lips follow the new voice. Check the words below; the track is a preview of the voice.` : `The same words, at the same moments, in ${people.filter((p) => p.voiceId).map((p) => voiceName(p.voiceId)).join(' and ')}. Listen before you remake; change a line’s words or say it again.`}>
+          <VoiceLines voice={v} busy={busy} step={voiceStep} names={people.map((p) => p.name)} onMake={(opts) => makeVoice(session.id, opts)} onPhrase={setPhrase} onSetupSplitter={setupSplitter} settingUp={busy === 'Setting up the voice splitter'} />
+        </Step>
+      )}
+
       {painted.length > 0 && (
-        <Step n={4} title="Remake it" sub="Each take takes a few minutes; they show under Runs when done.">
+        <Step n={voiced && voiceReady ? 5 : 4} title="Remake it" sub="Each take takes a few minutes; they show under Runs when done.">
           <div className="row">
             <span className="row-label">Takes</span>
             <div className="segmented">
@@ -201,6 +278,11 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
             <button className="btn btn-small" disabled={!!busy} onClick={write}>
               {busy === 'Writing the prompt' ? 'Writing…' : session.prompt ? 'Write it again' : 'Write it now'}
             </button>
+            {voiced && voiceReady && (
+              <label className="me-snap small" title="H3 speaks the lines itself in the voice, with the room sound kept around them, so the lips follow it. The track instead lays the new voice on exactly as you heard it, but the lips keep following the original mouth.">
+                <input type="checkbox" checked={useTrack} disabled={!check?.h3voice} onChange={(e) => setUseTrack(e.target.checked)} /> Use the new voice track exactly as heard (the lips follow the original mouth more)
+              </label>
+            )}
           </details>
           <div className="replace-go">
             <button className="btn btn-primary" disabled={!!busy || !check?.ready} onClick={render}>
@@ -209,7 +291,7 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
           </div>
         </Step>
       )}
-      {busy && busy !== 'Painting the frames' && busy !== 'Starting' && <p className="small dim">{busy}…</p>}
+      {busy && busy !== 'Painting the frames' && busy !== 'Starting' && busy !== 'Making the voice' && <p className="small dim">{busy}…</p>}
     </>
   )
 }

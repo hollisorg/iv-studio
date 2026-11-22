@@ -63,6 +63,7 @@ import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
+import { rebuildHost, RemakeVoice, VoiceSwap } from '../service/remakevoice'
 import { lintPrompt } from '../service/lint'
 import { ABUSE_EMAIL, acceptance, H3_LICENSE_URL, H3_RULES, H3_TERMS_DECLINED, H3_TERMS_NEEDED, H3_TERMS_VERSION, REPORT_URL, setH3Gate, termsAccepted } from '../service/terms'
 import { Reader } from '../service/reader'
@@ -973,9 +974,14 @@ app.whenReady().then(() => {
   // Remake (remake.js): Replace's engine for swapping people and changing the scene
   remake = new Remake({ studio, images, faces: shinobi, dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, writer: () => writerOf(readSettings(BASE)) })
   replace.remake = remake
+  // the voice swap (remakevoice.js): who goes in says the same words in their character's saved voice
+  remake.voice = new RemakeVoice({ remake, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
   // Rebuild (rebuild.js): a video read into shots and remade. The agent tools (MCP) drive the plan; this page starts
   // one, shows where it is and gives the person's OKs. Built the way the MCP server builds it.
   const rebuilds = new Rebuilds({ dataDir: DATA, reader: new Reader({ ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, run: (a) => edits.run(a), runErr: (a) => edits.runErr(a), beatsOf: (f) => reels.beatsOf(f), voices }), studio, images, remake, edits, writer: () => writerOf(readSettings(BASE)), lint: lintPrompt, onLog: (line) => send('rebuild:log', line) })
+  // the voice swap for a whole rebuild: the swapped-in person says the same words in their saved voice
+  rebuilds.voice = new VoiceSwap({ host: rebuildHost(rebuilds), voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
+  const rebuildVoiceProgress = (id) => (u) => send('rebuild:voiceProgress', { id, ...u })
   const rebuildView = async (id) => {
     const r = rebuilds.get(id)
     return rebuilds.view(['rendering', 'ready'].includes(r.status) ? await rebuilds.refresh(id) : r)
@@ -995,6 +1001,9 @@ app.whenReady().then(() => {
   handle('rebuild:pick', (id, index, candidate) => rebuilds.view(rebuilds.pick(id, index, candidate)))
   handle('rebuild:firstCut', (id) => rebuilds.firstCut(id))
   handle('rebuild:delete', (id) => rebuilds.remove(id))
+  handle('rebuild:setVoice', (id, input) => rebuilds.view(rebuilds.setSwapVoice(id, input || {})))
+  handle('rebuild:voice', async (id, opts = {}) => rebuilds.view(await rebuilds.makeVoice(id, { rehear: !!opts.rehear, onProgress: rebuildVoiceProgress(id) })))
+  handle('rebuild:setPhrase', async (id, index, patch) => rebuilds.view(await rebuilds.setPhrase(id, index, patch, { onProgress: rebuildVoiceProgress(id) })))
   const presetOf = (id) => (id ? studio.characters().find((c) => c.id === id) || null : null)
   handle('remake:meta', () => ({ credit: REMAKE_CREDIT }))
   handle('remake:check', (kind) => remake.check(kind))
@@ -1006,11 +1015,17 @@ app.whenReady().then(() => {
   handle('remake:write', (id) => remake.write(id))
   handle('remake:setPrompt', (id, prompt) => remake.setPrompt(id, prompt))
   handle('remake:render', (id, opts = {}) => remake.render(id, { ...opts, character: presetOf(opts.characterId) }))
+  const voiceProgress = (id) => (u) => send('remake:voiceProgress', { id, ...u })
+  handle('remake:voice', (id, opts = {}) => remake.voice.make(id, { rehear: !!opts.rehear, onProgress: voiceProgress(id) }))
+  handle('remake:setPhrase', (id, index, patch) => remake.voice.setPhrase(id, index, patch, { onProgress: voiceProgress(id) }))
+  handle('remake:voiceStatus', () => ({ ...voices.status(), splitterReady: voices.splitterReady() }))
+  handle('remake:setupSplitter', () => voices.setupSplitter())
   // who can go in: character presets with a face (their own or the ready-made catalogue's)
+  const voiceOf = (id) => (id ? voices.list().find((v) => v.id === id) : null)
   handle('remake:faces', () =>
     studio
       .characters()
-      .map((c) => ({ id: c.id, name: c.name, characterId: c.id, picture: studio.facePicture(c, resourcesDir(path.join(app.getAppPath(), 'resources'))), lora: !!c.lora }))
+      .map((c) => ({ id: c.id, name: c.name, characterId: c.id, picture: studio.facePicture(c, resourcesDir(path.join(app.getAppPath(), 'resources'))), lora: !!c.lora, voiceId: voiceOf(c.voiceId)?.id || null, voiceName: voiceOf(c.voiceId)?.name || null, voiceNote: c.voiceNote || '' }))
       .filter((f) => f.picture)
   )
   handle('replace:toEdit', async (file, name) => editWith(await localCopy(file), name, 'replace'))

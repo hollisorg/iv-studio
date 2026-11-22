@@ -7369,6 +7369,52 @@ button.nav-update:hover {
   border: 1px dashed var(--line);
   border-radius: 6px;
 }
+/* the voice swap: a voice per person, the new track and its lines */
+.remake-voice-pick {
+  width: 100%;
+  margin-top: 4px;
+}
+.remake-voice-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 8px 0;
+}
+.remake-voice-players label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.remake-voice-players audio {
+  width: 100%;
+}
+.remake-lines {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.remake-line {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.remake-line > .pink {
+  grid-column: 2 / -1;
+}
+.remake-line.kept input[type='text'],
+.remake-line.kept > input {
+  opacity: 0.55;
+}
+@media (max-width: 760px) {
+  .remake-line {
+    grid-template-columns: 1fr;
+  }
+  .remake-line > .pink {
+    grid-column: auto;
+  }
+}
 
 .system-free {
   display: inline-flex;

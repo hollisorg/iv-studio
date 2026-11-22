@@ -19,6 +19,11 @@ export const VOICE_SETUP = {
   ]
 }
 const VERSION = 1 // bump when VOICE_PACKAGES or the models change, so setup runs again
+// The voice splitter for Replace's voice swap: Demucs (Meta, MIT, code and weights), added to the same environment
+// only when it's first wanted, so nobody else has to set voices up again.
+export const SPLITTER_PACKAGES = ['demucs==4.0.1']
+export const SPLITTER_SETUP = { size: 120 * 1024 ** 2, model: { name: 'Demucs htdemucs', by: 'Meta', licence: 'MIT', url: 'https://github.com/facebookresearch/demucs' } }
+const SPLITTER_VERSION = 1
 
 const readJson = (file, fallback) => {
   try {
@@ -40,6 +45,7 @@ export class VoiceEngine {
     this.pending = new Map()
     this.seq = 0
     this.installing = null
+    this.splitterInstalling = null
   }
 
   get venv() {
@@ -57,8 +63,30 @@ export class VoiceEngine {
   marker = () => path.join(this.dir, 'installed.json')
   installed = () => fs.existsSync(this.python) && readJson(this.marker(), {}).version === VERSION
 
+  splitterMarker = () => path.join(this.dir, 'splitter.json')
+  splitterInstalled = () => this.installed() && readJson(this.splitterMarker(), {}).version === SPLITTER_VERSION
+
   status() {
-    return { installed: this.installed(), installing: !!this.installing, running: !!this.proc, setup: VOICE_SETUP }
+    return { installed: this.installed(), installing: !!this.installing, running: !!this.proc, setup: VOICE_SETUP, splitter: { installed: this.splitterInstalled(), installing: !!this.splitterInstalling, setup: SPLITTER_SETUP } }
+  }
+
+  // Once, about 120 MB: Demucs into the voice engine's own environment (the pinned PyTorch stays as it is), then its
+  // weights into the models folder.
+  installSplitter() {
+    if (this.splitterInstalled()) return Promise.resolve(this.status())
+    if (!this.installed()) return Promise.reject(new Error('Set up voices first: Audio > Voices > Set up voices.'))
+    if (!this.splitterInstalling)
+      this.splitterInstalling = (async () => {
+        await this.cloud.ensureUv()
+        this.onLog('Installing the voice splitter (Demucs)…')
+        await this.cloud.exec(this.cloud.uvExe, ['pip', 'install', '--python', this.venv, '--index', TORCH_INDEX, '--index-strategy', 'unsafe-best-match', ...VOICE_PACKAGES, ...SPLITTER_PACKAGES], { env: this.cloud.uvEnv() })
+        await this.runScript(['--download-splitter', this.models])
+        fs.writeFileSync(this.splitterMarker(), JSON.stringify({ version: SPLITTER_VERSION, packages: SPLITTER_PACKAGES, at: new Date().toISOString() }, null, 2))
+        this.onLog('The voice splitter is ready.')
+      })()
+        .finally(() => (this.splitterInstalling = null))
+        .then(() => this.status()) // after the finally, so it no longer says installing
+    return this.splitterInstalling
   }
 
   env() {

@@ -66,6 +66,7 @@ import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
 import { Remake, REMAKE_KINDS } from '../service/remake'
+import { rebuildHost, RemakeVoice, VoiceSwap } from '../service/remakevoice'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
 import { SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
@@ -1465,10 +1466,39 @@ tool('remake_paint', `Remake, step 1 of 2: swap people (kind swap) or change the
   who: z.string().optional(),
   picture: z.string().optional(),
   name: z.string().optional().describe('swap: the name of who goes in'),
+  character: z.string().optional().describe('swap: a character id (list_characters) instead of picture: their face, name and saved voice'),
+  voiceId: z.string().nullable().optional().describe('swap: the voice who goes in speaks with (list_voices); defaults to the character\'s saved voice'),
+  voice: z.enum(['swap', 'keep']).optional().describe('swap: "swap" (default when a voice is known) says the source\'s words in the new voice; "keep" keeps the original voice'),
   only: z.array(z.number().int()).optional().describe('repaint only these keyframe frame numbers')
-}, async ({ kind, video, session, start, length, only, ...input }) => {
+}, async ({ kind, video, session, start, length, only, character, voiceId, voice, ...input }) => {
   const s = session ? remake.get(session) : await remake.prepare({ video, kind, section: { start, length } })
+  if (kind === 'swap' && character) {
+    const c = studio.characters().find((x) => x.id === character)
+    if (!c) throw new Error(`No character ${character}.`)
+    input.picture ||= studio.facePicture(c, resourcesDir())
+    if (!input.picture) throw new Error(`${c.name} has no picture yet.`)
+    input.name ||= c.name
+    if (voiceId === undefined) voiceId = c.voiceId || null
+  }
+  if (kind === 'swap' && input.picture) input.people = [{ picture: input.picture, name: input.name || '', who: input.who || '', description: input.description || '', voiceId: voice === 'keep' ? null : voiceId || null }]
+  if (kind === 'swap' && voiceId && voice !== 'keep') voices.get(voiceId)
   return remake.paint(s.id, { ...input, only: only || null })
+})
+tool('remake_voice', `Replace's voice swap, between remake_paint and remake_render: the person who goes in says the source's own words, at the same moments, in their saved voice (a character's voice, or voiceId given to remake_paint). Splits the voice from the room sound (when the voice splitter is set up; otherwise the room sound dips under the new voice), hears the words and their times with Whisper, works out who says each line, says each of the swapped person's lines in their voice fitted to its time, mixes the track and has Whisper hear each new line back. Returns every line (start, end, words, who, swapped, fit warning, what was heard back and how well it matched) and the track's path: show the person the words and the track before rendering. Change a line with phrases: [{ index, text?, swap?, again? }] (again: say it with a new seed). remake_render then has H3 say these words in the voice (the default when Replace's nodes can), or lays the track on with h3voice false. Needs the voice engine (voice_status); about a minute.`, {
+  session: z.string(),
+  phrases: z.array(z.object({ index: z.number().int(), text: z.string().optional(), swap: z.boolean().optional(), again: z.boolean().optional() })).optional(),
+  rehear: z.boolean().default(false).describe('hear the words again from the source')
+}, async ({ session, phrases, rehear }) => {
+  let s
+  if (phrases?.length) {
+    for (const p of phrases) {
+      const cur = remake.get(session)
+      if (!cur.voice?.phrases) await remake.voice.hear(session)
+      s = await remake.voice.setPhrase(session, p.index, p)
+    }
+  } else s = await remake.voice.make(session, { rehear })
+  const v = s.voice
+  return { session: s.id, mode: v.mode === 'split' ? 'room sound kept' : 'room sound dips under the new voice (the voice splitter is not set up)', language: v.language, track: v.track, people: v.people, lines: v.phrases.map((p, index) => ({ index, start: p.start, end: p.end, words: p.text, who: p.person != null ? v.people?.[p.person]?.name || `person ${p.person + 1}` : 'not swapped', swapped: !!p.swap, at: p.at, stretch: p.tempo, warn: p.warn, heardBack: p.heard, match: p.match })) }
 })
 tool('remake_use_picture', "Set your own picture as a Remake keyframe (it is fitted to the canvas).", { session: z.string(), frame: z.number().int(), picture: z.string() }, ({ session, frame, picture }) => remake.usePicture(session, frame, picture))
 tool('remake_render', `Remake, step 2 of 2: writes the six-section prompt with the person's prompt writer (from the source frames and the painted ones, following the model's own prompt guide) unless prompt is given, then renders takes (1-3, a few minutes each on a 24 GB card). Returns jobs: poll get_job, or replace_history for the result trimmed back to the source's length and shape.`, {
@@ -1476,7 +1506,9 @@ tool('remake_render', `Remake, step 2 of 2: writes the six-section prompt with t
   takes: z.number().int().min(1).max(3).default(1),
   seed: z.number().int().min(0).optional(),
   prompt: z.string().optional().describe('Your own six-section prompt (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music)'),
-  characterId: z.string().optional().describe('swap: a character preset whose LoRA joins the run')
+  characterId: z.string().optional().describe('swap: a character preset whose LoRA joins the run'),
+  voice: z.boolean().default(true).describe('swap: use the voice swap\'s track (remake_voice) when a voice was chosen; made first if needed'),
+  h3voice: z.boolean().optional().describe('swap: H3 speaks the lines itself in the voice (the clip as <Audio 1>, the words in the prompt), so the lips follow the new voice. Left out: on when Replace’s nodes can do it (the person preferred it), else the voice track. false: the voice track (remake_voice) laid on instead')
 }, async ({ session, prompt, characterId, ...opts }) => {
   if (prompt) remake.setPrompt(session, prompt)
   return remake.render(session, { ...opts, character: characterId ? studio.characters().find((c) => c.id === characterId) : null })
@@ -1694,6 +1726,7 @@ tool('delete_music', "Delete a song and its file in IV Studio's music folder (Co
 const images = new Images({ studio, dataDir: DATA })
 remake.images = images
 remake.faces = shinobi
+remake.voice = new RemakeVoice({ remake, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, resourcesDir: resourcesDir() })
 tool('list_samplers', "The samplers and schedulers this ComfyUI offers for a shot's previews (generate_previews sampler and scheduler). IV Studio's tested defaults are er_sde and beta; the 2 MP finish keeps its own refine settings.", {}, async () => {
   const [k, b] = await Promise.all([studio.comfy.objectInfo('KSamplerSelect'), studio.comfy.objectInfo('BasicScheduler')])
   return { samplers: comboOptions(k, 'KSamplerSelect', 'sampler_name') || [], schedulers: comboOptions(b, 'BasicScheduler', 'scheduler') || [], defaults: { sampler: 'er_sde', scheduler: 'beta' } }
@@ -1903,13 +1936,29 @@ tool('delete_sizzle', 'Delete a sizzle and its capture (renders, songs and the S
 // ---------- Rebuild: a video taken apart and rebuilt ----------
 const reader = new Reader({ ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, run: (a) => edits.run(a), runErr: (a) => edits.runErr(a), beatsOf: (f) => reels.beatsOf(f), voices })
 const rebuilds = new Rebuilds({ dataDir: DATA, reader, studio, images, remake, edits, writer: () => writerOf(readSettings(BASE)), lint: lintPrompt })
+rebuilds.voice = new VoiceSwap({ host: rebuildHost(rebuilds), voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, resourcesDir: resourcesDir() })
 // what the agent needs to see of a rebuild: everything but the music's beat list
 const rebuildSummary = (r) => {
   const v = rebuilds.view(r)
   return { ...v, music: v.music && { bpm: v.music.bpm, strength: v.music.strength, beats: v.music.beats.length } }
 }
 const rebuildCaption = { text: z.string(), from: z.number().describe('seconds into the shot'), to: z.number().describe('seconds into the shot'), where: z.enum(REBUILD_WHERE) }
-const rebuildSwap = z.object({ ask: z.string().describe('What changes, in plain words: "Make her a man in a grey suit", "Put the mug on a beach"'), picture: z.string().optional().describe('A picture of what goes in (a face, a product), on this PC') })
+const rebuildSwap = z.object({
+  ask: z.string().describe('What changes, in plain words: "Make her a man in a grey suit", "Put the mug on a beach"'),
+  picture: z.string().optional().describe('A picture of what goes in (a face, a product), on this PC'),
+  character: z.string().optional().describe('A character id (list_characters) who goes in: their face picture, name and saved voice'),
+  voiceId: z.string().optional().describe('The voice who goes in speaks with (list_voices); the same words, at the same moments. Left out: the original voice stays, unless character brings one'),
+  name: z.string().optional().describe('The name of who goes in, for the prompts')
+})
+// a swap as the agent gives it, with a character filled in: their face, name and saved voice
+const rebuildSwapOf = (swap) => {
+  if (!swap) return swap
+  const { character, ...rest } = swap
+  if (!character) return rest
+  const c = studio.characters().find((x) => x.id === character)
+  if (!c) throw new Error(`No character ${character}.`)
+  return { ...rest, picture: rest.picture || studio.facePicture(c, resourcesDir()) || undefined, name: rest.name || c.name, voiceId: rest.voiceId || c.voiceId || undefined }
+}
 sizzleTool('rebuild_read', `Rebuild, step 1: read a video into shots, to make it again on this PC. Only for video the person made or has the right to rework: ask them, and pass rights: true only when they confirm (for someone else's video, describe it in words and don't rebuild it). Up to 2 minutes long. Finds the cuts, takes each shot's first, middle and last frame and a contact sheet, notes when captions come and go (top and bottom bands), the music's tempo, loudness and pauses, and the words when the voice engine is set up. Returns the shots and a sheet of every shot's middle frame. Then look at each shot (view_rebuild_shot) and say what it is (save_rebuild_reading), or pass writer: true to have the writer from Settings read them (local, Claude Code or Codex; never the paid one). Takes about a second per second of video.`, {
   file: z.string().describe('The video, on this PC'),
   name: z.string().optional(),
@@ -1917,7 +1966,7 @@ sizzleTool('rebuild_read', `Rebuild, step 1: read a video into shots, to make it
   swap: rebuildSwap.optional().describe('What changes in the remake, when the person already said'),
   writer: z.boolean().default(false).describe('Have the writer from Settings read every shot too')
 }, async ({ file, name, rights, swap, writer }) => {
-  let r = await rebuilds.read({ file, name, rights, swap: swap || null })
+  let r = await rebuilds.read({ file, name, rights, swap: rebuildSwapOf(swap) || null })
   if (writer) r = await rebuilds.readWithWriter(r.id)
   const mids = r.shots.map((s) => s.middle)
   const pictures = [await sizzlePicture(mids, { width: r.source.width >= r.source.height ? 240 : 160, tile: [6, Math.ceil(mids.length / 6)], aspect: r.source.width / r.source.height })]
@@ -1942,7 +1991,25 @@ tool('save_rebuild_plan', `Rebuild, step 3: the plan, one route per shot. h3: re
     shots: z.array(z.object({ index: z.number().int().min(1), route: z.enum(REBUILD_ROUTES), prompt: z.string().optional(), character: z.string().optional().describe('none, or a character preset id; write {char} in the prompt'), file: z.string().optional().describe('own: the clip'), note: z.string().optional() })),
     notes: z.string().optional()
   })
-}, ({ rebuildId, plan }) => rebuildSummary(rebuilds.savePlan(rebuildId, plan)))
+}, ({ rebuildId, plan }) => rebuildSummary(rebuilds.savePlan(rebuildId, plan.swap === undefined ? plan : { ...plan, swap: rebuildSwapOf(plan.swap) })))
+tool('rebuild_voice', `Rebuild's voice swap, after the plan (before make_rebuild_shots, which makes it itself when it's missing): the person painted in says the source's own words, at the same moments, in their saved voice (the plan's swap.voiceId, or set voiceId here; null keeps the original voice). Splits the voice from the room sound when the voice splitter is set up (otherwise the room dips under the new lines), hears the words and their times with Whisper across the whole video, works out who says each line, says each of the swapped person's lines in their voice fitted to its time, mixes the track and has Whisper hear each new line back. Each remade shot is then rendered with its piece of the voices so the lips follow it, and rebuild_first_cut puts the track on A1. Returns every line (start, end, words, swapped, fit warning, heard back) and the track: show the person before rendering. Change a line with phrases: [{ index, text?, swap?, again? }]. Speech only: a sung source keeps its singing (say so). Needs the voice engine (voice_status); about a minute for a 30 s video.`, {
+  rebuildId: z.string(),
+  voiceId: z.string().nullable().optional().describe('Set the swap\'s voice first (null: keep the original voice)'),
+  name: z.string().optional(),
+  phrases: z.array(z.object({ index: z.number().int(), text: z.string().optional(), swap: z.boolean().optional(), again: z.boolean().optional() })).optional(),
+  rehear: z.boolean().default(false)
+}, async ({ rebuildId, voiceId, name, phrases, rehear }) => {
+  if (voiceId !== undefined) {
+    if (voiceId) voices.get(voiceId)
+    rebuilds.setSwapVoice(rebuildId, { voiceId, name })
+  }
+  let r = rebuilds.get(rebuildId)
+  if (!rebuilds.voice.wanted(r)) return { rebuildId, voice: null, note: 'The swap has no voice: the original voice stays. Give voiceId (list_voices) to swap it.' }
+  if (phrases?.length) for (const p of phrases) r = await rebuilds.setPhrase(rebuildId, p.index, p)
+  else r = await rebuilds.makeVoice(rebuildId, { rehear })
+  const v = r.voice
+  return { rebuildId, mode: v.mode === 'split' ? 'room sound kept' : 'room sound dips under the new voice (the voice splitter is not set up)', language: v.language, track: v.track, lines: v.phrases.map((p, index) => ({ index, start: p.start, end: p.end, words: p.text, swapped: !!p.swap, at: p.at, stretch: p.tempo, warn: p.warn, heardBack: p.heard, match: p.match })) }
+})
 tool('approve_rebuild_plan', 'Record that the person approved the rebuild plan. Only call this after they said yes to it.', { rebuildId: z.string() }, ({ rebuildId }) => rebuildSummary(rebuilds.approvePlan(rebuildId)))
 sizzleTool('make_rebuild_frames', "Rebuild, step 4: the frames each H3 shot starts (and ends) on. Writing is painted out (H3 copies any it sees) and the swap painted in, with the picture editor on this PC (Qwen Image 2.1, Flux.2 or Flux 3 Klein), both ends with one seed. A shot with no writing and no swap keeps its own frames. Free and local; about 30-60 s a frame. Needs the plan's OK. Returns before/after pictures: look at them, show the person, and wait for their OK. only: just these shots again.", { rebuildId: z.string(), only: z.array(z.number().int().min(1)).optional() }, async ({ rebuildId, only }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
@@ -1963,7 +2030,7 @@ tool('make_rebuild_shots', "Rebuild, step 5: render the H3 shots from the approv
   await rebuilds.makeShots(rebuildId)
   return rebuildSummary(await rebuilds.refresh(rebuildId))
 })
-tool('rebuild_first_cut', "Rebuild, step 6: put every shot back in its slot in an IV Studio Edit: new takes retimed into their slots (V1, their own sound muted), kept shots as the original footage, stills with a slow push, the captions as titles (T1) and the original sound on A1 as a guide. Returns the edit's id (get_edit, edit_timeline and export_edit work on it) and what's still original. Tell the person the guide sound has to be replaced before they publish.", { rebuildId: z.string() }, ({ rebuildId }) => rebuilds.firstCut(rebuildId))
+tool('rebuild_first_cut', "Rebuild, step 6: put every shot back in its slot in an IV Studio Edit: new takes retimed into their slots (V1, their own sound muted), kept shots as the original footage, stills with a slow push, the captions as titles (T1) and, on A1, the new voice track when the swap has a voice (rebuild_voice), else the original sound as a guide. Returns the edit's id (get_edit, edit_timeline and export_edit work on it), what's still original and warnings: pass them on (a guide sound has to be replaced before they publish; shots not remade where the new voice talks).", { rebuildId: z.string() }, ({ rebuildId }) => rebuilds.firstCut(rebuildId))
 tool('get_rebuild', "A rebuild, brought up to date: its shots with their readings, routes and H3 lengths, the plan and approvals, each H3 shot's frames and take (previews, pick, finish, final file), and the edit. Call it to move rendering along.", { rebuildId: z.string() }, async ({ rebuildId }) => rebuildSummary(await rebuilds.refresh(rebuildId)))
 tool('list_rebuilds', 'Rebuilds, newest first: name, status (reading, planning, approved, frames, rendering, ready, editing), shots and length.', {}, () => ({ items: rebuilds.list() }))
 tool('delete_rebuild', 'Delete a rebuild and its frames, takes and cut pieces (renders in Shots and the Edit stay). Ask the person first.', { rebuildId: z.string() }, ({ rebuildId }) => rebuilds.remove(rebuildId))

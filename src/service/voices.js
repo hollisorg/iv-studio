@@ -95,6 +95,50 @@ export class Voices {
     }
   }
 
+  // The words with their times: [{ start, end, text }] in seconds, and the language Whisper heard.
+  async transcribeTimed(file) {
+    const wav = path.join(os.tmpdir(), `ivs-asr-${randomUUID().slice(0, 8)}.wav`)
+    try {
+      await this.ffmpegTo(file, wav, ['-ac', '1', '-ar', '16000'])
+      const out = await this.eng().call('transcribe_timed', { file: wav })
+      this.releaseSoon()
+      return { segments: out.segments || [], language: out.language || null, duration: out.duration ?? null }
+    } finally {
+      fs.rmSync(wav, { force: true })
+    }
+  }
+
+  // The voice splitter (Demucs) for Replace's voice swap: only on this PC's engine, set up once on request.
+  splitterReady() {
+    if (this.cloud?.()) return false
+    return !!this.engine.status().splitter?.installed
+  }
+  setupSplitter = () => this.engine.installSplitter().then(() => this.status())
+  // Voice and background of a recording apart: { vocals, background }, 44.1 kHz stereo WAVs.
+  async separate(file, { vocals, background }) {
+    if (!this.splitterReady()) throw new Error('The voice splitter isn’t set up.')
+    const wav = path.join(os.tmpdir(), `ivs-sep-${randomUUID().slice(0, 8)}.wav`)
+    try {
+      await this.ffmpegTo(file, wav, ['-ac', '2', '-ar', '44100'])
+      await this.engine.call('separate', { file: wav, vocals, background })
+      this.releaseSoon()
+      return { vocals, background }
+    } finally {
+      fs.rmSync(wav, { force: true })
+    }
+  }
+
+  // A line said in a voice, written to out (once: an existing file is used as it is). For Replace's voice swap.
+  async sayTo({ voiceId, text, seed = null, out }) {
+    const say = String(text || '').trim()
+    if (!say) throw new Error('No words to say.')
+    const v = this.get(voiceId)
+    if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
+    if (!fs.existsSync(out)) await this.eng().call('speak', { text: say, out, ref_wav: v.reference, ref_text: v.text, seed: seed ?? v.seed ?? 41 })
+    this.releaseSoon()
+    return { file: out, duration: WAV_SECONDS(fs.readFileSync(out)) }
+  }
+
   // ---------- the library ----------
   folder = (id) => path.join(this.dir, id)
   list() {

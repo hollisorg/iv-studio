@@ -55,8 +55,13 @@ export class CharacterCatalog {
     return this.list()
   }
 
-  // A ready-made character that is a preset gets its bundled voice on the Voices page, once.
-  async attachVoices() {
+  // A ready-made character that is a preset gets its bundled voice on the Voices page, once. One run at a time: two
+  // pages listing voices together each made the same voice (seen with Replace's voice picker, 2026-11-21).
+  attachVoices() {
+    this.attaching ||= this.attachVoicesOnce().finally(() => (this.attaching = null))
+    return this.attaching
+  }
+  async attachVoicesOnce() {
     if (!this.voices) return
     const have = this.voices.list()
     let list = this.studio.characters()

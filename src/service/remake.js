@@ -25,6 +25,7 @@ import { harnessJson } from './harness.js'
 import { IMAGE_ASPECTS } from './images.js'
 import { probe } from './media.js'
 import { localChat, localWriterModel } from './prompter.js'
+import { regenSpans, spokenLines, voiceStale, withDialogue } from './remakevoice.js'
 import { comboOptions } from './setup.js'
 
 export const REMAKE_KINDS = ['swap', 'change']
@@ -117,7 +118,9 @@ export function checkRemakePrompt(text, { pictures = 0, frames = MAX_FRAMES } = 
 
 // The ComfyUI graph for one take: Viggle's own workflow (comfyui/workflows/remake_*_api.json) with the merged int8
 // file in place of the base model and the LoRA. Files are ComfyUI input names; lora: an optional character LoRA.
-export function remakeGraph({ kind, unet, clip, vae, audioVae, source, refs, pins = [], frames, prompt, seed = 0, prefix = 'H3/remake/take', lora = null }) {
+// audio: a soundtrack to hold instead of the source's own (the voice swap's new track). voiceRef + regen (take C):
+// a voice clip as <Audio 1> and the seconds where H3 makes the sound new ("1.2-3.9, 5.0-6.4").
+export function remakeGraph({ kind, unet, clip, vae, audioVae, source, refs, pins = [], frames, prompt, seed = 0, prefix = 'H3/remake/take', lora = null, audio = null, voiceRef = null, regen = '' }) {
   const g = {
     1: { class_type: 'UNETLoader', inputs: { unet_name: unet, weight_dtype: 'default' } },
     3: { class_type: 'RemakeKeyframeUntil', inputs: { model: lora ? ['2', 0] : ['1', 0], keyframe_until: 0.9 } },
@@ -139,6 +142,15 @@ export function remakeGraph({ kind, unet, clip, vae, audioVae, source, refs, pin
     18: { class_type: 'VAEDecodeAudio', inputs: { samples: ['16', 0], vae: ['6', 0] } },
     19: { class_type: 'CreateVideo', inputs: { images: ['17', 0], audio: ['18', 0], fps: FPS } },
     save: { class_type: 'SaveVideo', inputs: { video: ['19', 0], filename_prefix: prefix, format: 'mp4', codec: 'h264' } }
+  }
+  if (audio) {
+    g.aud = { class_type: 'LoadAudio', inputs: { audio } }
+    g[11].inputs.audio = ['aud', 0]
+  }
+  if (voiceRef) {
+    g.vref = { class_type: 'LoadAudio', inputs: { audio: voiceRef } }
+    g[11].inputs.ref_audio = ['vref', 0]
+    g[11].inputs.regen = regen
   }
   if (lora) g[2] = { class_type: 'LoraLoaderModelOnly', inputs: { model: ['1', 0], lora_name: lora.name, strength_model: lora.strength ?? 0.8 } }
   refs.forEach((r, i) => {
@@ -181,6 +193,13 @@ const run = (cmd, args) =>
     p.on('close', (code) => (code === 0 ? resolve(out + err) : reject(new Error(err.trim().split('\n').slice(-3).join(' ') || `${path.basename(cmd)} exited ${code}`))))
   })
 
+// The final file's ffmpeg arguments: the take trimmed to the source's n frames at width x height, with its own sound,
+// or with track (the voice swap's) laid back on instead.
+export function finalArgs({ take, track = null, n, width, height, out }) {
+  const end = (n / FPS).toFixed(4)
+  return ['-y', '-v', 'error', '-i', take, ...(track ? ['-i', track] : []), '-vf', `trim=end_frame=${n},setpts=PTS-STARTPTS,scale=${width}:${height}:flags=lanczos`, ...(track ? ['-map', '0:v:0', '-map', '1:a:0'] : []), '-af', `atrim=end=${end}`, '-c:v', 'libx264', '-crf', '16', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', out]
+}
+
 const SCHEMA = { type: 'object', properties: Object.fromEntries(SECTIONS.map((k) => [k, { type: 'string' }])), required: SECTIONS }
 
 export class Remake {
@@ -218,13 +237,15 @@ export class Remake {
     const info = await this.studio.comfy.objectInfo()
     const unets = comboOptions(info, 'UNETLoader', 'unet_name') || []
     const unet = unets.find((u) => u.replace(/\\/g, '/').split('/').pop() === MODEL[kind]) || null
+    const h3voice = !!info.RemakeConditioning?.input?.optional?.ref_audio
     const packs = NODES.filter((c) => !info[c]).length ? [{ name: 'Replace’s nodes (Settings → Setup → Install missing node packs)', url: null, missing: NODES.filter((c) => !info[c]) }] : []
     const models = unet ? [] : [{ name: `Replace’s ${kind === 'swap' ? 'swap' : 'edit'} model (${MODEL[kind]}, 21 GB)`, where: 'diffusion_models', setup: kind === 'swap' ? 'remake_swap' : 'remake_edit' }]
-    return { ready: !packs.length && !models.length, packs, models, unet }
+    return { ready: !packs.length && !models.length, packs, models, unet, h3voice }
   }
 
   // 1. The source on Remake's canvas, and the frames to paint. section: {start, length} in seconds.
-  async prepare({ video, section = { start: 0, length: 0 }, kind = 'swap' }) {
+  // origin: the file as it was, when video is a softened copy (soft mouth); the voice swap sees who talks in it.
+  async prepare({ video, section = { start: 0, length: 0 }, kind = 'swap', origin = null }) {
     if (!video || !fs.existsSync(video)) throw new Error('Choose the source video.')
     if (!REMAKE_KINDS.includes(kind)) throw new Error('kind is swap or change.')
     const info = await probe(this.ffprobe, video)
@@ -255,7 +276,7 @@ export class Remake {
       await run(this.ffmpeg, ['-y', '-v', 'error', '-i', source, '-vf', `select=eq(n\\,${f})`, '-frames:v', '1', file])
       keyframes.push({ frame: f, time: stamp(f), file, painted: null })
     }
-    return this.save({ id, kind, video, section: { start, length: span }, source, n, frames, canvas, original: { width: info.width, height: info.height }, cuts, keyframes, createdAt: new Date().toISOString() })
+    return this.save({ id, kind, video, ...(origin && origin !== video ? { origin } : {}), section: { start, length: span }, source, n, frames, canvas, original: { width: info.width, height: info.height }, cuts, keyframes, createdAt: new Date().toISOString() })
   }
 
   // The picture editor IV Studio uses here: Qwen Image 2.1 (it kept the shot and its style in the 2026-11-04 test),
@@ -379,8 +400,9 @@ export class Remake {
     const images = []
     for (const [i, f] of shots.entries()) images.push({ name: `source-${i + 1}.jpg`, label: `<Video 1> at ${stamp(f)}`, data: await this.jpeg(s.source, f) })
     for (const [i, k] of keys.entries()) images.push({ name: `picture-${i + 1}.jpg`, label: `<Picture ${i + 1}>, the target video at ${k.time}`, data: (await this.jpegFile(k.painted)).toString('base64') })
+    const spoken = s.kind === 'swap' && s.voice?.phrases?.length ? spokenLines(s.voice, s.people) : []
     const cutsText = s.cuts.length ? `Cuts at ${s.cuts.map(stamp).join(', ')}.` : 'One continuous shot, no cuts.'
-    const user = [`The source is ${seconds.toFixed(2)} s at 24 fps (${s.n} frames). ${cutsText}`, wanted, `Painted frames: ${keys.map((k, i) => `<Picture ${i + 1}> at ${k.time}`).join(', ')}.`, '', 'Images, in order:', ...images.map((im, i) => `Image ${i + 1} (${im.name}): ${im.label}`)].join('\n')
+    const user = [`The source is ${seconds.toFixed(2)} s at 24 fps (${s.n} frames). ${cutsText}`, wanted, `Painted frames: ${keys.map((k, i) => `<Picture ${i + 1}> at ${k.time}`).join(', ')}.`, ...(spoken.length ? ['The spoken words, heard in the source (use these exact words; a swapped character says theirs in their own voice):', ...spoken] : []), '', 'Images, in order:', ...images.map((im, i) => `Image ${i + 1} (${im.name}): ${im.label}`)].join('\n')
     const { engine, model } = this.writer()
     let data
     if (isHarness(engine)) data = await harnessJson({ engine, model, system, user: `${user}\n${engine === 'claude' ? 'Open each image file with the Read tool before you write.\n' : ''}\nAnswer with the JSON object only.`, schema: SCHEMA, images, timeoutMs: 600000 })
@@ -424,15 +446,38 @@ export class Remake {
   }
 
   // 4. Renders the takes. takes: 1-3 (seeds seed, seed+1000, ...). character: a preset whose LoRA joins the run.
-  async render(id, { takes = 1, seed = null, character = null } = {}) {
+  // voice (default on): with a voice chosen for who goes in, Remake holds the voice swap's new track instead of the
+  // source's sound (made first if it isn't). h3voice (take C, experimental): the source's sound is kept except where
+  // the first swapped person talks, which H3 makes new in their voice (the clip as <Audio 1>, the words in the prompt).
+  // h3voice: H3 speaks the swapped lines itself in the voice (the clip as <Audio 1>); null (the default) does so when
+  // Replace's nodes can (pack version 2), else the voice track. Matthew picked it over the track, 2026-11-22: the lips
+  // follow the new voice, where with the track they still follow the source's mouth.
+  async render(id, { takes = 1, seed = null, character = null, voice = true, h3voice = null } = {}) {
     let s = this.get(id)
+    const check = await this.check(s.kind)
+    if (h3voice == null) h3voice = !!(voice && check.h3voice && this.voice?.wanted(s))
+    if (s.kind === 'swap' && (voice || h3voice) && this.voice?.wanted(s) && voiceStale(s, { h3: h3voice })) {
+      if (h3voice) await this.voice.hear(id)
+      else await this.voice.make(id)
+      s = this.get(id)
+    }
     if (!s.prompt) s = await this.write(id)
     const keys = s.keyframes.filter((k) => k.painted && !k.skip)
     if (!keys.length) throw new Error('Paint at least one frame first.')
-    const check = await this.check(s.kind)
     if (!check.ready) throw new Error(`Remake needs ${[...check.packs.map((p) => p.name), ...check.models.map((m) => m.name)].join(', ')}.`)
     const t = this.studio.template
     const source = await this.studio.stage(s.source, 'remake')
+    let sound = null
+    if (s.kind === 'swap' && h3voice) {
+      if (!check.h3voice) throw new Error('H3 voicing needs Replace’s nodes updated: Settings → Setup → Update node packs.')
+      const person = this.voice?.people(s).find((p) => p.voiceId)
+      if (!person) throw new Error('Choose a voice for who goes in first.')
+      const regen = regenSpans(s.voice, person.index)
+      if (!regen) throw new Error(`No lines for ${person.name || 'them'} to say were heard in this part.`)
+      sound = { mode: 'h3', voiceRef: await this.studio.stage(person.reference, 'remake'), regen, prompt: withDialogue(s.prompt, s.voice, { person: person.index, subject: person.index + 1 }), name: person.name }
+    } else if (s.kind === 'swap' && voice && s.voice?.track && fs.existsSync(s.voice.track)) {
+      sound = { mode: 'track', audio: await this.studio.stage(s.voice.track, 'remake'), track: s.voice.track, names: (s.voice.people || []).filter((p) => p.voiceId).map((p) => p.name) }
+    }
     const refs = []
     for (const k of keys) refs.push(await this.studio.stage(k.painted, 'remake'))
     const project = s.projectId ? this.studio.getProject(s.projectId) : this.studio.createProject(`${s.kind === 'swap' ? 'Swap' : 'Change'} · ${path.basename(s.video).replace(/\.[^.]+$/, '')}`, null, null, 'replace')
@@ -440,8 +485,8 @@ export class Remake {
     const base = seed ?? Math.floor(Math.random() * 1e6)
     const jobs = []
     for (let i = 0; i < Math.max(1, Math.min(3, takes)); i++) {
-      const graph = remakeGraph({ kind: s.kind, unet: check.unet, clip: t['2'].inputs.clip_name, vae: t['3'].inputs.vae_name, audioVae: t['4'].inputs.vae_name, source, refs, pins: keys.map((k) => k.frame), frames: s.frames, prompt: s.prompt, seed: base + i * 1000, prefix: `H3/remake/${s.id}_s${base + i * 1000}`, lora: character?.lora ? { name: character.lora, strength: character.strength ?? 0.8 } : null })
-      jobs.push(await this.studio.submitGraph({ kind: 'replace', graph, projectId: project.id, name: project.name, plan: { replace: { mode: s.kind === 'swap' ? 'remake-swap' : 'remake-change', engine: 'remake', finalNode: 'save', remake: s.id, video: s.video, section: s.section, seed: base + i * 1000 }, request: { mode: 'remake', prompt: s.prompt } } }))
+      const graph = remakeGraph({ kind: s.kind, unet: check.unet, clip: t['2'].inputs.clip_name, vae: t['3'].inputs.vae_name, audioVae: t['4'].inputs.vae_name, source, refs, pins: keys.map((k) => k.frame), frames: s.frames, prompt: s.prompt, seed: base + i * 1000, prefix: `H3/remake/${s.id}_s${base + i * 1000}`, lora: character?.lora ? { name: character.lora, strength: character.strength ?? 0.8 } : null, audio: sound?.audio || null, voiceRef: sound?.voiceRef || null, regen: sound?.regen || '', ...(sound?.prompt ? { prompt: sound.prompt } : {}) })
+      jobs.push(await this.studio.submitGraph({ kind: 'replace', graph, projectId: project.id, name: project.name, plan: { replace: { mode: s.kind === 'swap' ? 'remake-swap' : 'remake-change', engine: 'remake', finalNode: 'save', remake: s.id, video: s.video, section: s.section, seed: base + i * 1000, ...(sound ? { voice: { mode: sound.mode, track: sound.track || null, names: sound.names || [sound.name] } } : {}) }, request: { mode: 'remake', prompt: sound?.prompt || s.prompt } } }))
     }
     return { session: this.save({ ...this.get(id), jobs: [...(s.jobs || []), ...jobs.map((j) => j.id)] }), jobs }
   }
@@ -461,7 +506,10 @@ export class Remake {
     const ratio = s.original.width / s.original.height
     const w = ratio >= 1 ? long : Math.round((long * ratio) / 2) * 2
     const h = ratio >= 1 ? Math.round(long / ratio / 2) * 2 : long
-    await run(this.ffmpeg, ['-y', '-v', 'error', '-i', local, '-vf', `trim=end_frame=${s.n},setpts=PTS-STARTPTS,scale=${w}:${h}:flags=lanczos`, '-af', `atrim=end=${(s.n / FPS).toFixed(4)}`, '-c:v', 'libx264', '-crf', '16', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', out])
+    // with the voice swap's track, that track itself goes back on: Remake held it clean, so the take's own sound is
+    // only the same track through H3's 32 kHz audio VAE
+    const track = r.voice?.mode === 'track' && r.voice.track && fs.existsSync(r.voice.track) ? r.voice.track : null
+    await run(this.ffmpeg, finalArgs({ take: local, track, n: s.n, width: w, height: h, out }))
     return out
   }
 }

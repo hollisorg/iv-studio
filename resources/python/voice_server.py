@@ -2,11 +2,14 @@
 large-v3 turbo (OpenAI, MIT) reads the words in a recording. Runs in IV Studio's own Python environment.
 
   python voice_server.py --download <models dir>   fetch both models (pinned revisions), printing progress
+  python voice_server.py --download-splitter <models dir>   fetch Demucs's htdemucs weights (Replace's voice swap)
   python voice_server.py <models dir>               serve: one JSON request per stdin line, one JSON reply
                                                     per stdout line, {"id", "ok", ...} or {"id", "error"}
 Requests: {"op": "speak", "text", "out", "ref_wav", "ref_text", "seed"}
           {"op": "design", "text", "description", "out", "seed"}
           {"op": "transcribe", "file"}
+          {"op": "transcribe_timed", "file"}         the words with each segment's start and end, and the language
+          {"op": "separate", "file", "vocals", "background"}   voice and background apart (Demucs, MIT; optional)
           {"op": "load"}
 Models load on first use and stay loaded until IV Studio stops the process (that is how it frees the GPU).
 """
@@ -57,11 +60,29 @@ def patch_torchaudio():
     torchaudio.load = load
 
 
+def splitter_dir(root):
+    return os.path.join(root, "demucs")
+
+
+def download_splitter(root):
+    # Demucs (Meta, MIT, code and weights) fetches its pretrained weights through torch.hub; they go in IV Studio's
+    # models folder, not the person's home
+    import torch
+
+    torch.hub.set_dir(splitter_dir(root))
+    print(json.dumps({"progress": "Downloading Demucs (htdemucs, about 80 MB)…"}), flush=True)
+    from demucs.pretrained import get_model
+
+    get_model("htdemucs")
+    print(json.dumps({"done": True}), flush=True)
+
+
 class Engine:
     def __init__(self, root):
         self.root = root
         self.tts = None
         self.asr = None
+        self.demucs = None
 
     def voxcpm(self):
         if self.tts is None:
@@ -135,6 +156,72 @@ class Engine:
             words.append(processor.batch_decode(ids, skip_special_tokens=True)[0].strip())
         return {"text": " ".join(w for w in words if w)}
 
+    def transcribe_timed(self, file):
+        # the same model, asked for its timestamps: one {start, end, text} per segment, times in seconds
+        import torch
+
+        processor, model = self.whisper()
+        audio = read_audio(file, 16000)
+        segments, language = [], None
+        for start in range(0, max(len(audio), 1), 30 * 16000):
+            chunk = audio[start : start + 30 * 16000]
+            if len(chunk) < 1600:
+                continue
+            features = processor(chunk, sampling_rate=16000, return_tensors="pt").input_features.to(model.device, model.dtype)
+            with torch.no_grad():
+                ids = model.generate(features, task="transcribe", return_timestamps=True)
+            ids = ids[0] if hasattr(ids, "shape") and len(ids.shape) > 1 else ids
+            out = processor.tokenizer.decode(ids, output_offsets=True)
+            if language is None:
+                # generate leaves its prompt tokens (<|en|> and the rest) out of what it returns, so ask for it directly
+                with torch.no_grad():
+                    found = processor.tokenizer.decode(model.detect_language(features)[0]).strip("<|>")
+                language = found if found.isalpha() and len(found) <= 3 else None
+            offset = start / 16000
+            for o in out.get("offsets") or []:
+                a, b = o["timestamp"]
+                text = (o.get("text") or "").strip()
+                if text and a is not None and b is not None and b > a:
+                    segments.append({"start": round(offset + a, 3), "end": round(offset + b, 3), "text": text})
+        return {"segments": segments, "language": language, "duration": round(len(audio) / 16000, 3)}
+
+    def separate(self, file, vocals, background):
+        # Demucs htdemucs: the voices in one file, everything else (room, music, effects) in another, both at the
+        # input's rate. The input is a 44.1 kHz stereo WAV (IV Studio converts it first).
+        import importlib
+
+        import numpy as np
+        import soundfile as sf
+        import torch
+
+        importlib.invalidate_caches()  # Demucs may have been installed while this process ran
+        if self.demucs is None:
+            torch.hub.set_dir(splitter_dir(self.root))
+            from demucs.pretrained import get_model
+
+            log("loading Demucs")
+            self.demucs = get_model("htdemucs").eval().to("cuda" if torch.cuda.is_available() else "cpu")
+        from demucs.apply import apply_model
+
+        data, rate = sf.read(file, dtype="float32", always_2d=True)
+        wav = torch.from_numpy(data.T.copy())
+        if wav.shape[0] == 1:
+            wav = wav.repeat(2, 1)
+        wav = wav[:2]
+        ref = wav.mean(0)
+        mean, std = ref.mean(), ref.std() + 1e-8
+        dev = next(self.demucs.parameters()).device
+        with torch.no_grad():
+            out = apply_model(self.demucs, ((wav - mean) / std)[None].to(dev), device=dev, shifts=1, split=True, overlap=0.25, progress=False)[0]
+        out = (out * std + mean).cpu()
+        voc = out[self.demucs.sources.index("vocals")]
+        rest = wav - voc  # the background as the mix minus the voice, so nothing else is lost
+        for path, x in ((vocals, voc), (background, rest)):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            sf.write(path + ".part.wav", np.clip(x.numpy().T, -1, 1), rate, subtype="PCM_16")
+            os.replace(path + ".part.wav", path)
+        return {"vocals": vocals, "background": background, "rate": rate}
+
     def handle(self, req):
         op = req.get("op")
         if op == "speak":
@@ -143,6 +230,10 @@ class Engine:
             return self.design(req["text"], req["description"], req["out"], req.get("seed", 1))
         if op == "transcribe":
             return self.transcribe(req["file"])
+        if op == "transcribe_timed":
+            return self.transcribe_timed(req["file"])
+        if op == "separate":
+            return self.separate(req["file"], req["vocals"], req["background"])
         if op == "load":
             self.voxcpm()
             return {"loaded": True}
@@ -171,5 +262,7 @@ def serve(root):
 if __name__ == "__main__":
     if sys.argv[1] == "--download":
         download(sys.argv[2])
+    elif sys.argv[1] == "--download-splitter":
+        download_splitter(sys.argv[2])
     else:
         serve(sys.argv[1])
