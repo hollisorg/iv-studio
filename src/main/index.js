@@ -576,7 +576,9 @@ app.whenReady().then(() => {
       return { website: 'https://infinitevariance.ai', modalSignup: null }
     }
   })()
-  handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, dataDir: DATA, dataSource: LOCATION.missing ? 'default' : LOCATION.source, portable: PORTABLE, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
+  // examplesDir: the Workflows cards' Example videos (resources/examples), played through ivfile://
+  const examplesDir = path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'examples')
+  handle('app:info', () => ({ examplesDir, version: app.getVersion(), platform: process.platform, dataDir: DATA, dataSource: LOCATION.missing ? 'default' : LOCATION.source, portable: PORTABLE, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
     const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, hfToken, openaiKey, openaiHeaders, ...rest } = s

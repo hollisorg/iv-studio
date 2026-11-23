@@ -1,5 +1,6 @@
 // Failed renders in plain words: real ComfyUI messages map to the right explanation, unknown ones stay as they are.
 import { FAILURE_IDS, explainFailure } from '../src/service/failures.js'
+import { LOST_JOB } from '../src/service/studio.js'
 
 let failed = 0
 const check = (name, ok) => {
@@ -20,6 +21,7 @@ const CASES = [
   ['disk-full', 'OSError: There is not enough space on the disk'],
   ['credits', 'SeedanceVideo: Payment Required: insufficient credits for this request'],
   ['sign-in', 'SeedanceVideo: Unauthorized: Please login first to use this node.'],
+  ['lost', LOST_JOB],
   ['unreachable', 'fetch failed'],
   ['unreachable', 'ComfyUI did not answer /prompt within 20 s'],
   ['unreachable', 'connect ECONNREFUSED 127.0.0.1:8188'],
