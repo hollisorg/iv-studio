@@ -18,7 +18,7 @@ const ffmpeg = require('ffmpeg-ffprobe-static').ffmpegPath
 const ffprobe = require('ffmpeg-ffprobe-static').ffprobePath
 const OUT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '../resources/examples')
 const MAX_SECONDS = 12
-// "long": true lets one source run to this (Sequences' three shots in one take, Effects' three effects)
+// "long": true lets one source run to this (Sequences' three shots in one take)
 const LONG_SECONDS = 32
 
 const list = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))

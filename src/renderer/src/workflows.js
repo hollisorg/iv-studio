@@ -5,8 +5,7 @@
 // every file). kind compare: before and after videos with a wipe line (tabs when there's more than one); steps: the
 // pictures that went in, then the video; video: one video, its strip the labelled stretches that light up as it
 // plays (steps can have one too). sound: the video's sound is worth hearing (it still starts muted). tall: a vertical
-// video. long: may run to 32 s (Sequences' three shots, Effects' three effects). A tool without an example has no
-// Example button.
+// video. long: may run to 32 s (Sequences' three shots). A tool without an example has no Example button.
 export const WORKFLOWS = [
   {
     page: 'replace',
@@ -74,16 +73,14 @@ export const WORKFLOWS = [
     needs: ['Its models on this PC (Setup)'],
     example: {
       kind: 'steps',
-      long: true,
       inputs: [{ picture: 'effects-photo.webp', label: 'One photo' }],
       video: 'effects.mp4',
       strip: [
-        // three 5 s effects back to back (81 frames at 16 fps each)
-        { label: 'Cakeify', start: 0, end: 5.06 },
-        { label: '360° orbit', start: 5.06, end: 10.13 },
-        { label: 'Money rain', start: 10.13, end: 15.2 }
+        // two 5 s effects back to back (81 frames at 16 fps each)
+        { label: '360° orbit', start: 0, end: 5.06 },
+        { label: 'Money rain', start: 5.06, end: 10.13 }
       ],
-      text: 'One photo of Tess on a sunny street and three of the effects: Cakeify slices her open to show she was cake all along, the 360° orbit circles right round her, and Money rain fills the air with notes. Each is its own 5 second clip from the same photo.'
+      text: 'One photo of Tess on a sunny street and two of the effects: the 360° orbit circles right round her and back to her face, and Money rain fills the air with notes. Each is its own 5 second clip from the same photo.'
     }
   },
   {

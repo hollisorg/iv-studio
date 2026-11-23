@@ -15,7 +15,7 @@ const DIR = new URL('../resources/examples/', import.meta.url)
 const file = (n) => new URL(n, DIR)
 const BUDGET = 25 * 1024 * 1024
 const MAX_SECONDS = 12
-// a long example (Sequences: three 10 s shots in one take; Effects: three 5 s effects) may run to this
+// a long example (Sequences: three 10 s shots in one take) may run to this
 const LONG_SECONDS = 32
 // tools that have no Example on purpose (Reel's was dropped, Matthew 2026-11-23)
 const NO_EXAMPLE = ['reel']
@@ -123,7 +123,7 @@ for (const w of WORKFLOWS) {
 check('nothing in resources/examples goes unused', onDisk.every((n) => used.has(n)), onDisk.filter((n) => !used.has(n)).join(', '))
 check('every tool has an example (but the ones left without on purpose)', WORKFLOWS.every((w) => w.example || NO_EXAMPLE.includes(w.page)), WORKFLOWS.filter((w) => !w.example && !NO_EXAMPLE.includes(w.page)).map((w) => w.name).join(', '))
 check('the tools left without an example have none', NO_EXAMPLE.every((p) => WORKFLOWS.some((w) => w.page === p && !w.example)))
-check('only Sequences and Effects run long', WORKFLOWS.filter((w) => w.example?.long).every((w) => ['sequences', 'effects'].includes(w.page)))
+check('only Sequences runs long', WORKFLOWS.filter((w) => w.example?.long).every((w) => w.page === 'sequences'))
 
 // ---------- the words ----------
 for (const [who, text] of words) {
