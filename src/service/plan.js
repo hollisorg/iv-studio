@@ -203,8 +203,16 @@ export const ENHANCERS = ['dlss', 'seedvr2', 'none']
 export const SEEDVR2_SIZES = [1080, 1440, 2160]
 // a finish that skips DLSS 5 in its own graph (remote.js swaps the node for a plain save)
 export const skipsDlss = (finish) => finish?.enhancer === 'seedvr2' || finish?.enhancer === 'none'
+// The 2 MP pass draws the take again at this strength (node 25; the template's 0.4 otherwise). In First / last frame
+// (and Keyframes, which renders that way) its guide is the words alone (node 205: the pictures only steer the take,
+// node 204), so with no character LoRA nothing holds the face and 0.4 redrew it: Tess's green eyes came out brown in a
+// Keyframes finish (2026-11-23). 0.1 kept her face, eyes and freckles and was as sharp; 0.2 still moved the eyes.
+export const FRAMES_REFINE = 0.1
+export const picturesOnly = (request) => request?.mode === 'frames' && (!request.character || request.character === 'none')
 export function planFinish(previewPlan, finish) {
   const f = { candidate: 1, megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', rerollSeed: null, enhancer: 'dlss', enhanceResolution: 1080, ...finish }
+  // a picture-led shot with no character LoRA keeps its face: a light 2 MP pass, unless the finish sets one
+  if (f.refineDenoise == null && picturesOnly(previewPlan.request)) f.refineDenoise = FRAMES_REFINE
   // SeedVR2 or none instead of DLSS 5: the finish skips DLSS (no 2x, no frame generation); SeedVR2 then follows it
   if (skipsDlss(f)) Object.assign(f, { upscale2x: false, fps: 0 })
   const errors = []
@@ -214,6 +222,7 @@ export function planFinish(previewPlan, finish) {
   if (!(f.candidate >= 1 && f.candidate <= n)) errors.push(`candidate must be 1..${n}.`)
   if (!FRAME_GEN_FPS.includes(f.fps)) errors.push(`fps must be one of ${FRAME_GEN_FPS.join(', ')} (0 = off).`)
   if (!(f.megapixels >= 0.5 && f.megapixels <= 4)) errors.push('megapixels must be between 0.5 and 4.')
+  if (f.refineDenoise != null && !(f.refineDenoise >= 0.05 && f.refineDenoise <= 0.6)) errors.push('refineDenoise must be between 0.05 and 0.6.')
   if (f.audio === 'voice' && !previewPlan.request.voiceLine) errors.push('Final audio "voice" needs a voice line.')
   if (errors.length) throw Object.assign(new Error(errors.join(' ')), { errors })
 
@@ -243,6 +252,8 @@ export function planFinish(previewPlan, finish) {
   // DLSS 5's noise reduction (0-2) and style, when the finish asks for them
   if (f.dlssStrength != null && Number.isFinite(Number(f.dlssStrength))) values['50.NR Intensity'] = Math.min(2, Math.max(0, Number(f.dlssStrength)))
   if (['Default', 'Natural', 'Cinematic'].includes(f.dlssStyle)) values['50.NR Style'] = f.dlssStyle
+  // the 2 MP pass's strength (node 25, 0.4 by default): how much of the picture it draws again
+  if (f.refineDenoise != null) values['25.denoise'] = f.refineDenoise
   if (f.rerollSeed != null) values['505.seed'] = f.rerollSeed
   else values['505.seed'] = previewPlan.request.seed + 444
   const { width, height } = previewPlan.resolved

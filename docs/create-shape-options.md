@@ -30,6 +30,15 @@ Three changes to Create's "Shape and size" step and the H3 finish. Branch `claud
 - Sound's buttons are now **New sound** (was Generated: H3 makes the sound again with the full-size picture, so words and voices can come out a little different), **The take's sound** (was Preview's: the sound of the picked take, exactly as heard) and **My recording**.
 - The speed preset note under Final size no longer squeezes into the label column.
 
+## A picture-led finish keeps the face
+
+- Found while remaking the Keyframes example: finishing the studio-shoot take at 2 MP turned Tess's green eyes brown and made her face more generic. The take itself was right.
+- Why: the 2 MP pass draws the take again for 2 steps at strength 0.4 (node 25). In First / last frame mode, which Keyframes uses too, its guide is the words alone (node 26 -> 1104 -> 404 -> 205); only the take is guided by the pictures (node 204). With no character LoRA, nothing holds the face, so 0.4 redraws it.
+- Measured on the same take (last frame, face at 1:1): 0.4 brown eyes and a different face; 0.2 freckles back but hazel eyes; 0.1 green eyes, freckles and the same face as the take, with coat and knit texture as sharp as 0.4.
+- Fix (`plan.js`): a finish of a First / last frame or Keyframes shot with no character LoRA uses `refineDenoise` 0.1 (`FRAMES_REFINE`) unless it sets its own; everything else keeps 0.4. `refineDenoise` (0.05 to 0.6) can also be passed to any finish. A real finish through the default path recorded 0.1 and gave the same graph as the explicit 0.1 run (ComfyUI reused its output).
+- Not changed: Continue mode's 2 MP pass is also guided without its source clip (node 611, not 612); nobody has reported a face change there, so it stays as it is.
+- Test: `test/frames-finish.mjs` (6 checks, in the CI list).
+
 ## Checks
 
 - `node test/shape-options.mjs`: 6 of 6. Covers photo sizing and the size nodes, the aspect fallback outside frames mode, photoRatio and nearestAspect, LTX, the None finish graph (no DLSS node left; node 51 still reports the final), and the One final chain (it starts once, and a failed start is recorded).
