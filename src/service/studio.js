@@ -11,7 +11,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { Comfy } from './comfy.js'
 import { probe } from './media.js'
 import { buildPrompt, checkPrompt } from './graph.js'
-import { applyPatch, planFinish, planPreviews } from './plan.js'
+import { applyPatch, planFinish, planPreviews, skipsDlss } from './plan.js'
 import { applyFinishSpeed, applySpeed, withPreviewSize } from './speed.js'
 import { adaptGraph, capabilities, LIVE_NODE, withLivePreview, withLivePreviewAll } from './remote.js'
 import { Cast, resolveMentions, withCast } from './cast.js'
@@ -142,7 +142,7 @@ export function renderFacts({ job, jobs = [], output = {}, request = {}, charact
   const f = fin?.plan?.finish
   if (f) {
     if (seedance) add('Finish', f.way === 'seedance' ? 'Seedance 1080p' : f.way === 'take' ? 'The take, as it is' : f.refiner === 'h3' || f.refiner === 'h3seedvr2' ? `H3 at ${f.megapixels || 2} MP, strength ${f.strength ?? 'light'}${f.refiner === 'h3seedvr2' ? ', then SeedVR2' : ', then DLSS 5'}` : f.refiner === 'dlss' ? 'DLSS 5' : `SeedVR2 ${f.resolution || 1080}p`)
-    else add('Finish', `${f.megapixels || 2} MP from preview ${f.candidate || 1}${f.enhancer === 'seedvr2' ? ', then SeedVR2' : f.upscale2x ? ', DLSS 5 and RTX 2×' : ', DLSS 5'}${f.dlssStrength != null ? ` (strength ${f.dlssStrength}${f.dlssStyle && f.dlssStyle !== 'Default' ? `, ${f.dlssStyle}` : ''})` : ''}${f.fps ? `, ${f.fps} fps` : ''}`)
+    else add('Finish', `${f.megapixels || 2} MP from preview ${f.candidate || 1}${f.enhancer === 'seedvr2' ? ', then SeedVR2' : f.enhancer === 'none' ? ', no enhancer' : f.upscale2x ? ', DLSS 5 and RTX 2×' : ', DLSS 5'}${f.dlssStrength != null ? ` (strength ${f.dlssStrength}${f.dlssStyle && f.dlssStyle !== 'Default' ? `, ${f.dlssStyle}` : ''})` : ''}${f.fps ? `, ${f.fps} fps` : ''}`)
   }
   const e = job.kind === 'enhance' ? job.plan?.enhance : null
   if (e?.engine === 'faces') add('Enhanced', `Faces refined${e.strength ? `, strength ${e.strength}` : ''}`)
@@ -492,7 +492,8 @@ export class Studio {
   async generatePreviews(input) {
     if (input.engine === SEEDANCE) return this.seedancePreviews(input)
     if (input.engine === LTX) return this.ltxPreviews(input)
-    const { projectId, projectName, characterOverride, members: extra = [], ...given } = input
+    // autoFinish (Create's One final): the one take is finished as soon as it is done, with these finish settings
+    const { projectId, projectName, characterOverride, members: extra = [], autoFinish, ...given } = input
     // a speed preset (speed.js) fills the preview size, steps and takes the request leaves out
     // and the saved first-render size (Settings → Your PC) where the request names none
     const asked = applySpeed(withPreviewSize(given, this.previewSize?.()))
@@ -528,6 +529,10 @@ export class Studio {
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name
+    if (autoFinish) {
+      if (plan.resolved.previews !== 1) throw new Error('One final makes one take; set previews to 1.')
+      plan.autoFinish = { ...autoFinish, candidate: 1 }
+    }
     return this.submit({ kind: 'previews', project, plan, name })
   }
 
@@ -548,7 +553,7 @@ export class Studio {
     const caps = await this.capabilities()
     const finish = applyFinishSpeed(given, speed || source.plan.request?.speed || fallbackSpeed, caps)
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
-    if (finish.upscale2x && !caps.upscale2x && finish.enhancer !== 'seedvr2') throw new Error('This ComfyUI has no 2x upscaler.')
+    if (finish.upscale2x && !caps.upscale2x && !skipsDlss(finish)) throw new Error('This ComfyUI has no 2x upscaler.')
     if (finish.enhancer === 'seedvr2' && this.comfy.hosted) throw new Error('SeedVR2 runs on this PC\'s ComfyUI or your own cloud (RunPod, Modal), not on Comfy Cloud.')
     const plan = planFinish(source.plan, finish)
     plan.values['80'] = source.name
@@ -857,8 +862,9 @@ export class Studio {
   // Queues any graph and records it as a job. Sequence graphs carry plan.saves so their outputs can be read.
   async submitGraph({ kind, graph: built, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
     const caps = await this.capabilities()
-    // a finish SeedVR2 will enhance skips DLSS 5 (remote.js swaps its node for a plain save, as on the cloud)
-    let graph = adaptGraph(built, plan?.finish?.enhancer === 'seedvr2' ? { ...caps, dlss: false, upscale2x: false, rife: false } : caps, { upscaleSize: plan?.resolved?.upscaleSize })
+    // a finish SeedVR2 will enhance, or one with no enhancer, skips DLSS 5 (remote.js swaps its node for a plain
+    // save, as on the cloud)
+    let graph = adaptGraph(built, skipsDlss(plan?.finish) ? { ...caps, dlss: false, upscale2x: false, rife: false } : caps, { upscaleSize: plan?.resolved?.upscaleSize })
     // step pictures for the live preview from every kind of render that samples (shot hunts and finishes already
     // carry them), on this PC only: the cloud has no websocket to send them over
     if (this.livePreviewOn() && !this.comfy.remote && caps.previewNode) graph = withLivePreviewAll(graph, { tinyVaes: caps.tinyVaes, size: String(kind).startsWith('picture') ? 640 : 448 })
@@ -1514,6 +1520,16 @@ export class Studio {
       if (job.plan?.engine === SEEDANCE) await this.keepLocal(job)
       job.finishedAt = now()
       writeJson(this.jobFile(job.id), job)
+      // One final (Create): the one take's finish starts as soon as the take is done
+      if (job.kind === 'previews' && job.status === 'success' && job.plan?.autoFinish && !job.autoFinishJob && !job.autoFinishError) {
+        try {
+          const f = await this.finishCandidate({ jobId: job.id, ...job.plan.autoFinish })
+          job.autoFinishJob = f.id
+        } catch (err) {
+          job.autoFinishError = err.message
+        }
+        writeJson(this.jobFile(job.id), job)
+      }
       // a finish whose enhancer is SeedVR2: its enhance step starts as soon as the finish is done
       if (job.kind === 'finish' && job.status === 'success' && job.plan?.finish?.enhancer === 'seedvr2' && !job.enhanceJob) {
         try {
@@ -1672,7 +1688,7 @@ export class Studio {
     // a failed job also says what went wrong in plain words (failures.js); job.error stays as ComfyUI wrote it
     const explain = job.status === 'error' && job.error ? explainFailure(job.error, { where: job.where, kind: job.kind }) : null
     // the request goes out whole: the shot page shows its prompt in full
-    return { ...rest, ...(explain ? { explain } : {}), plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance, engine: job.plan?.engine, refs: job.plan?.refs } }
+    return { ...rest, ...(explain ? { explain } : {}), plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance, engine: job.plan?.engine, refs: job.plan?.refs, autoFinish: job.plan?.autoFinish } }
   }
 
   listJobs(projectId) {

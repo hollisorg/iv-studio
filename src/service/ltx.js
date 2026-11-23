@@ -3,6 +3,7 @@
 // its Gemma 4 text encoder, video and audio VAEs, sampled in two stages: a half-size pass, then Lightricks' latent
 // upscaler x2 and a short refining pass. A take is the half-size pass (fast); finishing a take runs the same pass
 // with the same seed (so it is the same take) and then the upscale stage, to full size with its own sound.
+import { photoRatio } from './plan.js'
 // LTX 2.5 makes a shot from words, or from a first frame (and a last frame). It has no character LoRAs or
 // reference pictures here: a person stays the same through their first frame.
 
@@ -33,8 +34,9 @@ export const LTX_NEGATIVE = 'blurry, out of focus, low quality, flicker, distort
 const RATIOS = { '16:9': [16, 9], '9:16': [9, 16], '1:1': [1, 1], '4:3': [4, 3], '3:4': [3, 4], '3:2': [3, 2], '2:3': [2, 3], '21:9': [21, 9] }
 
 // The take's size: about mp megapixels at the aspect, each side a multiple of 32 (so the finish, x2, is of 64).
-export function ltxTakeSize(aspect = '16:9', mp = LTX_TAKE_MP) {
-  const [a, b] = RATIOS[aspect] || RATIOS['16:9']
+// ratio: an exact [w, h] (the first frame's own shape, "Same as photo") instead of the aspect.
+export function ltxTakeSize(aspect = '16:9', mp = LTX_TAKE_MP, ratio = null) {
+  const [a, b] = ratio || RATIOS[aspect] || RATIOS['16:9']
   const px = mp * 1e6
   const w = Math.sqrt((px * a) / b)
   const r32 = (x) => Math.max(256, Math.round(x / 32) * 32)
@@ -51,7 +53,7 @@ export function planLtx(request = {}) {
   if (mode === 'frames' && !pictures.length) throw new Error('First / last frame needs a first frame picture.')
   const prompt = String(request.prompt || '').trim()
   if (!prompt) throw new Error('Write what happens in the shot first.')
-  const take = ltxTakeSize(request.aspect, LTX_TAKE_MP)
+  const take = ltxTakeSize(request.aspect, LTX_TAKE_MP, mode === 'frames' && request.photoSize ? photoRatio(request.photoSize) : null)
   const frames = ltxFrames(request.seconds)
   const previews = Math.min(3, Math.max(1, Number(request.previews) || 2))
   const seed = Number.isInteger(Number(request.seed)) ? Number(request.seed) : Math.floor(Math.random() * 1e9)

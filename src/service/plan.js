@@ -39,12 +39,32 @@ export const ASPECTS = {
 export const FRAME_GEN_FPS = [0, 30, 48, 50, 60, 72, 120]
 const RATIO = { '16:9': [16, 9], '9:16': [9, 16], '1:1': [1, 1], '4:3': [4, 3], '3:4': [3, 4], '3:2': [3, 2], '2:3': [2, 3], '21:9': [21, 9] }
 
-// ComfyUI's ResolutionSelector, multiple 32.
-export function resolveSize(aspect, megapixels) {
-  const [a, b] = RATIO[aspect]
+// ComfyUI's ResolutionSelector, multiple 32. ratio: an exact [w, h] (a first frame's own shape) instead of the aspect.
+export function resolveSize(aspect, megapixels, ratio = null) {
+  const [a, b] = ratio || RATIO[aspect]
   const s = Math.sqrt((megapixels * 1024 * 1024) / (a * b))
   return { width: Math.round((a * s) / 32) * 32, height: Math.round((b * s) / 32) * 32 }
 }
+
+// "Same as photo" (Create, First / last frame): the picture's own width and height, kept between 21:9 and 9:21
+// (wider or taller than that H3 hasn't been tried at), or null when it isn't a usable size.
+export function photoRatio(size) {
+  const w = Number(size?.width)
+  const h = Number(size?.height)
+  if (!(w > 0 && h > 0)) return null
+  const r = Math.min(21 / 9, Math.max(9 / 21, w / h))
+  return r >= 1 ? [r, 1] : [1, 1 / r]
+}
+// The standard aspect nearest a picture's shape: what a shot made at its photo's own shape is filed as elsewhere
+// (the editor, sequences) that only knows the standard ones.
+export function nearestAspect(size) {
+  const ratio = photoRatio(size)
+  if (!ratio) return null
+  const r = ratio[0] / ratio[1]
+  return Object.entries(RATIO).sort(([, x], [, y]) => Math.abs(Math.log(x[0] / x[1] / r)) - Math.abs(Math.log(y[0] / y[1] / r)))[0][0]
+}
+// the nodes that read the shot's width and height from the ResolutionSelector (501)
+const SIZE_NODES = ['102', '204', '205', '304', '611', '614']
 
 // Seedhunter 2.5's formula: seconds -> frames on H3's 17n+5 grid at 24 fps.
 export function resolveFrames(seconds) {
@@ -120,7 +140,9 @@ export function planPreviews(request, characters) {
   // Continue makes one take for the app's own chains (Extend, one-take film shots, sequences); a shot from Create
   // (continueFull) hunts 1-3 takes like any other and finishes at full size (planFinish)
   const previews = r.mode === 'continue' && !r.continueFull ? 1 : Math.min(3, Math.max(1, Math.round(r.previews)))
-  const size = resolveSize(r.aspect, r.megapixels)
+  // photoSize ({ width, height }, First / last frame only): the shot takes the first frame's own shape
+  const ratio = r.mode === 'frames' && r.photoSize ? photoRatio(r.photoSize) : null
+  const size = resolveSize(r.aspect, r.megapixels, ratio)
   const frames = resolveFrames(r.seconds)
   const groups = [mode.group, character && !refChar ? 'char_tess' : 'char_none', 'select1']
   for (let k = 1; k <= previews; k++) groups.push(`preview${k}`)
@@ -138,6 +160,8 @@ export function planPreviews(request, characters) {
     '81.seed': r.seed,
     '410.LoraLoaderState': loraState(r.extraLoras)
   }
+  // the photo's own shape: every node that reads 501's width and height gets the exact size instead
+  if (ratio) for (const id of SIZE_NODES) Object.assign(values, { [`${id}.width`]: size.width, [`${id}.height`]: size.height })
   if (refChar) values['1004'] = refChar.name
   else if (character) {
     // the character's main H3 LoRA, and any more its bible loads with it (bible.js models.h3.loras)
@@ -174,15 +198,17 @@ export function planPreviews(request, characters) {
 // A finish re-uses the preview plan's groups and values unchanged (so the picked latent's fingerprint
 // matches and IV Latent Cache skips re-sampling), keeping only the picked preview and adding the upscale.
 // The finish's enhancer: DLSS 5 (in the graph: noise reduction, RTX 2x, frame generation) or SeedVR2 (a step after
-// a DLSS-free finish, to a short side of enhanceResolution).
-export const ENHANCERS = ['dlss', 'seedvr2']
+// a DLSS-free finish, to a short side of enhanceResolution), or none (the latent upscaler's video as it is).
+export const ENHANCERS = ['dlss', 'seedvr2', 'none']
 export const SEEDVR2_SIZES = [1080, 1440, 2160]
+// a finish that skips DLSS 5 in its own graph (remote.js swaps the node for a plain save)
+export const skipsDlss = (finish) => finish?.enhancer === 'seedvr2' || finish?.enhancer === 'none'
 export function planFinish(previewPlan, finish) {
   const f = { candidate: 1, megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', rerollSeed: null, enhancer: 'dlss', enhanceResolution: 1080, ...finish }
-  // SeedVR2 instead of DLSS 5: the finish skips DLSS (no 2x, no frame generation) and SeedVR2 follows it
-  if (f.enhancer === 'seedvr2') Object.assign(f, { upscale2x: false, fps: 0 })
+  // SeedVR2 or none instead of DLSS 5: the finish skips DLSS (no 2x, no frame generation); SeedVR2 then follows it
+  if (skipsDlss(f)) Object.assign(f, { upscale2x: false, fps: 0 })
   const errors = []
-  if (!ENHANCERS.includes(f.enhancer)) errors.push(`enhancer must be ${ENHANCERS.join(' or ')}.`)
+  if (!ENHANCERS.includes(f.enhancer)) errors.push(`enhancer must be ${ENHANCERS.join(', ')}.`)
   if (f.enhancer === 'seedvr2' && !SEEDVR2_SIZES.includes(f.enhanceResolution)) errors.push(`enhanceResolution must be ${SEEDVR2_SIZES.join(', ')}.`)
   const n = previewPlan.resolved.previews
   if (!(f.candidate >= 1 && f.candidate <= n)) errors.push(`candidate must be 1..${n}.`)

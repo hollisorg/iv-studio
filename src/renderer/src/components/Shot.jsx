@@ -70,6 +70,7 @@ export function finalLabel(f) {
   if (way === 'local' && f.plan.finish?.refiner === 'h3seedvr2') return `Final · take ${n} · H3 ${typeof f.plan.finish.strength === 'number' ? f.plan.finish.strength : f.plan.finish.strength || 'light'}, before SeedVR2`
   if (way === 'local' && f.plan.finish?.refiner === 'h3') return `Final · take ${n} · H3 ${typeof f.plan.finish.strength === 'number' ? f.plan.finish.strength : f.plan.finish.strength || 'light'} + DLSS 5`
   if (way === 'local' || way === 'take') return `Final · take ${n} · as it came`
+  if (!way && f.plan?.finish?.enhancer === 'none') return `Final · take ${n} · ${f.plan.finish.megapixels || 2} MP, no enhancer`
   return `Final · take ${n}`
 }
 // The same, short, for Compare: "Take 1 · Seedance 1080p", "Take 1 · SeedVR2 1080p"
@@ -405,6 +406,8 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
     }, () => {})
   }, [])
   const seedvr2 = opts.enhancer === 'seedvr2'
+  // None: the full-size pass as it is, with nothing after it (no DLSS 5, no SeedVR2)
+  const none = opts.enhancer === 'none'
   const [shotSpeed, setShotSpeed] = useState(job.plan.request?.speed || null)
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -446,71 +449,93 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
       <div className="finish-head">
         <span className="finish-kicker mono">Finish</span>
         <h3>Take {candidate}</h3>
-        <span className="dim small">Rendered again at full size from this take, then cleaned up and sharpened.</span>
+        <span className="dim small" data-plain="Makes the take you picked again, bigger and sharper. The movement stays the same.">
+          {single ? 'This take is cleaned up as it is (a Continue chain finishes in one pass).' : `H3 draws this take again at full size, from the take itself: the same movement and timing, a sharper picture.${none ? '' : ' Then the enhancer below cleans it up.'}`} Choose the size, what runs after it, and which sound the final keeps.
+        </span>
       </div>
       <div className="finish-grid">
       {!single && (
         <div className="row">
           <span className="row-label">Final size</span>
-          <div className="segmented">
-            {FINAL_MP.map((mp) => (
-              <button key={mp} className={opts.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
-                {mp} MP
-              </button>
-            ))}
-          </div>
-          {shotSpeed && <span className="dim small finish-speed">Started from the {SPEEDS[shotSpeed].label} speed preset.{opts.megapixels >= 2 ? ' A 2 MP pass is the slowest step on cards under 22 GB.' : ''}</span>}
-        </div>
-      )}
-      {((dlss && !remote) || ownCloud) && (
-        <div className="row">
-          <span className="row-label">Enhancer</span>
           <div className="enhancer-pick">
             <div className="segmented">
-              <button className={!seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'dlss' })}>
-                {dlss ? 'DLSS 5' : '2× upscale'}
-              </button>
+              {FINAL_MP.map((mp) => (
+                <button key={mp} className={opts.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
+                  {mp} MP
+                </button>
+              ))}
+            </div>
+            <span className="dim small" data-plain="How big the finished video is. Bigger is sharper but takes longer.">
+              How big H3 draws the final, in megapixels: 2 MP is about 1080p (1920 × 1088 at 16:9), 1 MP a little over 720p. Bigger is sharper and slower.
+              {shotSpeed && ` Started from the ${SPEEDS[shotSpeed].label} speed preset.`}
+              {opts.megapixels >= 2 ? ' 2 MP is the slowest step on cards under 22 GB.' : ''}
+            </span>
+          </div>
+        </div>
+      )}
+      <div className="row">
+        <span className="row-label">Enhancer</span>
+        <div className="enhancer-pick">
+          <div className="segmented">
+            <button className={!seedvr2 && !none ? 'on' : ''} onClick={() => set({ enhancer: 'dlss' })}>
+              {dlss ? 'DLSS 5' : '2× upscale'}
+            </button>
+            {((dlss && !remote) || ownCloud) && (
               <button className={seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'seedvr2', upscale2x: false, fps: 0 })}>
                 SeedVR2
               </button>
-            </div>
-            <span className="dim small">{seedvr2 ? 'Restores detail after the finish. Slower; 24 fps.' : dlss ? 'Cleans up and can upscale 2× and add frames. Quick.' : 'The cloud’s quick 2× upscale and extra frames.'}</span>
+            )}
+            <button className={none ? 'on' : ''} onClick={() => set({ enhancer: 'none', upscale2x: false, fps: 0 })}>
+              None
+            </button>
           </div>
+          <span className="dim small" data-plain={none ? 'Nothing extra: the video exactly as it comes out.' : seedvr2 ? 'Brings back fine detail like eyes and hair. Takes a few minutes.' : 'A quick clean-up. It can also make the video bigger and smoother.'}>
+            {none ? `What runs after the full-size pass. None keeps the ${single ? 'take' : `${opts.megapixels} MP pass`} exactly as it comes out: no clean-up, no upscale, 24 fps.` : seedvr2 ? 'What runs after the full-size pass. SeedVR2 restores face, eye and hair detail and sets the final’s size (below). Slower, a few minutes; 24 fps.' : dlss ? 'What runs after the full-size pass. DLSS 5 cleans up noise in seconds, and can double the size and add frames (below).' : 'What runs after the full-size pass: the cloud’s quick 2× upscale and extra frames (below).'}
+          </span>
         </div>
-      )}
-      {seedvr2 ? (
+      </div>
+      {none ? null : seedvr2 ? (
         <div className="row">
           <span className="row-label">SeedVR2 size</span>
-          <div className="segmented">
-            {[1080, 1440, 2160].map((r) => (
-              <button key={r} className={opts.enhanceResolution === r ? 'on' : ''} onClick={() => set({ enhanceResolution: r })}>
-                {r}p
-              </button>
-            ))}
+          <div className="enhancer-pick">
+            <div className="segmented">
+              {[1080, 1440, 2160].map((r) => (
+                <button key={r} className={opts.enhanceResolution === r ? 'on' : ''} onClick={() => set({ enhanceResolution: r })}>
+                  {r}p
+                </button>
+              ))}
+            </div>
+            <span className="dim small">The final’s short side after SeedVR2 (1080p is full HD, 2160p is 4K). Bigger takes longer.</span>
           </div>
         </div>
       ) : (
         <>
           <div className="row">
             <span className="row-label">{dlss ? 'RTX upscale' : '2× upscale'}</span>
-            <div className="segmented">
-              <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
-                Off
-              </button>
-              <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
-                2×
-              </button>
+            <div className="enhancer-pick">
+              <div className="segmented">
+                <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
+                  Off
+                </button>
+                <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
+                  2×
+                </button>
+              </div>
+              <span className="dim small">{opts.upscale2x ? `Doubles the width and height after the pass${single ? '' : ` (${opts.megapixels} MP becomes about ${opts.megapixels * 4} MP)`}. Quick, but it adds no new detail.` : 'Off keeps the full-size pass’s own size. 2× doubles it afterwards.'}</span>
             </div>
           </div>
           {dlss && !remote && <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} />}
           <div className="row">
             <span className="row-label">Frame rate</span>
-            <div className="segmented">
-              {FPS.map((f) => (
-                <button key={f} className={opts.fps === f ? 'on' : ''} onClick={() => set({ fps: f })}>
-                  {f ? f : '24'}
-                </button>
-              ))}
+            <div className="enhancer-pick">
+              <div className="segmented">
+                {FPS.map((f) => (
+                  <button key={f} className={opts.fps === f ? 'on' : ''} onClick={() => set({ fps: f })}>
+                    {f ? f : '24'}
+                  </button>
+                ))}
+              </div>
+              <span className="dim small">{opts.fps ? `Adds in-between frames to play at ${opts.fps} fps: smoother motion, the same length. Fast action can smear a little.` : '24 fps is how H3 makes it, the film look. More adds in-between frames for smoother motion.'}</span>
             </div>
           </div>
         </>
@@ -518,18 +543,27 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
       {!single && (
         <div className="row">
           <span className="row-label">Sound</span>
-          <div className="segmented">
-            <button className={opts.audio === 'pass' ? 'on' : ''} onClick={() => set({ audio: 'pass' })}>
-              Generated
-            </button>
-            <button className={opts.audio === 'preview' ? 'on' : ''} onClick={() => set({ audio: 'preview' })} title="Keeps a voice cloned from an <Audio> reference or RefMod">
-              Preview's
-            </button>
-            {hasVoice && (
-              <button className={opts.audio === 'voice' ? 'on' : ''} onClick={() => set({ audio: 'voice' })}>
-                My recording
+          <div className="enhancer-pick">
+            <div className="segmented">
+              <button className={opts.audio === 'pass' ? 'on' : ''} onClick={() => set({ audio: 'pass' })}>
+                New sound
               </button>
-            )}
+              <button className={opts.audio === 'preview' ? 'on' : ''} onClick={() => set({ audio: 'preview' })}>
+                The take’s sound
+              </button>
+              {hasVoice && (
+                <button className={opts.audio === 'voice' ? 'on' : ''} onClick={() => set({ audio: 'voice' })}>
+                  My recording
+                </button>
+              )}
+            </div>
+            <span className="dim small" data-plain={opts.audio === 'preview' ? 'Keeps the sound you heard in the take.' : opts.audio === 'voice' ? 'Uses your own recording as the sound.' : 'Makes the sound again with the picture. It can come out a bit different.'}>
+              {opts.audio === 'preview'
+                ? 'Keeps the sound of the take you picked, exactly as you heard it. Choose this when the take’s voice or sound is right: a voice from an <Audio> reference or a RefMod, a line you liked. The finish keeps the same timing, so it still lines up.'
+                : opts.audio === 'voice'
+                  ? 'Your voice-line recording becomes the sound, as it is. The lips were made to follow it.'
+                  : 'H3 makes the sound again while it draws the full-size picture, so it fits the final. Words, voices and effects can come out a little different from the take; choose The take’s sound to keep what you heard.'}
+            </span>
           </div>
         </div>
       )}
@@ -1032,6 +1066,15 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
             </div>
             <Progress job={run} />
             {run.status === 'error' && <Failure job={run} notify={notify} />}
+            {run.plan?.autoFinish && (
+              <p className={`small engine-note ${run.autoFinishError ? 'pink' : 'dim'}`}>
+                {run.autoFinishError
+                  ? `One final: the finish couldn’t start (${run.autoFinishError}). Pick the take to finish it yourself.`
+                  : run.autoFinishJob
+                    ? `One final: the take is being finished at ${run.plan.autoFinish.megapixels || 2} MP${run.plan.autoFinish.enhancer === 'none' ? ', with no enhancer' : run.plan.autoFinish.enhancer === 'seedvr2' ? ', then SeedVR2' : ', then DLSS 5'}.`
+                    : `One final: the take is finished at ${run.plan.autoFinish.megapixels || 2} MP as soon as it is done.`}
+              </p>
+            )}
             {req.prompt && (
               <details className="run-prompt">
                 <summary className="mono dim">

@@ -8592,6 +8592,15 @@ button.nav-update:hover {
   border-color: var(--red);
   background: rgba(var(--accent-rgb), 0.1);
 }
+/* "Photo" (Same as photo) before a first frame is added */
+.aspect-tile:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.aspect-tile:disabled:hover {
+  color: var(--paper-dim);
+  border-color: var(--line);
+}
 .aspect-glyph {
   height: 24px;
   display: grid;

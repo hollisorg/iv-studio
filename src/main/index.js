@@ -365,6 +365,8 @@ async function pump() {
         if (['success', 'error', 'cancelled'].includes(job.status)) pending.delete(id)
         // a SeedVR2 finish starts its enhance step (Studio.refreshJob): watch that too
         if (job.enhanceJob && !pending.has(job.enhanceJob)) pending.add(job.enhanceJob)
+        // a One final take (Create) starts its finish the same way
+        if (job.autoFinishJob && !pending.has(job.autoFinishJob)) pending.add(job.autoFinishJob)
         // finished previews are ranked in the background (ranking.js); the window hears when it's done
         if (job.kind === 'previews' && job.status === 'success' && !job.ranking && ranker) ranker.rank(id).then((r) => r && send('jobs:update', studio.publicJob(studio.getJob(id))), () => {})
       } catch (err) {

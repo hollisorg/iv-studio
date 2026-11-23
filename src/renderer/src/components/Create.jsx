@@ -22,6 +22,7 @@ import { withSetups, withoutSetups } from '../../../service/setuptext'
 import { starterById, starterForm } from '../starters'
 import TemplateBar from './Templates'
 import { showFor } from '../../../service/bible'
+import { nearestAspect, photoRatio } from '../../../service/plan'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
 const SAMPLER_DEFAULT = 'er_sde'
@@ -39,6 +40,13 @@ const MODES = [
 ]
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const PREVIEW_MP = [0.3, 0.4, 0.6, 0.8]
+// One final (no hunt): the one take finished at this size, with this enhancer after it (plan.js ENHANCERS)
+const FINAL_MP = [1, 1.5, 2]
+const FINAL_ENHANCERS = [
+  ['none', 'None', 'The 2 MP render as it is: no clean-up or upscale after it.'],
+  ['dlss', 'DLSS 5', 'DLSS 5 cleans it up after the 2 MP render. Quick (about 15 s).'],
+  ['seedvr2', 'SeedVR2', 'SeedVR2 restores detail to 1080p after the 2 MP render. Slower (a few minutes).']
+]
 // Preview quality: the turbo add-on IV Studio uses (DMAD) was trained for 4 steps; Standard gives it 8. A finish
 // re-uses the picked preview's latent, so the 2 MP pass is the same either way.
 const QUALITY = [
@@ -123,7 +131,13 @@ const FRESH_FORM = {
   voiceLine: null,
   refmods: [],
   retention: 1,
-  extraLoras: []
+  extraLoras: [],
+  // First / last frame: the shot takes the first frame's own shape instead of the aspect tile
+  matchPhoto: false,
+  // One final (H3): one take, finished straight away at finalMp with finalEnhancer, instead of a hunt
+  oneFinal: false,
+  finalMp: 2,
+  finalEnhancer: 'none'
 }
 // the parts of a form a speed preset sets; they don't count as a change of setup
 const SPEED_KEYS = ['megapixels', 'steps', 'previews']
@@ -281,11 +295,20 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     if (form.with?.some((id) => !characters.some((c) => c.id === id))) set({ with: form.with.filter((id) => characters.some((c) => c.id === id)) })
   }, [characters])
 
+  // the first frame's own size, when the shot takes its shape ("Same as photo")
+  const firstPic = form.mode === 'frames' ? form.media.find((m) => m.kind === 'picture') : null
+  const picShape = photoRatio(firstPic?.info) ? { width: firstPic.info.width, height: firstPic.info.height } : null
+  const photo = form.matchPhoto ? picShape : null
+  const oneFinal = form.oneFinal && form.engine === 'h3'
   const request = useMemo(() => {
-    const { projectId, projectName, voiceItem, ...r } = form
+    const { projectId, projectName, voiceItem, matchPhoto, oneFinal: one, finalMp, finalEnhancer, ...r } = form
+    // One final: one take, finished as soon as it's done (studio.js autoFinish); DLSS stays at 1x
+    const auto = oneFinal ? { previews: 1, autoFinish: { megapixels: finalMp, enhancer: finalEnhancer, ...(finalEnhancer === 'dlss' ? { upscale2x: false } : {}) } } : {}
+    // "Same as photo": the picture's size, and the standard aspect nearest it for everything that files shots by aspect
+    const shape = photo ? { photoSize: photo, aspect: nearestAspect(photo) } : {}
     // a Continue shot made here hunts takes and gets the full finish (plan.js continueFull)
-    return { ...r, ...(r.mode === 'continue' && r.engine !== 'seedance' ? { continueFull: true } : {}), speed: speedOfForm(form) || undefined, character: r.character ?? 'none', with: r.engine === 'seedance' ? undefined : (r.with || []).filter((id) => id !== r.character), media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
-  }, [form])
+    return { ...r, ...auto, ...shape, ...(r.mode === 'continue' && r.engine !== 'seedance' ? { continueFull: true } : {}), speed: oneFinal ? undefined : speedOfForm(form) || undefined, character: r.character ?? 'none', with: r.engine === 'seedance' ? undefined : (r.with || []).filter((id) => id !== r.character), media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
+  }, [form, photo?.width, photo?.height, oneFinal])
   const speed = request.speed || null
   // a Custom shot finishes like the saved preset (the Finish panel's default too)
   const finishSpeed = speed || savedId
@@ -328,13 +351,13 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     let live = true
     const probe = { ...request, prompt: request.prompt || 'x' }
     window.ivstudio.render
-      .plan(probe, finishFor(request.speed || savedId, { upscale2x: setup?.caps?.upscale2x !== false }))
+      .plan(probe, oneFinal ? request.autoFinish : finishFor(request.speed || savedId, { upscale2x: setup?.caps?.upscale2x !== false }))
       .then((p) => live && (setPlan(p), setPlanError(null)))
       .catch((err) => live && (setPlan(null), setPlanError(err.message)))
     return () => {
       live = false
     }
-  }, [request, savedId])
+  }, [request, savedId, oneFinal])
 
   async function addMedia(kind) {
     addFiles((await window.ivstudio.files.pick(kind)).map((path) => ({ kind, path })))
@@ -498,7 +521,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [editing, setEditing] = useState(null)
   const editItem = editing === 'voice' ? form.voiceItem || { kind: 'audio', path: form.voiceLine } : form.media[editing]
   const editHint = {
-    frames: `Frames are stretched to the shot's size (${form.aspect}). Crop to "Shot" so nothing gets squashed.`,
+    frames: photo ? 'The shot takes the first frame’s own shape (Same as photo), so nothing is squashed. Crop it to change the shape.' : `Frames are stretched to the shot's size (${form.aspect}). Crop to "Shot" so nothing gets squashed.`,
     continue: 'The shot carries on from the last frames you keep: trim where the clip should hand over.',
     reference: 'Keep only what the shot should use. Shorter references are quicker.'
   }
@@ -531,7 +554,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       const job = await window.ivstudio.render.previews({ ...request, projectId: form.projectId || undefined, projectName: form.projectName || undefined, ...(spend ? { spend } : {}) })
       // the last run: Create opens on it next time
       window.ivstudio.createMemory.saveLast('video', form, { ran: true }).catch(() => {})
-      notify('Previews started. You can keep working; they appear here as they finish.', 'info')
+      notify(oneFinal ? `One take started. It is finished at ${form.finalMp} MP as soon as it is done; you can keep working.` : 'Previews started. You can keep working; they appear here as they finish.', 'info')
       openShot(job.projectId)
     } catch (err) {
       notify(err.message)
@@ -587,7 +610,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const modeLabel = MODES.find(([id]) => id === form.mode)?.[1]
   const counts = ['picture', 'video', 'audio'].map((k) => [k, form.media.filter((m) => m.kind === k).length]).filter(([, n]) => n)
   const priceText = sd && price?.paid ? (price.max - price.min > 0.005 ? `up to ${dollars(price.max)}` : `about ${dollars(price.max)}`) : ''
-  const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : sd ? `Hunt ${r?.previews || ''} take${r?.previews > 1 ? 's' : ''}${priceText ? ` · ${priceText}` : ''}` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
+  const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : sd ? `Hunt ${r?.previews || ''} take${r?.previews > 1 ? 's' : ''}${priceText ? ` · ${priceText}` : ''}` : oneFinal ? `Render one final · ${form.finalMp} MP` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
   const canHunt = !(busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway))
 
   return (
@@ -967,15 +990,29 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           </section>
 
           <section className="create-step">
-            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : 'The previews are small and quick; the one you pick is finished at full size.'} subPlain={sd ? 'Try a few cheap rough takes first, then finish the one you like. Or make sharp 720p or 1080p takes straight away.' : 'You get a few small, quick versions first. The one you like is then made again at full size.'} />
+            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : oneFinal ? `One take, finished at ${form.finalMp} MP straight away. No previews to pick from.` : 'The previews are small and quick; the one you pick is finished at full size.'} subPlain={sd ? 'Try a few cheap rough takes first, then finish the one you like. Or make sharp 720p or 1080p takes straight away.' : oneFinal ? 'One video, made at full size straight away.' : 'You get a few small, quick versions first. The one you like is then made again at full size.'} />
             <div className="aspect-tiles" role="radiogroup" aria-label="Aspect ratio">
-              {ASPECTS.map((a) => (
-                <button key={a} role="radio" aria-checked={form.aspect === a} className={`aspect-tile ${form.aspect === a ? 'on' : ''}`} onClick={() => set({ aspect: a })}>
-                  <AspectGlyph a={a} />
-                  <span className="mono">{a}</span>
+              {form.mode === 'frames' && (
+                <button role="radio" aria-checked={!!form.matchPhoto} disabled={!picShape} title={picShape ? `Same as photo: the first frame's own shape, ${picShape.width} × ${picShape.height}` : 'Same as photo: add a first frame to use its shape'} className={`aspect-tile photo-tile ${form.matchPhoto ? 'on' : ''}`} onClick={() => set({ matchPhoto: true })}>
+                  <AspectGlyph a={picShape ? `${picShape.width}:${picShape.height}` : '4:3'} />
+                  <span className="mono">Photo</span>
                 </button>
-              ))}
+              )}
+              {ASPECTS.map((a) => {
+                const on = form.aspect === a && !photo
+                return (
+                  <button key={a} role="radio" aria-checked={on} className={`aspect-tile ${on ? 'on' : ''}`} onClick={() => set({ aspect: a, matchPhoto: false })}>
+                    <AspectGlyph a={a} />
+                    <span className="mono">{a}</span>
+                  </button>
+                )
+              })}
             </div>
+            {form.mode === 'frames' && form.matchPhoto && (
+              <p className="dim small engine-note">
+                {photo ? `Same as photo: ${photo.width} × ${photo.height}${r ? `, made at ${r.width} × ${r.height}` : ''}.${Math.max(photo.width, photo.height) / Math.min(photo.width, photo.height) > 21 / 9 + 0.01 ? ' Wider than 21:9, so it is made at 21:9.' : ''}` : 'Same as photo: add a first frame and the shot takes its shape.'}
+              </p>
+            )}
             <div className="create-field">
               <span className="create-label mono">
                 Length <span className="create-value">{form.seconds} s</span>
@@ -1039,11 +1076,54 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               </div>
             )}
-            {h3 && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
+            {h3 && (
+              <div className="create-field">
+                <span className="create-label mono">How</span>
+                <div className="segmented" role="radiogroup" aria-label="Hunt or one final">
+                  {[
+                    [false, 'Hunt previews'],
+                    [true, 'One final']
+                  ].map(([v, l]) => (
+                    <button key={l} role="radio" aria-checked={!!form.oneFinal === v} className={!!form.oneFinal === v ? 'on' : ''} onClick={() => set({ oneFinal: v })}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                <span className="dim small" data-plain={oneFinal ? 'One video, made at full size. No previews to choose from.' : 'A few small versions first; you pick one to make at full size.'}>
+                  {oneFinal ? 'Renders one take and finishes it at full size straight away: no previews, no picking.' : 'Small, quick previews first; the one you pick is finished at full size.'}
+                </span>
+              </div>
+            )}
+            {h3 && oneFinal && (
+              <div className="create-grid">
+                <div className="create-field">
+                  <span className="create-label mono">Final size</span>
+                  <div className="segmented">
+                    {FINAL_MP.map((mp) => (
+                      <button key={mp} className={form.finalMp === mp ? 'on' : ''} onClick={() => set({ finalMp: mp })}>
+                        {mp} MP
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="create-field">
+                  <span className="create-label mono">Enhancer</span>
+                  <div className="segmented">
+                    {FINAL_ENHANCERS.filter(([id]) => id !== 'dlss' || setup?.caps?.dlss !== false || form.finalEnhancer === id).map(([id, label, hint]) => (
+                      <button key={id} className={form.finalEnhancer === id ? 'on' : ''} onClick={() => set({ finalEnhancer: id })} title={hint}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="dim small">{FINAL_ENHANCERS.find(([id]) => id === form.finalEnhancer)?.[2]}</span>
+                </div>
+              </div>
+            )}
+            {h3 && !oneFinal && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
             {h3 && (
             <div className="create-grid">
               <div className="create-field">
-                <span className="create-label mono">Preview size</span>
+                <span className="create-label mono">{oneFinal ? 'First pass size' : 'Preview size'}</span>
                 <div className="segmented">
                   {PREVIEW_MP.map((mp) => (
                     <button key={mp} className={form.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
@@ -1052,16 +1132,18 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                   ))}
                 </div>
               </div>
-              <div className="create-field">
-                <span className="create-label mono">Previews</span>
-                <div className="segmented">
-                  {[1, 2, 3].map((n) => (
-                    <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
-                      {n}
-                    </button>
-                  ))}
+              {!oneFinal && (
+                <div className="create-field">
+                  <span className="create-label mono">Previews</span>
+                  <div className="segmented">
+                    {[1, 2, 3].map((n) => (
+                      <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="create-field">
                 <span className="create-label mono">Quality</span>
                 <div className="segmented">
@@ -1149,7 +1231,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             <span>Your shot</span>
             <span className="dim">{sd ? `Seedance · ${modeLabel}` : modeLabel}</span>
           </div>
-          <ShotFrame aspect={form.aspect} media={form.media} mode={form.mode} char={char} face={faceOf(char)} seconds={form.seconds} />
+          <ShotFrame aspect={photo ? `${photo.width}:${photo.height}` : form.aspect} media={form.media} mode={form.mode} char={char} face={faceOf(char)} seconds={form.seconds} />
           <div className="shot-time" aria-hidden="true">
             {Array.from({ length: 15 }, (_, i) => (
               <span key={i} className={i < Math.ceil((form.seconds * 15) / (sd ? 30 : 15)) ? 'on' : ''} />
@@ -1182,7 +1264,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             {r ? (
               <>
                 <div>
-                  <dt>{sd ? 'Takes' : 'Previews'}</dt>
+                  <dt>{sd ? 'Takes' : oneFinal ? 'Take' : 'Previews'}</dt>
                   <dd>
                     {r.previews} × {r.width}×{r.height} · {r.seconds} s
                   </dd>
@@ -1190,7 +1272,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 <div>
                   <dt>Finish</dt>
                   <dd>
-                    {lx ? `LTX's own 2× upscale → ${plan.finish.width}×${plan.finish.height}` : sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width}×${plan.finish.height}`}
+                    {lx ? `LTX's own 2× upscale → ${plan.finish.width}×${plan.finish.height}` : oneFinal ? `${form.finalMp} MP straight away${form.finalEnhancer === 'none' ? '' : `, then ${FINAL_ENHANCERS.find(([id]) => id === form.finalEnhancer)?.[1]}`} → ${plan.finish.width}×${plan.finish.height}` : sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width}×${plan.finish.height}`}
                   </dd>
                 </div>
                 {sd && (
@@ -1226,10 +1308,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           {r ? (
             <>
               <span className="mono">
-                {r.previews} {sd ? 'take' : 'preview'}{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {sd ? 'Seedance 2.5' : r.model}
+                {r.previews} {sd || oneFinal ? 'take' : 'preview'}{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {sd ? 'Seedance 2.5' : r.model}
                 {h3 && plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
               </span>
-              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : lx ? `${r.frames} frames · finish with LTX's 2× upscale → ${plan.finish.width} × ${plan.finish.height}` : `${r.frames} frames · finish at ${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width} × ${plan.finish.height}`}</span>
+              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : lx ? `${r.frames} frames · finish with LTX's 2× upscale → ${plan.finish.width} × ${plan.finish.height}` : oneFinal ? `${r.frames} frames · one final at ${form.finalMp} MP → ${plan.finish.width} × ${plan.finish.height}` : `${r.frames} frames · finish at ${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width} × ${plan.finish.height}`}</span>
             </>
           ) : (
             <span className="mono pink">{planError}</span>
