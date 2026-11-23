@@ -1,6 +1,6 @@
 {
  "note": "Made by scripts/make-examples.mjs; the Workflows cards’ Example media.",
- "total": 10014544,
+ "total": 11553835,
  "files": {
   "animalcam-photo.webp": {
    "bytes": 15440,
@@ -22,49 +22,49 @@
    "bytes": 28292,
    "sha256": "1885c917b9666fd7bfbe88becfa8b59581b280c872b28acfb281e5477cbfbc34"
   },
-  "effects-first.webp": {
-   "bytes": 10320,
-   "sha256": "f25d850406f6cac6e528b33da0d0cd0f8f7b53d39bc5eddaf6995a02210846d5"
-  },
-  "effects-last.webp": {
-   "bytes": 10966,
-   "sha256": "a1a4f3f02173f7cef992c3d9e7fe3725eee0c60566f5c37544e0e377dae0d808"
+  "effects-photo.webp": {
+   "bytes": 25142,
+   "sha256": "75d6a0679488d1c93d6493e21753ba7ddadf4875df8adaa5026f012dafea5196"
   },
   "effects.mp4": {
-   "bytes": 533112,
-   "sha256": "e8d0be5a6f3bdbe1442aeca26190c38e58377e87eb219fa63281bd1f90e1c90e",
-   "seconds": 5.04,
-   "width": 872,
+   "bytes": 1710150,
+   "sha256": "8ffa2e48ba3fa5787195a12a7ff06f1749ddc50336e7ed61f2d5335ce5a0a742",
+   "seconds": 15.21,
+   "width": 832,
    "height": 480,
    "audio": false
   },
   "effects.webp": {
-   "bytes": 17946,
-   "sha256": "3455b0b6791515705973f11020c9904489a0db7afb37c590ab8972ee9f2f8ffa"
+   "bytes": 47540,
+   "sha256": "37ef2a93275a40daa12790bf6748ffaa504f8921f7dd9721906014d98ff01e93"
   },
   "keyframes-1.webp": {
-   "bytes": 23950,
-   "sha256": "2e538e3345d3e408d1145e60b8360451a7cff07de99fa730e9a7e5760ae9703e"
+   "bytes": 4220,
+   "sha256": "6b97f86bc7084333be5e1980e1ae8ce15e15abe2619dcd704e04b96d5976745f"
   },
   "keyframes-2.webp": {
-   "bytes": 21406,
-   "sha256": "e97720a93b5873f656f0dca2db68bd2356cd193a47367081587a179fc21d6865"
+   "bytes": 4082,
+   "sha256": "db2a61dcb3506010a3ffc3b1258ee58efc4ec4020a5b3d9318bba44bf7e361df"
   },
   "keyframes-3.webp": {
-   "bytes": 21506,
-   "sha256": "1084519bd4d12665bd3b1e6d36fa72288c4833504dfa739e362619b1fba0b334"
+   "bytes": 5706,
+   "sha256": "f3da4ab0f3551e6be7a728074a7f111cd6b15e87fa6ca7f28f3729c5ecc63f55"
+  },
+  "keyframes-4.webp": {
+   "bytes": 6984,
+   "sha256": "a40260265edfca296a4d547a1af413c7d00582016ce2cf387d6dec914d5ecb0b"
   },
   "keyframes.mp4": {
-   "bytes": 954394,
-   "sha256": "181c53e9a9577f454b671c4577cd7e48575cf1e1904729d8de7a0c65cadb0c60",
-   "seconds": 8,
-   "width": 968,
-   "height": 540,
+   "bytes": 674356,
+   "sha256": "9a7cdd8d740e1971059093a8ab35487f4b2b2cee3ec80263e2ef3d1db6775d26",
+   "seconds": 10.83,
+   "width": 864,
+   "height": 480,
    "audio": true
   },
   "keyframes.webp": {
-   "bytes": 45672,
-   "sha256": "46e326f7879dd9b0ff92d70f37defa4517fd2a15dc835db2cc7c28b1079eed7c"
+   "bytes": 9510,
+   "sha256": "1b06e1d1b68fdbf873db0e2a1343547393f9f749d42bcb7a8fc0ce0ca6f8dd4a"
   },
   "musicvideo.mp4": {
    "bytes": 860277,
@@ -101,42 +101,6 @@
   "rebuild-before.webp": {
    "bytes": 23232,
    "sha256": "5b2d3e42a77cc7a95944f85f36f767501fad3e832811aa86aaf8d470b15b9ee1"
-  },
-  "reel-1.webp": {
-   "bytes": 9234,
-   "sha256": "b4b7d2d13253864a54d460535095c339e63a0605ddeb0ba9722376ce59d312e5"
-  },
-  "reel-2.webp": {
-   "bytes": 9320,
-   "sha256": "b1f3731f41f7086d4afe4e927a8f06a1fd23f1979075da373e9770bd92828eb2"
-  },
-  "reel-3.webp": {
-   "bytes": 5598,
-   "sha256": "f4fd397f1f352f8e711ab967e8acb8131d6835ecab484da3f99e82de4ef4ff74"
-  },
-  "reel-4.webp": {
-   "bytes": 6404,
-   "sha256": "287caf2844d0a6ae12c28e6bc9566b81936e3c7fc2cd16ad050574044b45337e"
-  },
-  "reel-5.webp": {
-   "bytes": 6142,
-   "sha256": "0cea2af78b5747bb6d2483a1f1c3d36e328de10ff4abd4bb1cea1955529c6008"
-  },
-  "reel-6.webp": {
-   "bytes": 5572,
-   "sha256": "0a3ccc7383b32c7bcd3b4be269b58532b05e05f931e48c9369bb335faf7ef23e"
-  },
-  "reel.mp4": {
-   "bytes": 544923,
-   "sha256": "8cc820f7336327ca92071c46be9d7fc62ee59e0b94cdcb9c91087928c6e8f947",
-   "seconds": 12.08,
-   "width": 960,
-   "height": 540,
-   "audio": true
-  },
-  "reel.webp": {
-   "bytes": 29044,
-   "sha256": "635f6cbec16ae60ac4744173ab6c75de55e72ecd5a53698471ac8dc98bb9ef9c"
   },
   "replace-scene-after.mp4": {
    "bytes": 456896,
@@ -187,16 +151,16 @@
    "sha256": "0c8401f12222904afd3ab8c62f316e343f6e0d428b3c0a45ed9cb32cb7a34a80"
   },
   "sequences.mp4": {
-   "bytes": 597255,
-   "sha256": "108f99cec78160814a515afeb9b06dc30740c25c4306fd45ca7ea31527d2ad86",
-   "seconds": 12,
-   "width": 938,
+   "bytes": 1898445,
+   "sha256": "78671c91deac6638dfd6fb08ece0a1a6b29c83fedc228ba37c7877e3eb8ef750",
+   "seconds": 30.3,
+   "width": 940,
    "height": 540,
    "audio": true
   },
   "sequences.webp": {
-   "bytes": 19172,
-   "sha256": "4aa4ac89012649d648bd07bb933b8837374b782ed8b3fdebc0b4b18c7dfa936f"
+   "bytes": 25092,
+   "sha256": "b8804e12ff6d3cf1fe4afeddb8de85b457a34ca6409fe80e224f49385f9cfb4b"
   },
   "shinobi-1.webp": {
    "bytes": 6036,

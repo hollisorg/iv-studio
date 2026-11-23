@@ -15,6 +15,10 @@ const DIR = new URL('../resources/examples/', import.meta.url)
 const file = (n) => new URL(n, DIR)
 const BUDGET = 25 * 1024 * 1024
 const MAX_SECONDS = 12
+// a long example (Sequences: three 10 s shots in one take; Effects: three 5 s effects) may run to this
+const LONG_SECONDS = 32
+// tools that have no Example on purpose (Reel's was dropped, Matthew 2026-11-23)
+const NO_EXAMPLE = ['reel']
 
 let failed = 0
 const check = (name, ok, more = '') => {
@@ -86,7 +90,8 @@ for (const w of WORKFLOWS) {
     check(`${w.name}: ${n} has its poster`, onDisk.includes(poster))
     const p = onDisk.includes(n) ? probe(n) : null
     if (!p) continue
-    check(`${w.name}: ${n} is H.264, at most ${MAX_SECONDS} s`, p.codec === 'h264' && p.seconds <= MAX_SECONDS + 0.15, `${p.codec}, ${p.seconds.toFixed(2)} s`)
+    const max = ex.long ? LONG_SECONDS : MAX_SECONDS
+    check(`${w.name}: ${n} is H.264, at most ${max} s`, p.codec === 'h264' && p.seconds <= max + 0.15, `${p.codec}, ${p.seconds.toFixed(2)} s`)
     check(`${w.name}: ${n} is at most 720 px on its short side`, Math.min(p.width, p.height) <= 720, `${p.width} x ${p.height}`)
     if (ex.sound && n === ex.video) {
       check(`${w.name}: ${n} has the sound it offers`, p.audio)
@@ -116,7 +121,9 @@ for (const w of WORKFLOWS) {
   }
 }
 check('nothing in resources/examples goes unused', onDisk.every((n) => used.has(n)), onDisk.filter((n) => !used.has(n)).join(', '))
-check('every tool has an example', WORKFLOWS.every((w) => w.example), WORKFLOWS.filter((w) => !w.example).map((w) => w.name).join(', '))
+check('every tool has an example (but the ones left without on purpose)', WORKFLOWS.every((w) => w.example || NO_EXAMPLE.includes(w.page)), WORKFLOWS.filter((w) => !w.example && !NO_EXAMPLE.includes(w.page)).map((w) => w.name).join(', '))
+check('the tools left without an example have none', NO_EXAMPLE.every((p) => WORKFLOWS.some((w) => w.page === p && !w.example)))
+check('only Sequences and Effects run long', WORKFLOWS.filter((w) => w.example?.long).every((w) => ['sequences', 'effects'].includes(w.page)))
 
 // ---------- the words ----------
 for (const [who, text] of words) {
@@ -134,6 +141,7 @@ check('a card is a box holding the open button and Example (no button inside a b
 check('Example only shows for a tool that has one', /\{t\.example && \(/.test(page))
 check('closing puts focus back on the Example button', /opener\.current\?\.focus\(\)/.test(page))
 check('Try it opens the tool', /onTry=\{\(\) => \(setShowing\(null\), go\(showing\.page\)\)\}/.test(page))
+check('a picture-in example can show its labelled parts too', /function Strip\(/.test(pop) && (pop.match(/<Strip parts=\{ex\.strip\}/g) || []).length === 2)
 check('the pop-up is a labelled modal dialog titled Example', /role="dialog"/.test(pop) && /aria-modal="true"/.test(pop) && /<h2 id="wf-example-title">Example<\/h2>/.test(pop) && /aria-describedby="wf-example-text"/.test(pop))
 check('Esc closes it and Tab stays inside', /e\.key === 'Escape'/.test(pop) && /e\.key === 'Tab'/.test(pop))
 check('its videos start muted, and Reduce motion starts them paused', (pop.match(/<video /g) || []).length === (pop.match(/<video [^>]*\bmuted\b/g) || []).length && /reducedMotion\(\)/.test(pop) && /useState\(!stillStart\)/.test(pop))

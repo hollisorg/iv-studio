@@ -4,8 +4,9 @@
 // example: what the card's Example pop-up shows (WorkflowExample.jsx), from resources/examples (examples.json lists
 // every file). kind compare: before and after videos with a wipe line (tabs when there's more than one); steps: the
 // pictures that went in, then the video; video: one video, its strip the labelled stretches that light up as it
-// plays. sound: the video's sound is worth hearing (it still starts muted). tall: a vertical video. A tool without
-// an example has no Example button.
+// plays (steps can have one too). sound: the video's sound is worth hearing (it still starts muted). tall: a vertical
+// video. long: may run to 32 s (Sequences' three shots, Effects' three effects). A tool without an example has no
+// Example button.
 export const WORKFLOWS = [
   {
     page: 'replace',
@@ -41,7 +42,14 @@ export const WORKFLOWS = [
       kind: 'video',
       video: 'sequences.mp4',
       sound: true,
-      text: 'A scene written as a list of shots, Tess talking across the kitchen table, rendered as one unbroken take: no cuts and no jumps between the shots, with the voices and the room sound running straight through.'
+      long: true,
+      strip: [
+        // three 10 s shots on H3's frame grid (243 frames each, 10.13 s)
+        { label: 'Shot 1 · Both of them', start: 0, end: 10.13 },
+        { label: 'Shot 2 · Him', start: 10.13, end: 20.25 },
+        { label: 'Shot 3 · Tess', start: 20.25, end: 30.3 }
+      ],
+      text: 'A kitchen scene written as three shots: both of them at the table, then him reading the letter, then Tess answering. IV Studio rendered it as one unbroken take, so the camera moves round the table from one to the other with no cuts, and the voices and room sound run straight through.'
     }
   },
   {
@@ -66,12 +74,16 @@ export const WORKFLOWS = [
     needs: ['Its models on this PC (Setup)'],
     example: {
       kind: 'steps',
-      inputs: [
-        { picture: 'effects-first.webp', label: 'First picture' },
-        { picture: 'effects-last.webp', label: 'Last picture' }
-      ],
+      long: true,
+      inputs: [{ picture: 'effects-photo.webp', label: 'One photo' }],
       video: 'effects.mp4',
-      text: 'A transition from one picture into another: Tess at a rainy bus stop bursts into light and comes back checking her watch. Two pictures in, one 5 second clip out.'
+      strip: [
+        // three 5 s effects back to back (81 frames at 16 fps each)
+        { label: 'Cakeify', start: 0, end: 5.06 },
+        { label: '360° orbit', start: 5.06, end: 10.13 },
+        { label: 'Money rain', start: 10.13, end: 15.2 }
+      ],
+      text: 'One photo of Tess on a sunny street and three of the effects: Cakeify slices her open to show she was cake all along, the 360° orbit circles right round her, and Money rain fills the air with notes. Each is its own 5 second clip from the same photo.'
     }
   },
   {
@@ -79,14 +91,7 @@ export const WORKFLOWS = [
     name: 'Reel',
     tag: 'Pictures and a song, cut to the beat',
     about: 'Add pictures in order and pick a song. IV Studio finds its beat and cuts them on its bars, with a slow move on each picture, as an edit you can finish in Edit.',
-    needs: ['Nothing extra: your pictures and a song'],
-    example: {
-      kind: 'steps',
-      inputs: [1, 2, 3, 4, 5, 6].map((n) => ({ picture: `reel-${n}.webp` })),
-      video: 'reel.mp4',
-      sound: true,
-      text: 'Six pictures of Tess and an upbeat song. IV Studio found the beat (120 BPM) and cut to a new picture on the bars, with a slow move on each, as an edit ready to finish in Edit.'
-    }
+    needs: ['Nothing extra: your pictures and a song']
   },
   {
     page: 'musicvideo',
@@ -114,10 +119,10 @@ export const WORKFLOWS = [
     needs: ['H3 on this PC', 'Your pictures'],
     example: {
       kind: 'steps',
-      inputs: [{ picture: 'keyframes-1.webp' }, { picture: 'keyframes-2.webp' }, { picture: 'keyframes-3.webp' }],
+      inputs: [{ picture: 'keyframes-1.webp' }, { picture: 'keyframes-2.webp' }, { picture: 'keyframes-3.webp' }, { picture: 'keyframes-4.webp' }],
       video: 'keyframes.mp4',
       sound: true,
-      text: 'Three pictures of Tess on a harbour wall at sunset, in order. IV Studio made one take that lands on each picture in turn, with the moves between them and one continuous sound.'
+      text: 'Four pictures from a studio shoot, in order: Tess full length, over her shoulder, hands in her pockets, then a close-up. IV Studio made one take that moves from pose to pose, the camera closing in as she goes, and lands on each picture in turn.'
     }
   },
   {

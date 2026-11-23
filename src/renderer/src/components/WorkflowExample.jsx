@@ -148,9 +148,26 @@ function Compare({ dir, pair, still }) {
   )
 }
 
+// The labelled parts under a video (shots, scenes, effects), the one playing lit
+function Strip({ parts, t }) {
+  return (
+    <ol className="wfx-strip" aria-label="Parts">
+      {parts.map((s) => {
+        const on = t >= s.start && t < s.end
+        return (
+          <li key={s.label} className={on ? 'on' : ''} style={{ flexGrow: s.end - s.start }} aria-current={on ? 'true' : undefined}>
+            <span className="mono small">{s.label}</span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function Steps({ dir, ex, still }) {
   const main = useRef(null)
   const v = useVideos(main, [], { stillStart: still })
+  const [t, setT] = useState(0)
   return (
     <>
       <div className={`wfx-steps ${ex.tall ? 'tall' : ''} ${ex.inputs.length > 3 ? 'many' : ''}`}>
@@ -166,9 +183,10 @@ function Steps({ dir, ex, still }) {
           →
         </span>
         <div className="wfx-result">
-          <video ref={main} src={fileUrl(dir, ex.video)} poster={fileUrl(dir, posterOf(ex.video))} muted loop playsInline preload="auto" aria-label="What came out" />
+          <video ref={main} src={fileUrl(dir, ex.video)} poster={fileUrl(dir, posterOf(ex.video))} muted loop playsInline preload="auto" aria-label="What came out" onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} />
         </div>
       </div>
+      {ex.strip && <Strip parts={ex.strip} t={t} />}
       <Controls {...v} sound={ex.sound} />
     </>
   )
@@ -183,18 +201,7 @@ function Single({ dir, ex, still }) {
       <div className="wfx-single">
         <video ref={main} src={fileUrl(dir, ex.video)} poster={fileUrl(dir, posterOf(ex.video))} muted loop playsInline preload="auto" onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} />
       </div>
-      {ex.strip && (
-        <ol className="wfx-strip" aria-label="Parts">
-          {ex.strip.map((s) => {
-            const on = t >= s.start && t < s.end
-            return (
-              <li key={s.label} className={on ? 'on' : ''} style={{ flexGrow: s.end - s.start }} aria-current={on ? 'true' : undefined}>
-                <span className="mono small">{s.label}</span>
-              </li>
-            )
-          })}
-        </ol>
-      )}
+      {ex.strip && <Strip parts={ex.strip} t={t} />}
       <Controls {...v} sound={ex.sound} />
     </>
   )

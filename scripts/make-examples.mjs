@@ -18,6 +18,8 @@ const ffmpeg = require('ffmpeg-ffprobe-static').ffmpegPath
 const ffprobe = require('ffmpeg-ffprobe-static').ffprobePath
 const OUT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '../resources/examples')
 const MAX_SECONDS = 12
+// "long": true lets one source run to this (Sequences' three shots in one take, Effects' three effects)
+const LONG_SECONDS = 32
 
 const list = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
 fs.mkdirSync(OUT, { recursive: true })
@@ -27,7 +29,8 @@ const probe = (file) => JSON.parse(execFileSync(ffprobe, ['-v', 'error', '-show_
 for (const s of list) {
   const out = path.join(OUT, s.out)
   if (s.out.endsWith('.mp4')) {
-    const length = Math.min(s.length ?? MAX_SECONDS, MAX_SECONDS)
+    const max = s.long ? LONG_SECONDS : MAX_SECONDS
+    const length = Math.min(s.length ?? max, max)
     const h = s.height || 540
     const vf = [s.crop && `crop=${s.crop}`, `scale=-2:${h}:flags=lanczos`, 'setsar=1', 'format=yuv420p'].filter(Boolean).join(',')
     // every example with sound at one loudness (-16 LUFS, peaks under -1.5 dB), so Sound on doesn't jump between cards:
