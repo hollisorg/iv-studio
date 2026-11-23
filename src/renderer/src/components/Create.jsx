@@ -10,7 +10,7 @@ import Findings from './Findings'
 import { MentionBox, MentionNotes, PlaceDialog } from './Mentions'
 import { blocking, lintPrompt } from '../../../service/lint'
 import { fileUrl } from './edit/model'
-import { AspectGlyph, DropIcon, StepHead } from './CreateKit'
+import { AspectGlyph, DropIcon, showStep, StepHead, StepJump, useFolds } from './CreateKit'
 import { pretty as refmodTitle, RefModIcon, RefModPicker } from './CharacterSources'
 import { lintSeedance } from '../../../service/seedlint'
 import { confirmSpend, dollars } from './ComfyAccount'
@@ -627,6 +627,56 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : sd ? `Hunt ${r?.previews || ''} take${r?.previews > 1 ? 's' : ''}${priceText ? ` · ${priceText}` : ''}` : oneFinal ? `Render one final · ${form.finalMp} MP` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
   const canHunt = !(busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway))
 
+  // Folding steps and the jump bar: each step's one-line summary, for its folded head and its chip
+  const folds = useFolds()
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
+  const others = h3 ? (form.with || []).map((id) => characters.find((c) => c.id === id)?.name).filter(Boolean) : []
+  const promptLine = form.prompt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const enhancerName = FINAL_ENHANCERS.find(([id]) => id === form.finalEnhancer)?.[1]
+  const stepList = [
+    { id: 'kind', n: 1, short: 'Kind', summary: `${engineName(form.engine)} · ${modeLabel}` },
+    {
+      id: 'who',
+      n: steps.who,
+      short: 'Who',
+      summary: [lx ? 'No characters with LTX' : char?.name || 'No character', others.length && `with ${others.join(', ')}`, form.extraLoras.length && plural(form.extraLoras.length, 'LoRA'), form.refmods.length && plural(form.refmods.length, 'RefMod')].filter(Boolean).join(' · ')
+    },
+    steps.media && {
+      id: 'media',
+      n: steps.media,
+      short: form.mode === 'frames' ? 'Frames' : form.mode === 'continue' ? 'The video' : 'Builds on',
+      summary: counts.length ? counts.map(([k, n]) => plural(n, k)).join(', ') : 'Nothing added yet',
+      warn: !form.media.length
+    },
+    {
+      id: 'what',
+      n: steps.what,
+      short: 'What happens',
+      summary: !promptLine ? 'No prompt yet' : `${errors.length ? `${plural(errors.length, 'error')} to fix · ` : ''}${promptLine.length > 90 ? `${promptLine.slice(0, 90)}…` : promptLine}`,
+      warn: !promptLine || errors.length > 0
+    },
+    {
+      id: 'shape',
+      n: steps.shape,
+      short: 'Shape',
+      summary: [
+        form.mode === 'frames' && form.matchPhoto ? 'Photo shape' : form.aspect,
+        `${form.seconds} s`,
+        sd ? TIERS.find(([id]) => id === form.tier)?.[1] : oneFinal ? `One final · ${form.finalMp} MP · ${form.finalEnhancer === 'none' ? 'no enhancer' : enhancerName}` : plural(form.previews, 'preview')
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    }
+  ]
+    .filter(Boolean)
+    .map((s) => ({ ...s, folded: folds.isFolded(s.id) }))
+  const stepBox = (id) => ({ id: `create-step-${id}`, className: `create-step${folds.isFolded(id) ? ' folded' : ''}` })
+  const foldOf = (id) => {
+    const s = stepList.find((x) => x.id === id)
+    return { folded: s?.folded, summary: s?.summary, warn: s?.warn, onToggle: () => folds.toggle(id) }
+  }
+  const jumpTo = (id) => (folds.open(id), showStep(id))
+
   return (
     <div className="create create-v2">
       <Stage effect="sparks" art="create" title="Create" kicker="New shot">
@@ -638,7 +688,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           onChange={setQuickIdea}
           goLabel="Write it for me"
           disabled={!quickIdea.trim()}
-          onGo={() => (sendIdea(quickIdea, true), setQuickIdea(''), showBelow('.create .writer'))}
+          onGo={() => (sendIdea(quickIdea, true), setQuickIdea(''), folds.open('what'), showBelow('.create .writer'))}
         />
       </Stage>
       {kindSwitch}
@@ -676,10 +726,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
         </p>
       )}
 
+      <StepJump steps={stepList} onJump={jumpTo} onAll={(fold) => folds.setAll(stepList.map((s) => s.id), fold)} />
+
       <div className="create-layout">
         <div className="create-steps">
-          <section className="create-step">
-            <StepHead n={1} title="What kind of shot" sub={lx ? 'LTX 2.5, on this PC: quick takes with sound, good for cartoons and animation. It starts from words, or from a first frame (and a last).' : sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} subPlain={sd ? 'Seedance makes the video online and uses your Comfy credits. Start from words, your own pictures or clips, a first picture, or a video to carry on.' : 'Pick how the video starts: from words, from your own pictures and clips, from a first picture, or carrying on a video.'} />
+          <section {...stepBox('kind')}>
+            <StepHead n={1} fold={foldOf('kind')} title="What kind of shot" sub={lx ? 'LTX 2.5, on this PC: quick takes with sound, good for cartoons and animation. It starts from words, or from a first frame (and a last).' : sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} subPlain={sd ? 'Seedance makes the video online and uses your Comfy credits. Start from words, your own pictures or clips, a first picture, or a video to carry on.' : 'Pick how the video starts: from words, from your own pictures and clips, from a first picture, or carrying on a video.'} />
             <div className="engine-switch" role="radiogroup" aria-label="Model">
               {ENGINES.map(([id, label, note]) => (
                 <button key={id} role="radio" aria-checked={form.engine === id} className={`engine-card ${form.engine === id ? 'on' : ''}`} onClick={() => switchEngine(id)}>
@@ -701,8 +753,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </div>
           </section>
 
-          <section className="create-step">
-            <StepHead n={steps.who} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} subPlain={sd ? 'Pick a character and their face comes along, so they look the same.' : 'Pick a character and they keep the same face and voice in every shot. Looks add a style or a kind of movement; reference packs bring a saved face, voice or place.'} />
+          <section {...stepBox('who')}>
+            <StepHead n={steps.who} fold={foldOf('who')} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} subPlain={sd ? 'Pick a character and their face comes along, so they look the same.' : 'Pick a character and they keep the same face and voice in every shot. Looks add a style or a kind of movement; reference packs bring a saved face, voice or place.'} />
             {lx && <p className="dim small engine-note">LTX 2.5 has no character LoRAs. To keep a person the same, start from a first frame of them (First / last frame).</p>}
             {!lx && (
             <div className="cast-picker" role="group" aria-label="Characters">
@@ -827,9 +879,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           </section>
 
           {form.mode !== 'text' && (
-            <section className="create-step">
+            <section {...stepBox('media')}>
               <StepHead
                 n={steps.media}
+                fold={foldOf('media')}
                 title={form.mode === 'frames' ? 'The frames' : form.mode === 'continue' ? 'The video to carry on' : 'What it builds on'}
                 sub={form.mode === 'frames' ? 'The first frame, and a last frame if the clip should land on one.' : form.mode === 'continue' ? 'The clip to continue. 24 fps works best.' : sd ? 'A place, an outfit, a voice, a camera move: name each one in the prompt as @image1, @video1, @audio1 and say what to take from it.' : 'A place, an outfit, a voice: name them in the prompt as <Picture 1>, <Video 1>, <Audio 1>.'}
               />
@@ -898,8 +951,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           )}
 
           {h3 && !form.projectId && (!form.prompt.trim() || starter) && <Starters onPick={applyStarter} current={starter} />}
-          <section className="create-step">
-            <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
+          <section {...stepBox('what')}>
+            <StepHead n={steps.what} fold={foldOf('what')} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
             <PromptWriter
               listen
               context={{ engine: form.engine, mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', with: sd ? [] : form.with || [], media: form.media.map((m) => ({ kind: m.kind, file: m.path })), voiceLine: form.voiceLine || null }}
@@ -1003,8 +1056,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             )}
           </section>
 
-          <section className="create-step">
-            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : oneFinal ? `One take, finished at ${form.finalMp} MP straight away. No previews to pick from.` : 'The previews are small and quick; the one you pick is finished at full size.'} subPlain={sd ? 'Try a few cheap rough takes first, then finish the one you like. Or make sharp 720p or 1080p takes straight away.' : oneFinal ? 'One video, made at full size straight away.' : 'You get a few small, quick versions first. The one you like is then made again at full size.'} />
+          <section {...stepBox('shape')}>
+            <StepHead n={steps.shape} fold={foldOf('shape')} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : oneFinal ? `One take, finished at ${form.finalMp} MP straight away. No previews to pick from.` : 'The previews are small and quick; the one you pick is finished at full size.'} subPlain={sd ? 'Try a few cheap rough takes first, then finish the one you like. Or make sharp 720p or 1080p takes straight away.' : oneFinal ? 'One video, made at full size straight away.' : 'You get a few small, quick versions first. The one you like is then made again at full size.'} />
             <div className="aspect-tiles" role="radiogroup" aria-label="Aspect ratio">
               {form.mode === 'frames' && (
                 <button role="radio" aria-checked={!!form.matchPhoto} disabled={!picShape} title={picShape ? `Same as photo: the first frame's own shape, ${picShape.width} × ${picShape.height}` : 'Same as photo: add a first frame to use its shape'} className={`aspect-tile photo-tile ${form.matchPhoto ? 'on' : ''}`} onClick={() => set({ matchPhoto: true })}>

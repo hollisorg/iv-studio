@@ -19575,3 +19575,131 @@ html.chat-window body {
 .while-you-wait .btn {
   margin-left: auto;
 }
+
+/* Create: folding steps (a folded step is its head and one-line summary) and the jump bar */
+.create-step {
+  scroll-margin-top: 84px;
+}
+.create-step.folded {
+  gap: 0;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.create-step.folded > :not(.step-head) {
+  display: none;
+}
+.step-head.foldable {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.create-step.folded .step-head {
+  align-items: center;
+  cursor: pointer;
+}
+.create-step.folded .step-n {
+  font-size: 28px;
+}
+.create-step.folded .step-head h2 {
+  font-size: 18px;
+}
+.step-summary {
+  margin: 5px 0 0;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-summary.warn,
+.step-jump-chip.warn .step-jump-sum {
+  color: var(--red);
+}
+.step-fold {
+  align-self: start;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.create-step.folded .step-fold {
+  align-self: center;
+}
+/* sticks flush to the top of the page (above the page's own padding), so nothing shows above it */
+.step-jump {
+  position: sticky;
+  top: calc(-1 * clamp(28px, 4vw, 52px));
+  z-index: 5;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 18px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--ink);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+.step-jump-chips {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.step-jump-chip {
+  display: flex;
+  flex: 1 1 0;
+  gap: 8px;
+  align-items: center;
+  min-width: 120px;
+  min-height: 44px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  color: var(--cream);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.step-jump-chip:hover,
+.step-jump-chip:focus-visible {
+  border-color: var(--red);
+}
+.step-jump-chip.folded {
+  background: transparent;
+}
+.step-jump-n {
+  color: var(--red);
+  font-size: 13px;
+}
+.step-jump-text {
+  display: grid;
+  min-width: 0;
+}
+.step-jump-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-jump-sum {
+  overflow: hidden;
+  color: var(--paper-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-jump-all {
+  flex: none;
+  min-height: 44px;
+  padding: 0 6px;
+}
+@media (max-width: 760px) {
+  .step-jump-chip {
+    flex: none;
+    min-width: 0;
+  }
+  .step-jump-sum {
+    display: none;
+  }
+}
+/* the Your shot card stays clear of the jump bar */
+.create-v2 .shot-card {
+  top: calc(84px - clamp(28px, 4vw, 52px));
+}

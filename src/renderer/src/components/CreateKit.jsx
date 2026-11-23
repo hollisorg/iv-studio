@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { reducedMotion } from '../a11y'
 // Pieces Create's Video and Image sides share: the Video | Image selector under the banner, a step's heading,
 // an aspect ratio drawn as its shape, and the drop icon.
 
@@ -24,19 +26,91 @@ export function CreateKind({ kind, onKind }) {
 
 // A step's number, title and one line on what it's for.
 // subPlain: the sub line in plain words, shown instead with Simple words on (words.js)
-export function StepHead({ n, title, sub, subPlain }) {
+// fold (optional): { folded, summary, warn, onToggle }. A folded step shows its one-line summary in place of
+// the explanation, with Change to open it again; clicking anywhere on a folded head opens it too.
+export function StepHead({ n, title, sub, subPlain, fold }) {
+  const folded = !!fold?.folded
   return (
-    <div className="step-head">
+    <div className={`step-head${fold ? ' foldable' : ''}`} onClick={folded ? fold.onToggle : undefined}>
       {n != null && <span className="step-n">{String(n).padStart(2, '0')}</span>}
       <div>
         <h2>{title}</h2>
-        {sub && (
-          <p className="dim small" data-plain={subPlain}>
-            {sub}
-          </p>
-        )}
+        {folded
+          ? fold.summary && <p className={`step-summary small${fold.warn ? ' warn' : ''}`}>{fold.summary}</p>
+          : sub && (
+              <p className="dim small" data-plain={subPlain}>
+                {sub}
+              </p>
+            )}
       </div>
+      {fold && (
+        <button
+          className="step-fold link-btn mono small"
+          aria-expanded={!folded}
+          aria-label={folded ? `Change ${title}` : `Fold ${title}`}
+          onClick={(e) => (e.stopPropagation(), fold.onToggle())}
+        >
+          {folded ? 'Change' : 'Fold'}
+        </button>
+      )}
     </div>
+  )
+}
+
+// Which of Create's steps are folded, kept on this PC so a step you've folded stays folded next time.
+export function useFolds(key = 'iv.create.folded') {
+  const [folded, setFolded] = useState(() => {
+    try {
+      const list = JSON.parse(localStorage.getItem(key) || '[]')
+      return new Set(Array.isArray(list) ? list : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const update = (fn) =>
+    setFolded((cur) => {
+      const next = fn(new Set(cur))
+      try {
+        localStorage.setItem(key, JSON.stringify([...next]))
+      } catch {
+        // a full or blocked store only means it isn't remembered
+      }
+      return next
+    })
+  return {
+    isFolded: (id) => folded.has(id),
+    toggle: (id) => update((s) => (s.has(id) ? s.delete(id) : s.add(id), s)),
+    open: (id) => update((s) => (s.delete(id), s)),
+    setAll: (ids, fold) => update((s) => (ids.forEach((id) => (fold ? s.add(id) : s.delete(id))), s))
+  }
+}
+
+// Scrolls a step into view under the jump bar (instantly when motion is reduced).
+export function showStep(id) {
+  requestAnimationFrame(() => document.getElementById(`create-step-${id}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }))
+}
+
+// The bar that stays at the top of Create: every step with its summary; a click opens that step and goes to it.
+// steps: [{ id, n, short, summary, warn, folded }]
+export function StepJump({ steps, onJump, onAll }) {
+  const allFolded = steps.every((s) => s.folded)
+  return (
+    <nav className="step-jump" aria-label="Steps">
+      <div className="step-jump-chips">
+        {steps.map((s) => (
+          <button key={s.id} className={`step-jump-chip${s.folded ? ' folded' : ''}${s.warn ? ' warn' : ''}`} onClick={() => onJump(s.id)} title={s.summary}>
+            <span className="step-jump-n mono">{String(s.n).padStart(2, '0')}</span>
+            <span className="step-jump-text">
+              <span className="step-jump-title">{s.short}</span>
+              <span className="step-jump-sum small">{s.summary}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <button className="link-btn mono small step-jump-all" onClick={() => onAll(!allFolded)}>
+        {allFolded ? 'Open all' : 'Fold all'}
+      </button>
+    </nav>
   )
 }
 
