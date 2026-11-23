@@ -1071,7 +1071,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 {run.autoFinishError
                   ? `One final: the finish couldn’t start (${run.autoFinishError}). Pick the take to finish it yourself.`
                   : run.autoFinishJob
-                    ? `One final: the take is being finished at ${run.plan.autoFinish.megapixels || 2} MP${run.plan.autoFinish.enhancer === 'none' ? ', with no enhancer' : run.plan.autoFinish.enhancer === 'seedvr2' ? ', then SeedVR2' : ', then DLSS 5'}.`
+                    ? (() => {
+                        const how = `${run.plan.autoFinish.megapixels || 2} MP${run.plan.autoFinish.enhancer === 'none' ? ', with no enhancer' : run.plan.autoFinish.enhancer === 'seedvr2' ? ', then SeedVR2' : ', then DLSS 5'}`
+                        const f = finishesOf(run.id).find((j) => j.id === run.autoFinishJob)
+                        return f?.status === 'success' ? `One final: finished at ${how}. It's below.` : f?.status === 'error' || f?.status === 'cancelled' ? `One final: the finish at ${how} didn't complete. Pick the take to try again.` : `One final: the take is being finished at ${how}.`
+                      })()
                     : `One final: the take is finished at ${run.plan.autoFinish.megapixels || 2} MP as soon as it is done.`}
               </p>
             )}
