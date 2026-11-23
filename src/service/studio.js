@@ -162,6 +162,9 @@ export function explainRenderError(text) {
   return text
 }
 
+// A render ComfyUI forgot (refreshJob, lostByComfy); failures.js turns it into "ComfyUI lost this render".
+export const LOST_JOB = 'ComfyUI no longer has this render: it is in neither its queue nor its history. ComfyUI was most likely restarted, or its queue cleared, before the render finished. If ComfyUI had already saved a file, it is in ComfyUI’s output folder.'
+
 export class Studio {
   // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
   constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, comfyApiKey = null, outputDir, models = null }) {
@@ -806,7 +809,7 @@ export class Studio {
 
   // Saves a job record (as submitGraph does for H3 graphs) and returns it as the window sees it.
   recordJob({ kind, projectId, name, promptId, plan, parent = null, status = 'queued', outputs = [] }) {
-    const job = { id: randomUUID().slice(0, 12), kind, projectId, sequenceId: null, parent, name, promptId, status, createdAt: now(), where: this.comfy.remote ? 'cloud' : 'local', plan, outputs, ...(status === 'success' ? { finishedAt: now() } : {}) }
+    const job = { id: randomUUID().slice(0, 12), kind, projectId, sequenceId: null, parent, name, promptId, status, createdAt: now(), where: this.comfy.remote ? 'cloud' : 'local', server: this.comfy.url, plan, outputs, ...(status === 'success' ? { finishedAt: now() } : {}) }
     writeJson(this.jobFile(job.id), job)
     if (projectId) this.touchProject(projectId, job.id)
     return this.publicJob(job)
@@ -885,6 +888,8 @@ export class Studio {
       status: 'queued',
       createdAt: now(),
       where: this.comfy.remote ? 'cloud' : 'local',
+      // the ComfyUI it went to: only that one can say it lost the job (refreshJob)
+      server: this.comfy.url,
       plan: kind === 'previews' ? plan : { ...plan, preview: undefined },
       previewPlan: previewPlan || undefined,
       outputs: []
@@ -1546,10 +1551,35 @@ export class Studio {
     if (q.queue_running.some((i) => i[1] === job.promptId)) job.status = 'running'
     else {
       const pos = q.queue_pending.findIndex((i) => i[1] === job.promptId)
+      if (pos < 0 && (await this.lostByComfy(job))) return this.publicJob(job)
+      if (pos < 0 && job.lostCheck) return this.refreshJob(id) // it finished between the two questions
       job.status = pos >= 0 ? 'queued' : job.status
       job.queuePosition = pos >= 0 ? pos + 1 + q.queue_running.length : undefined
     }
     return this.publicJob({ ...job, progress: this.progress.get(job.promptId) })
+  }
+
+  // A job that is neither in ComfyUI's queue nor in its history: ComfyUI restarted (or its queue was cleared) before
+  // it finished, and a restart forgets both, so it would stay "queued" for good. It's marked failed with a plain
+  // reason (failures.js 'lost'), so the pages offer Try again. Only the ComfyUI the job went to can say so: a job sent
+  // to another address (the person switched ComfyUI, or a cloud GPU since) is left alone, and so is Comfy Cloud,
+  // whose queue isn't ComfyUI's. History is asked a second time first, in case the job finished between the history
+  // and queue answers (then job.lostCheck sends refreshJob round again). Returns true when it marked the job lost.
+  async lostByComfy(job) {
+    if (!job.promptId || this.comfy.hosted) return false
+    if ((job.where || 'local') !== (this.comfy.remote ? 'cloud' : 'local')) return false
+    if (job.server && job.server !== this.comfy.url) return false
+    const again = (await this.comfy.history(job.promptId).catch(() => null))?.[job.promptId]
+    if (again) {
+      job.lostCheck = true
+      return false
+    }
+    job.status = 'error'
+    job.lost = true
+    job.error = LOST_JOB
+    job.finishedAt = now()
+    writeJson(this.jobFile(job.id), job)
+    return true
   }
 
   async cancelJob(id) {
@@ -1560,6 +1590,8 @@ export class Studio {
       job.status = 'cancelled'
       writeJson(this.jobFile(job.id), job)
     }
+    // not in the queue: it finished meanwhile, or ComfyUI lost it (a restart), which refreshJob settles
+    if (result === 'not queued') return { job: await this.refreshJob(id).catch(() => this.publicJob(job)), result }
     return { job: this.publicJob(job), result }
   }
 

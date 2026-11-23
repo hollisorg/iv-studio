@@ -73,6 +73,19 @@ const RULES = [
     })
   },
   {
+    // studio.js LOST_JOB: in neither ComfyUI's queue nor its history, so a restart (or a cleared queue) dropped it
+    id: 'lost',
+    test: /no longer has this render/i,
+    say: ({ where }) => ({
+      title: where === 'cloud' ? 'Your cloud GPU lost this render' : 'ComfyUI lost this render',
+      why:
+        where === 'cloud'
+          ? 'The cloud machine was restarted or stopped before this render finished, and a restart forgets what was waiting. Nothing in the render itself went wrong, so running it again works.'
+          : 'ComfyUI was restarted, or its queue was cleared, before this render finished, and a restart forgets what was waiting. Nothing in the render itself went wrong, so running it again works.',
+      fixes: [{ id: 'try-again', label: 'Try again' }]
+    })
+  },
+  {
     id: 'unreachable',
     test: /econnrefused|econnreset|enotfound|etimedout|fetch failed|socket hang up|network (error|request failed)|didn.t answer|did not answer|connection (refused|reset|closed)|bad gateway|\b50[234]\b|pod.*(asleep|stopped|not running)/i,
     say: ({ where }) => ({

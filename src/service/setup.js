@@ -34,8 +34,11 @@ const PICKS = { fl2va: ['text', 'frames', 'continue', 'takePlain'], ref2va: ['re
 // model (accept: patterns, like the fp8 or NVFP4 build ComfyUI's templates download), else the one picked in
 // Settings → Models. { file, how: 'exact' | 'version' | 'picked' } or null. Files in subfolders keep their path.
 export function resolveModel(m, opts, chosen = {}) {
+  // in the manifest's order, not ComfyUI's alphabetical list: with both Qwen3-VL files installed, the describer's own
+  // qwen3vl_8b_int8_convrot must win over its stand-in qwen3vl_4b_fp8_scaled, or Qwen Image 2.1 (which names the 8B)
+  // gets the 4B and fails in the sampler (normalized_shape [4096] ... 2560)
   const names = [m.match, ...(m.alt || [])]
-  const exact = opts.find((o) => names.includes(base(o)))
+  const exact = names.map((n) => opts.find((o) => base(o) === n)).find(Boolean)
   if (exact) return { file: exact, how: 'exact' }
   const version = (m.accept || []).map((a) => new RegExp(a, 'i')).reduce((hit, re) => hit || opts.find((o) => re.test(base(o))), null)
   if (version) return { file: version, how: 'version' }

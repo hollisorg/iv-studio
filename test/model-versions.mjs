@@ -54,6 +54,13 @@ ok('IV Studio’s own build wins; another version is next; the Settings → Mode
   assert.equal(resolveModel(byId.ref2va, ['my_h3_merge.safetensors'], { text: 'my_h3_merge.safetensors' }), null, 'a pick for an fl2va workflow is not a ref2va')
 })
 
+ok('a model’s own file wins over its stand-in, whatever ComfyUI’s alphabetical order (Qwen Image 2.1 got the 4B encoder)', () => {
+  const both = ['qwen3vl_4b_fp8_scaled.safetensors', 'qwen3vl_8b_int8_convrot.safetensors', 'qwen3vl_32b_minimax_h3_int4_convrot.safetensors']
+  assert.deepEqual(resolveModel(byId.describer, both), { file: 'qwen3vl_8b_int8_convrot.safetensors', how: 'exact' })
+  assert.deepEqual(resolveModel(byId.describer, ['qwen3vl_4b_fp8_scaled.safetensors']), { file: 'qwen3vl_4b_fp8_scaled.safetensors', how: 'exact' }, 'the stand-in still counts when it is the only one')
+  assert.equal(modelFileMap(manifest, { CLIPLoader: { input: { required: { clip_name: [both] } } } })['qwen3vl_8b_int8_convrot.safetensors'], 'qwen3vl_8b_int8_convrot.safetensors')
+})
+
 ok('the 8-step turbo LoRA is not taken for the 4-step DMAD LoRA', () => {
   assert.equal(resolveModel(byId.dmad, ['minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors', 'minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors']), null)
 })

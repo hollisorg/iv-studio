@@ -2772,6 +2772,248 @@ body.resizing * {
   text-transform: uppercase;
   color: var(--cream);
 }
+/* Workflows' cards are a box (Audio's are still one button): the open button is stretched over the whole card by
+   its ::after, so a click anywhere opens the tool, and Example sits on top of it in the corner */
+div.workflow-card {
+  cursor: default;
+  grid-template-rows: 1fr auto;
+}
+.workflow-open {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.workflow-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.workflow-open:focus-visible {
+  outline: none;
+}
+div.workflow-card:hover,
+div.workflow-card:has(.workflow-open:focus-visible) {
+  border-color: var(--red);
+}
+div.workflow-card:has(.workflow-open:focus-visible) {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+div.workflow-card:has(.workflow-open:focus-visible) .workflow-art {
+  opacity: 0.36;
+  transform: scale(1.03);
+}
+.workflow-card > .workflow-example {
+  position: relative;
+  z-index: 1;
+  justify-self: end;
+  min-height: 36px;
+  text-shadow: none;
+  background: var(--ink);
+}
+.workflow-example span {
+  font-size: 0.75em;
+  margin-right: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  div.workflow-card:has(.workflow-open:focus-visible) .workflow-art {
+    transform: none;
+  }
+}
+
+/* the Example pop-up (WorkflowExample.jsx): fits a 1100 x 720 window without scrolling; the media box takes what
+   the heading, paragraph and buttons leave */
+.modal.wf-example {
+  width: min(880px, 92vw);
+  max-height: 90vh;
+  gap: 12px;
+}
+.wf-example .spacer {
+  flex: 1;
+}
+.wfx-text {
+  margin: 0;
+  max-width: 70ch;
+  line-height: 1.5;
+}
+.wfx-tabs {
+  justify-self: start;
+}
+.wfx-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: -4px;
+}
+.wfx-controls .wfx-sound {
+  border-color: var(--pink);
+  color: var(--pink);
+}
+.wfx-compare,
+.wfx-single {
+  position: relative;
+  justify-self: center;
+  width: 100%;
+  max-height: calc(90vh - 300px);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  overflow: hidden;
+}
+.wfx-compare {
+  width: auto;
+  height: min(calc(90vh - 300px), calc((92vw - 48px) * 9 / 16), 466px);
+  touch-action: none;
+  cursor: ew-resize;
+  user-select: none;
+}
+/* the tab row above a compare takes its height from the media */
+.wf-example:has(.wfx-tabs) .wfx-compare {
+  height: min(calc(90vh - 350px), calc((92vw - 48px) * 9 / 16), 440px);
+}
+.wfx-compare video,
+.wfx-single video,
+.wfx-result video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.wfx-single {
+  width: auto;
+  height: min(calc(90vh - 300px), calc((92vw - 48px) * 9 / 16), 466px);
+}
+.wfx-tag {
+  position: absolute;
+  top: 10px;
+  padding: 3px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: rgba(8, 6, 7, 0.7);
+  pointer-events: none;
+}
+.wfx-tag-before {
+  left: 10px;
+}
+.wfx-tag-after {
+  right: 10px;
+}
+.wfx-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--pink);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+}
+.wfx-line:focus-visible {
+  outline: 2px solid var(--cream);
+  outline-offset: 2px;
+}
+.wfx-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  font: 700 16px / 1 var(--display);
+  color: var(--ink);
+  background: var(--pink);
+  border-radius: 50%;
+}
+.wfx-strip {
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wfx-strip li {
+  flex-basis: 0;
+  padding: 6px 10px;
+  color: var(--dim, #a99);
+  background: var(--ink-2);
+  border-top: 2px solid var(--line);
+}
+.wfx-strip li.on {
+  color: var(--cream);
+  border-top-color: var(--pink);
+}
+.wfx-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 2.2fr);
+  align-items: center;
+  gap: 14px;
+  height: min(calc(90vh - 300px), 420px);
+}
+.wfx-steps.tall {
+  grid-template-columns: minmax(0, 1.6fr) auto minmax(0, 1fr);
+}
+.wfx-inputs {
+  display: grid;
+  gap: 8px;
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-auto-rows: minmax(0, 1fr);
+}
+.wfx-steps.tall .wfx-inputs {
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  align-content: center;
+}
+.wfx-steps.many .wfx-inputs {
+  grid-template-columns: 1fr 1fr;
+}
+.wfx-inputs li {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+}
+.wfx-inputs img {
+  flex: 0 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  object-fit: contain;
+}
+/* six small pictures fill their boxes (a reel's pictures are all the same shape) */
+.wfx-steps.many .wfx-inputs img {
+  flex: 1 1 0;
+  object-fit: cover;
+}
+.wfx-steps.tall .wfx-inputs img {
+  height: auto;
+  max-height: calc(min(calc(90vh - 300px), 420px) - 24px);
+}
+.wfx-arrow {
+  font: 700 28px / 1 var(--display);
+  color: var(--pink);
+}
+.wfx-result {
+  position: relative;
+  align-self: stretch;
+  background: #000;
+}
 .replace .block > .btn,
 .replace .block > .segmented {
   justify-self: start;
