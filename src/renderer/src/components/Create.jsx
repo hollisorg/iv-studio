@@ -22,6 +22,7 @@ import { withSetups, withoutSetups } from '../../../service/setuptext'
 import { starterById, starterForm } from '../starters'
 import TemplateBar from './Templates'
 import { showFor } from '../../../service/bible'
+import { renderPopupOn, startRender } from '../renders'
 import { nearestAspect, photoRatio } from '../../../service/plan'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
@@ -554,8 +555,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       const job = await window.ivstudio.render.previews({ ...request, projectId: form.projectId || undefined, projectName: form.projectName || undefined, ...(spend ? { spend } : {}) })
       // the last run: Create opens on it next time
       window.ivstudio.createMemory.saveLast('video', form, { ran: true }).catch(() => {})
-      notify(oneFinal ? `One take started. It is finished at ${form.finalMp} MP as soon as it is done; you can keep working.` : 'Previews started. You can keep working; they appear here as they finish.', 'info')
       openShot(job.projectId)
+      // the render pop-up, and the ready drop when it's done (RenderHub.jsx)
+      startRender({ kind: 'video', job, projectId: job.projectId, name: form.projectName.trim() || null })
+      if (!renderPopupOn()) notify(oneFinal ? `One take started. It is finished at ${form.finalMp} MP as soon as it is done; you can keep working.` : 'Previews started. You can keep working; they appear here as they finish.', 'info')
     } catch (err) {
       notify(err.message)
     } finally {

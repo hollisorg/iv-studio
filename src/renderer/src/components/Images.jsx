@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { renderPopupOn, startRender } from '../renders'
 import Hero from './Hero'
 import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import { fileUrl } from './edit/model'
@@ -252,11 +253,39 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
     if (files.length) addRefs(files)
   }
 
+  // a set brought into view and lit for a moment: a new one being made, or one opened from the render hub's reveal
+  const [lit, setLit] = useState(null)
+  function showSet(id) {
+    setLit(id)
+    setTimeout(() => document.getElementById(`image-set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
+    setTimeout(() => setLit((x) => (x === id ? null : x)), 2600)
+  }
+  useEffect(() => {
+    const show = (e) => {
+      const id = e.detail?.id
+      if (!id) return
+      I()
+        .get(id)
+        .then((s) => {
+          setSets((all) => (all.some((x) => x.id === id) ? all.map((x) => (x.id === id ? s : x)) : [s, ...all]))
+          showSet(id)
+          if (s?.files?.length) setViewing({ set: s, i: 0 })
+        })
+        .catch(() => {})
+    }
+    window.addEventListener('iv:image-show', show)
+    return () => window.removeEventListener('iv:image-show', show)
+  }, [])
+
   async function make() {
     setBusy(true)
     try {
       const rec = await I().create({ ...form, seed: form.seed === '' ? null : Number(form.seed), steps: form.steps === '' ? null : Number(form.steps), cfg: form.cfg === '' ? null : Number(form.cfg) })
       setSets((all) => [rec, ...all])
+      // the render pop-up and the ready drop (RenderHub.jsx); and the new set, in view and lit, where it's being made
+      startRender({ kind: 'image', set: rec, name: rec.name })
+      if (!renderPopupOn()) notify('Making your pictures. They appear under Your pictures; you can keep working.', 'info')
+      showSet(rec.id)
     } catch (err) {
       notify(err.message)
     } finally {
@@ -567,7 +596,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
           </div>
           <div className="image-sets">
             {sets.map((s) => (
-              <div key={s.id} className="image-set">
+              <div key={s.id} id={`image-set-${s.id}`} className={`image-set ${lit === s.id ? 'lit' : ''}`}>
                 <div className="image-set-head">
                   <span className="image-set-name" title={s.prompt}>
                     {s.name}

@@ -18921,3 +18921,458 @@ html.chat-window body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- The render hub (RenderHub.jsx): the render pop-up, Frame Hunt, the ready drops and the reveal ---------- */
+.modal.render-popup {
+  width: min(560px, 94vw);
+}
+.render-popup-kicker {
+  color: var(--pink, var(--red));
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.render-popup-name {
+  margin: 4px 0 14px;
+  font-size: 26px;
+  line-height: 1.1;
+}
+.render-popup-bar {
+  height: 6px;
+  background: var(--ink-3, #221b1e);
+  overflow: hidden;
+}
+.render-popup-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.6), var(--red));
+  transition: width 0.6s ease;
+  position: relative;
+}
+.render-popup-bar span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: rp-sheen 1.6s linear infinite;
+}
+.render-popup.done .render-popup-bar span::after,
+.render-popup.failed .render-popup-bar span::after {
+  animation: none;
+}
+.render-popup.failed .render-popup-bar span {
+  background: var(--line-strong);
+}
+@keyframes rp-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.render-popup-state {
+  margin: 10px 0 4px;
+}
+.render-popup.done .render-popup-state {
+  color: var(--red);
+}
+.render-popup-note {
+  margin: 4px 0 14px;
+  color: var(--paper-dim);
+}
+.render-popup-play {
+  margin: 4px 0 8px;
+}
+.render-popup-off {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Frame Hunt */
+.frame-hunt {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.frame-hunt-hud {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+.frame-hunt-hud button {
+  margin-left: auto;
+}
+.frame-hunt-board {
+  position: relative;
+  justify-self: center;
+  border: 1px solid var(--line);
+  line-height: 0;
+}
+.frame-hunt-board canvas {
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+.frame-hunt-over {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  justify-items: center;
+  background: rgba(16, 12, 14, 0.82);
+  line-height: 1.4;
+}
+
+/* the ready drops: bottom right, above everything but pop-ups */
+.ready-drops {
+  position: fixed;
+  right: 20px;
+  bottom: 22px;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+.ready-drop {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: var(--ink-2, #17121a);
+  border: 1px solid rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 36px rgba(var(--accent-rgb), 0.28);
+  animation: drop-in 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both, drop-glow 2.4s ease-in-out 0.7s infinite;
+  overflow: hidden;
+}
+.ready-drop::before {
+  /* a light sweep across it as it lands, then every few seconds */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.22) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: drop-sweep 3.2s ease-in-out 0.5s infinite;
+  pointer-events: none;
+}
+.ready-drop-open {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 16px 12px 14px;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.ready-drop-crate {
+  width: 44px;
+  height: 38px;
+  color: var(--red);
+  animation: crate-bob 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(var(--accent-rgb), 0.6));
+}
+.ready-drop-text {
+  display: grid;
+  gap: 2px;
+}
+.ready-drop-kicker {
+  color: var(--red);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.ready-drop-name {
+  font-size: 15px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ready-drop-x {
+  align-self: flex-start;
+  padding: 6px 10px;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-size: 16px;
+}
+.ready-drop-x:hover {
+  color: var(--paper);
+}
+@keyframes drop-in {
+  0% {
+    transform: translateY(40px) scale(0.85);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes drop-glow {
+  50% {
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.45), 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 56px rgba(var(--accent-rgb), 0.5);
+  }
+}
+@keyframes drop-sweep {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+@keyframes crate-bob {
+  50% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+}
+
+/* the reveal: drop → shake → burst → open */
+.loot {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 50%, rgba(var(--accent-rgb), 0.22), transparent 55%), rgba(8, 6, 7, 0.94);
+  animation: loot-fade 0.3s ease both;
+  overflow: hidden;
+}
+.loot-rays {
+  position: absolute;
+  width: 160vmax;
+  height: 160vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(var(--accent-rgb), 0.16) 0deg 7deg, transparent 7deg 20deg);
+  mask-image: radial-gradient(circle, #000 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.loot.burst .loot-rays,
+.loot.open .loot-rays {
+  opacity: 1;
+  animation: rays-turn 14s linear infinite;
+}
+.loot-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+/* the crate and the card share one spot, the middle of the window */
+.loot-stage > * {
+  grid-area: 1 / 1;
+}
+.loot-crate {
+  position: relative;
+  width: 170px;
+  height: 150px;
+  color: var(--red);
+  filter: drop-shadow(0 0 28px rgba(var(--accent-rgb), 0.55));
+}
+.loot-box {
+  position: absolute;
+  inset: 0;
+}
+.loot-lid {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 8px;
+  height: 26px;
+  border: 3px solid currentColor;
+  background: var(--ink, #100c0e);
+  z-index: 1;
+}
+.loot.drop .loot-crate {
+  animation: crate-drop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.loot.shake .loot-crate {
+  animation: crate-shake 0.9s ease-in-out both;
+}
+.loot.burst .loot-crate,
+.loot.open .loot-crate {
+  animation: crate-burst 0.55s ease-in both;
+}
+.loot.burst .loot-lid,
+.loot.open .loot-lid {
+  animation: lid-pop 0.55s ease-out both;
+}
+.loot-card {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  width: min(560px, 90vw);
+  padding: 22px 22px 18px;
+  background: var(--ink-2, #17121a);
+  border: 1px solid rgba(var(--accent-rgb), 0.75);
+  box-shadow: 0 0 80px rgba(var(--accent-rgb), 0.45), 0 30px 80px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: translateY(60px) scale(0.6) rotateX(60deg);
+  pointer-events: none;
+}
+.loot.open .loot-card {
+  animation: card-rise 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  pointer-events: auto;
+}
+.loot-kicker {
+  color: var(--red);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.loot-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  background: #000;
+  overflow: hidden;
+}
+.loot-media img,
+.loot-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.loot-name {
+  margin: 2px 0 0;
+  font-size: 24px;
+  text-align: center;
+}
+.loot-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.loot-sparks span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red);
+  opacity: 0;
+}
+.loot.burst .loot-sparks span {
+  animation: spark 0.9s ease-out both;
+}
+@keyframes loot-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rays-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes crate-drop {
+  from {
+    transform: translateY(-70vh) rotate(-8deg);
+  }
+}
+@keyframes crate-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  10%,
+  30%,
+  50%,
+  70% {
+    transform: translateX(-7px) rotate(-4deg);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(7px) rotate(4deg);
+  }
+  90% {
+    transform: scale(1.08);
+  }
+}
+@keyframes crate-burst {
+  to {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes lid-pop {
+  to {
+    transform: translateY(-90px) rotate(-24deg);
+    opacity: 0;
+  }
+}
+@keyframes card-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(60px) scale(0.6) rotateX(60deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes spark {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(var(--d));
+  }
+}
+
+/* a picture set brought into view (made just now, or opened from the reveal) */
+.image-set.lit {
+  outline: 1px solid var(--red);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.18);
+  transition: box-shadow 0.4s ease;
+}
+
+/* Reduce motion: the same steps, nothing moving */
+.rm .render-popup-bar span::after,
+.rm .ready-drop,
+.rm .ready-drop::before,
+.rm .ready-drop-crate,
+.rm .loot,
+.rm .loot-rays,
+.rm .loot-crate,
+.rm .loot-lid,
+.rm .loot-card,
+.rm .loot-sparks span {
+  animation: none !important;
+  transition: none !important;
+}
+.rm .loot-crate,
+.rm .loot-sparks {
+  display: none;
+}
+.rm .loot.open .loot-card {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .render-popup-bar span::after,
+  .ready-drop,
+  .ready-drop::before,
+  .ready-drop-crate,
+  .loot-rays,
+  .loot-card {
+    animation: none !important;
+  }
+  .loot.open .loot-card {
+    opacity: 1;
+    transform: none;
+  }
+}

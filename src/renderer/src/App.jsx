@@ -53,6 +53,7 @@ import { SizzleList, SizzleProject } from './components/Sizzle'
 import { RebuildList, RebuildProject } from './components/Rebuild'
 import { NavIcon } from './components/NavIcons'
 import { onTopBar } from './topbar'
+import RenderHub from './components/RenderHub'
 
 // The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
 // Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
@@ -354,6 +355,13 @@ export default function App() {
     setProjectId(id)
     switchSection('video')
     setPage('shot')
+  }
+  // a picture set from the render hub's reveal: Create → Image, with that set open (Images.jsx iv:image-show)
+  const openImage = (setId) => {
+    pickCreateKind('image')
+    switchSection('video')
+    setPage('create')
+    if (setId) setTimeout(() => window.dispatchEvent(new CustomEvent('iv:image-show', { detail: { id: setId } })), 150)
   }
   const openProject = (id) => {
     setProductionId(id)
@@ -725,6 +733,7 @@ export default function App() {
       {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}
       <TourHost />
       {welcome && <Welcome first={welcome === 'first'} onClose={() => (setWelcome(null), recheck?.())} go={setPage} notify={notify} />}
+      <RenderHub openShot={openShot} openImage={openImage} />
       {toast && (
         <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>
           {toast.text}
