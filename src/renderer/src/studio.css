@@ -1133,6 +1133,16 @@ select.writer-engine {
   text-transform: uppercase;
   cursor: pointer;
 }
+/* the open list: Windows draws it light unless told it's dark, and the label's dim text washed out on it */
+select.writer-engine {
+  color-scheme: dark;
+}
+select.writer-engine option {
+  background-color: var(--ink);
+  color: var(--paper);
+  text-transform: none;
+  letter-spacing: normal;
+}
 select.writer-engine:hover {
   color: var(--paper);
   border-color: var(--line-strong);
