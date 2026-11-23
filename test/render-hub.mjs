@@ -78,7 +78,7 @@ await ok('Frame Hunt: every frame can be reached, the glitches can get out, and 
 await ok('Frame Hunt steps: the eye moves and takes frames; a glitch on the eye catches it; all frames clears it', () => {
   const text = src('../src/renderer/src/components/FrameHunt.jsx')
   // the pure parts, run here without React or a canvas
-  const body = text.replace(/^import .*$/m, '').replace(/export default function FrameHunt[\s\S]*$/, '')
+  const body = text.replace(/^import .*$/gm, '').replace(/export default function FrameHunt[\s\S]*$/, '')
   const mod = new Function(`${body.replace(/export /g, '')}; return { newLevel, step, isWall }`)()
   const s = mod.newLevel(1)
   const before = s.frames.size

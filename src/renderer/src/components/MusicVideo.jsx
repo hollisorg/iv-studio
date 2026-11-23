@@ -9,6 +9,7 @@ import { fileUrl } from './edit/model'
 import { usePeaks, Wave } from './edit/thumbs'
 import TileDelete from './TileDelete'
 import { track } from '../renders'
+import { ToolWriter } from './PromptWriter'
 
 // Music video (src/service/musicvideo.js): a song cut into scenes on its bars, each scene an H3 shot that sings or
 // plays along to its own stretch of the song, then the finished scenes laid over the song as an edit.
@@ -275,6 +276,7 @@ function Editor({ id, back, notify, characters = [], jobs: live = {}, openEdit }
           </span>
         </div>
         <div className="mv-top-actions">
+          <ToolWriter tool="musicvideo" notify={notify} />
           <button className="btn btn-small" disabled={!!busy || !noPrompt} onClick={() => run('write', () => api().write(id, {}).then((r) => r.video))} title="The writer chosen in Settings writes every scene that has no prompt yet">
             {busy === 'write' ? 'Writing…' : noPrompt ? `✦ Write ${noPrompt} scene${noPrompt === 1 ? '' : 's'}` : '✦ All written'}
           </button>

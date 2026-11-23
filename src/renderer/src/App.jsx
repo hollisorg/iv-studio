@@ -54,7 +54,7 @@ import { RebuildList, RebuildProject } from './components/Rebuild'
 import { NavIcon } from './components/NavIcons'
 import { onTopBar } from './topbar'
 import RenderHub from './components/RenderHub'
-import { setRenderPrefs } from './renders'
+import { setQuietHours, setRenderPrefs } from './renders'
 
 // The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
 // Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
@@ -527,10 +527,10 @@ export default function App() {
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s), !s.onboarded && setWelcome('first')), () => {})
+    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s), setQuietHours(s.quietHours), !s.onboarded && setWelcome('first')), () => {})
     // Simple words (words.js), Settings → Accessibility (a11y.js) and Settings → Top bar, whenever the settings change
     // (Settings, Check my PC)
-    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s)), () => {})
+    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s), setQuietHours(s.quietHours)), () => {})
     window.addEventListener('iv:settings', words)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)

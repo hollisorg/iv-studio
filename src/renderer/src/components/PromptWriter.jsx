@@ -72,7 +72,61 @@ function useLasting(key, onResult, onLate) {
 // previs clip, for the form to add as a video reference (then the words name it as <Video n>).
 // idea + onIdea: the idea kept by the page (a sequence shot saves it). lastingKey + onLate: the write keeps going
 // if the card goes away, and onLate gets the prompt then (see useLasting).
-export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null, listen = false, idea: ideaProp, onIdea, lastingKey = null, onLate = null }) {
+// Who writes for one tool: the writer that tool remembers (settings.writers[tool], set from its menu), else Settings →
+// Prompt writer's. { status, engine, pick(id), remembered }
+export function useToolWriter(tool) {
+  const [status, setStatus] = useState(null)
+  const [writers, setWriters] = useState({})
+  const load = () => {
+    window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
+    window.ivstudio.settings.get().then((s) => setWriters(s.writers || {}), () => {})
+  }
+  useEffect(() => {
+    load()
+    // another writer on the page (or Settings) switched a writer
+    window.addEventListener('iv:writer', load)
+    return () => window.removeEventListener('iv:writer', load)
+  }, [])
+  const engine = (tool && writers[tool]) || status?.engine || 'local'
+  async function pick(id) {
+    const next = { ...writers, [tool]: id }
+    setWriters(next)
+    await window.ivstudio.settings.set({ writers: next })
+    window.dispatchEvent(new Event('iv:writer'))
+  }
+  return { status, engine, pick, remembered: !!(tool && writers[tool]) }
+}
+
+// The menu of writers for one tool (Write it for me's corner, Music video, Films)
+export function WriterMenu({ status, engine, onPick, title = 'Who writes the prompt here. Settings → Prompt writer sets the one every tool starts with.' }) {
+  return (
+    <select className="writer-engine mono small" aria-label="Who writes the prompt" title={title} value={engine} disabled={!status} onChange={(e) => onPick(e.target.value)}>
+      {WRITERS.filter(([id]) => id === engine || (id !== 'contextir' && (id !== 'openai' || status?.openai?.url))).map(([id, label]) => {
+        const missing = !status ? false : id === 'local' ? !status.installed : HARNESS_NAME[id] ? !status.harnesses?.[id]?.installed : id === 'openai' ? !status.openai?.model : false
+        const text = id === 'contextir' ? `Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : id === 'openai' && status?.openai?.model ? `${status.openai.model} · your server` : label
+        return (
+          <option key={id} value={id}>
+            {text}
+            {missing ? ' (not set up)' : ''}
+          </option>
+        )
+      })}
+    </select>
+  )
+}
+export function ToolWriter({ tool, notify }) {
+  const w = useToolWriter(tool)
+  return (
+    <span className="writer-engine-pick tool-writer">
+      <span className="mono small dim">Writer</span>
+      <WriterMenu status={w.status} engine={w.engine} onPick={(id) => w.pick(id).catch((err) => notify?.(err.message))} />
+    </span>
+  )
+}
+// a writer's name for the run history ("written by Claude")
+export const writerName = (id) => ({ local: 'the local writer', claude: 'Claude', codex: 'ChatGPT', hermes: 'Hermes', openai: 'your OpenAI-compatible server', contextir: 'Context IR' })[id] || id
+
+export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null, listen = false, idea: ideaProp, onIdea, lastingKey = null, onLate = null, tool = 'create' }) {
   const [ideaLocal, setIdeaLocal] = useState('')
   const idea = ideaProp ?? ideaLocal
   const setIdea = onIdea || setIdeaLocal
@@ -111,30 +165,21 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
       setDrawing(false)
     }
   }
-  const [status, setStatus] = useState(null)
+  // this tool's writer (its menu remembers it per tool)
+  const { status, engine: chosen, pick } = useToolWriter(tool)
   const [undo, setUndo] = useState(null)
-  const [busy, run] = useLasting(lastingKey, (text) => (setUndo(current || ''), onWritten(text)), onLate)
-
-  const loadStatus = () => window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
-  useEffect(() => {
-    loadStatus()
-    // another writer on the page (or Settings) switched the writer
-    window.addEventListener('iv:writer', loadStatus)
-    return () => window.removeEventListener('iv:writer', loadStatus)
-  }, [])
-  // the header's menu: saves the writer for every Write it for me, as Settings → Prompt writer does
+  // the prompt goes back with who wrote it, for the run's history
+  const [busy, run] = useLasting(lastingKey, (text) => (setUndo(current || ''), onWritten(text, chosen)), onLate)
   async function pickWriter(id) {
     try {
-      await window.ivstudio.settings.set({ promptEngine: id })
-      await loadStatus()
-      window.dispatchEvent(new Event('iv:writer'))
+      await pick(id)
     } catch (err) {
       notify(err.message)
     }
   }
 
   // Context IR is MiniMax's H3 rewriter: a Seedance shot is written by the local writer instead
-  const engine = context.engine === 'seedance' && status?.engine === 'contextir' ? 'local' : status?.engine || 'local'
+  const engine = context.engine === 'seedance' && chosen === 'contextir' ? 'local' : chosen
   const harness = engine === 'claude' || engine === 'codex' || engine === 'hermes'
   const blocker =
     status &&
@@ -171,7 +216,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     const staged =
       (board && stage?.people?.length ? `${idea.trim()}\nStaging (follow it exactly): ${stagingWords(stage)}\nCamera: ${cameraWords(stage)}.` : idea) +
       (previsN ? `\n${previsWords(previs.stage, previsN)} Say so in the prompt, with these words.` : '')
-    await run(() => window.ivstudio.prompts.write({ ...context, idea: staged }), (err) => notify(err.message))
+    await run(() => window.ivstudio.prompts.write({ ...context, idea: staged, writer: engine }), (err) => notify(err.message))
   }
 
   return (
@@ -179,25 +224,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
       <div className="writer-head">
         <span className="mono label writer-label">✦ Write it for me</span>
         <span className="writer-engine-pick">
-          <select
-            className="writer-engine mono small"
-            aria-label="Who writes the prompt"
-            title="Who writes the prompt. The same choice as Settings → Prompt writer."
-            value={engine}
-            disabled={!status}
-            onChange={(e) => pickWriter(e.target.value)}
-          >
-            {WRITERS.filter(([id]) => id === engine || (id !== 'contextir' && (id !== 'openai' || status?.openai?.url))).map(([id, label]) => {
-              const missing = !status ? false : id === 'local' ? !status.installed : HARNESS_NAME[id] ? !status.harnesses?.[id]?.installed : id === 'openai' ? !status.openai?.model : false
-              const text = id === 'contextir' ? `Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : id === 'openai' && status?.openai?.model ? `${status.openai.model} · your server` : label
-              return (
-                <option key={id} value={id}>
-                  {text}
-                  {missing ? ' (not set up)' : ''}
-                </option>
-              )
-            })}
-          </select>
+          <WriterMenu status={status} engine={engine} onPick={pickWriter} />
           {context.engine === 'seedance' && <span className="mono dim small"> · Seedance guide</span>}
         </span>
       </div>

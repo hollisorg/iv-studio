@@ -528,7 +528,7 @@ export class Studio {
     const unet = this.models[plan.request.mode]
     if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
     // the run keeps what was asked as written (mentions and all, media as local files), for "Edit and run again"
-    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path, ...(m.softMouth ? { softMouth: true } : {}) })), voiceLine: asked.voiceLine || null, ...(asked.with?.length ? { with: asked.with } : {}) }
+    plan.asked = { prompt: asked.prompt, mode: asked.mode, character: asked.character ?? 'none', media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path, ...(m.softMouth ? { softMouth: true } : {}) })), voiceLine: asked.voiceLine || null, ...(asked.with?.length ? { with: asked.with } : {}) }
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name

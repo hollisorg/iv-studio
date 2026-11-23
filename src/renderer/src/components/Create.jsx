@@ -22,7 +22,7 @@ import { withSetups, withoutSetups } from '../../../service/setuptext'
 import { starterById, starterForm } from '../starters'
 import TemplateBar from './Templates'
 import { showFor } from '../../../service/bible'
-import { renderPopupOn, startRender } from '../renders'
+import { applyQuickFinal, QUICK_FINALS, quickFinalOf, renderPopupOn, sameQuickFinal, startRender } from '../renders'
 import { nearestAspect, photoRatio } from '../../../service/plan'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
@@ -44,9 +44,9 @@ const PREVIEW_MP = [0.3, 0.4, 0.6, 0.8]
 // One final (no hunt): the one take finished at this size, with this enhancer after it (plan.js ENHANCERS)
 const FINAL_MP = [1, 1.5, 2]
 const FINAL_ENHANCERS = [
-  ['none', 'None', 'The 2 MP render as it is: no clean-up or upscale after it.'],
-  ['dlss', 'DLSS 5', 'DLSS 5 cleans it up after the 2 MP render. Quick (about 15 s).'],
-  ['seedvr2', 'SeedVR2', 'SeedVR2 restores detail to 1080p after the 2 MP render. Slower (a few minutes).']
+  ['none', 'None', 'The full-size render as it is: no clean-up or upscale after it.'],
+  ['dlss', 'DLSS 5', 'DLSS 5 cleans it up after the full-size render. Quick (about 15 s).'],
+  ['seedvr2', 'SeedVR2', 'SeedVR2 restores detail to 1080p after the full-size render. Slower (a few minutes).']
 ]
 // Preview quality: the turbo add-on IV Studio uses (DMAD) was trained for 4 steps; Standard gives it 8. A finish
 // re-uses the picked preview's latent, so the 2 MP pass is the same either way.
@@ -138,7 +138,9 @@ const FRESH_FORM = {
   // One final (H3): one take, finished straight away at finalMp with finalEnhancer, instead of a hunt
   oneFinal: false,
   finalMp: 2,
-  finalEnhancer: 'none'
+  finalEnhancer: 'none',
+  // which writer wrote the prompt (Write it for me), kept with the run for its history; null when typed
+  writtenBy: null
 }
 // the parts of a form a speed preset sets; they don't count as a change of setup
 const SPEED_KEYS = ['megapixels', 'steps', 'previews']
@@ -154,6 +156,15 @@ const withLine = (prompt, text) => {
 export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, incomingCharacter, clearIncomingCharacter, incomingRun, clearIncomingRun, kindSwitch }) {
   // the speed preset saved in Settings → Your PC (service/speed.js)
   const [savedId, setSavedId] = useState('quality')
+  // your own quick finals (Settings: quickFinals), beside the built-in ones
+  const [quickFinals, setQuickFinals] = useState([])
+  useEffect(() => {
+    window.ivstudio.settings.get().then((s) => setQuickFinals(Array.isArray(s.quickFinals) ? s.quickFinals : []), () => {})
+  }, [])
+  const saveQuickFinals = (list) => {
+    setQuickFinals(list)
+    window.ivstudio.settings.set({ quickFinals: list }).catch((err) => notify(err.message))
+  }
   const [form, setForm] = useState(() => structuredClone(FRESH_FORM))
 
   const [advanced, setAdvanced] = useState(false)
@@ -899,7 +910,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 if (form.mode !== 'reference') set({ mode: 'reference', media: form.media.filter((m) => m.kind === 'picture') })
                 addFiles([{ kind: 'video', path: clip.file }])
               }}
-              onWritten={(prompt) => set({ prompt: sd ? prompt : withSetups(prompt, cinema) })}
+              onWritten={(prompt, by) => set({ prompt: sd ? prompt : withSetups(prompt, cinema), writtenBy: by || null })}
               notify={notify}
               go={go}
             />
@@ -1095,6 +1106,30 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 <span className="dim small" data-plain={oneFinal ? 'One video, made at full size. No previews to choose from.' : 'A few small versions first; you pick one to make at full size.'}>
                   {oneFinal ? 'Renders one take and finishes it at full size straight away: no previews, no picking.' : 'Small, quick previews first; the one you pick is finished at full size.'}
                 </span>
+              </div>
+            )}
+            {h3 && (
+              <div className="create-field quick-finals">
+                <span className="create-label mono">Quick finals</span>
+                <div className="quick-final-row">
+                  {[...QUICK_FINALS.filter((q) => !q.framesOnly || form.mode === 'frames'), ...quickFinals].map((q) => (
+                    <span key={q.id} className={`quick-final ${sameQuickFinal(form, q) ? 'on' : ''}`}>
+                      <button className="btn btn-small" onClick={() => setForm((f) => applyQuickFinal(f, q))} title="One final with this setup">
+                        {q.label}
+                      </button>
+                      {q.id.startsWith('mine-') && (
+                        <button className="quick-final-x" aria-label={`Remove ${q.label}`} onClick={() => saveQuickFinals(quickFinals.filter((x) => x.id !== q.id))}>
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {oneFinal && !QUICK_FINALS.concat(quickFinals).some((q) => sameQuickFinal(form, q)) && quickFinals.length < 8 && (
+                    <button className="link-btn mono small" onClick={() => saveQuickFinals([...quickFinals, quickFinalOf(form)])}>
+                      + Save this setup
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {h3 && oneFinal && (

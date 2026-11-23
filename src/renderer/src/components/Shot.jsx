@@ -14,6 +14,7 @@ import { askAgent, useAgentName } from './ChatPanel'
 import { lintPrompt } from '../../../service/lint'
 import { lintSeedance } from '../../../service/seedlint'
 import { track } from '../renders'
+import { writerName } from './PromptWriter'
 
 const DONE = ['success', 'error', 'cancelled']
 // A local upscaler's strength: a slider with its value, the default marked, and a line saying what it does.
@@ -1083,7 +1084,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
             {req.prompt && (
               <details className="run-prompt">
                 <summary className="mono dim">
-                  Prompt{notes ? ` · ${notes} checker note${notes > 1 ? 's' : ''}` : ''}
+                  Prompt{req.writtenBy ? ` · written by ${writerName(req.writtenBy)}` : ''}{notes ? ` · ${notes} checker note${notes > 1 ? 's' : ''}` : ''}
                 </summary>
                 <pre>{written}</pre>
                 {written !== req.prompt && (

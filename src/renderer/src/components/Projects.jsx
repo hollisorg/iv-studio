@@ -15,6 +15,7 @@ import { CinemaChips, CinemaPicker, LookbookBox, PromptTools, useSlate } from '.
 import { SPEEDS } from '../../../service/speed'
 import { FirstRenders, useFirstRenders } from './Speed'
 import { track } from '../renders'
+import { ToolWriter } from './PromptWriter'
 
 // Projects: a short film made step by step (src/service/productions.js). The list of films, and one film as a
 // six-step wizard: Idea, Story, Cast and places, Storyboard, Film it, Watch. The storyboard is the heart of it:
@@ -460,6 +461,7 @@ function Story({ v, act, notify, setStep }) {
       <div className="wiz-head">
         <h2 className="wiz-q">Your story</h2>
         <span className="wiz-tools">
+          <ToolWriter tool="films" notify={notify} />
           <button className="link-btn mono small" onClick={write}>
             ✦ Write it for me
           </button>

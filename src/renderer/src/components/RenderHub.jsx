@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { fileUrl } from './edit/model'
-import { imageState, jobsState, jobTitle, readyFx, readyWords, renderPopupOn as popupOn, revealMedia, setRenderPrefs, videoState } from '../renders'
+import { againRequest, imageState, isQuiet, isRunning, jobsState, jobTitle, nextSteps, publishRenders, readyFx, readyWords, renderPopupOn as popupOn, revealMedia, setRenderPrefs, startRender, track, videoState } from '../renders'
 import { reducedMotion } from '../a11y'
 
 // The game only loads when someone presses Play
 const FrameHunt = lazy(() => import('./FrameHunt'))
 const reduced = reducedMotion
+// quiet now: Settings → Accessibility → Quiet hours, or editing full screen (the app's focus mode)
+const quietNow = () => isQuiet(new Date(), !!document.querySelector('.app.app-focus'))
 
 // The render hub, mounted once in App: a pop-up when a render starts (startRender in renders.js), a "ready" drop in the
 // corner when it's done, on any page, and the reveal when that drop is clicked.
@@ -36,8 +38,8 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
           (result) => setRenders((all) => all.map((x) => (x.key === key ? { ...x, state: { stage: 'done', pct: 100, media: d.media?.(result) || null } } : x))),
           (err) => setRenders((all) => all.map((x) => (x.key === key ? { ...x, state: { stage: 'failed', error: err?.message || 'It stopped.' } } : x)))
         )
-      setRenders((all) => [r, ...all.filter((x) => x.key !== key)])
-      if (popupOn()) setPopup(key)
+      setRenders((all) => [r, ...all.filter((x) => x.key !== key)].slice(0, 16))
+      if (popupOn() && !quietNow()) setPopup(key)
       // a shot without a name of its own takes its project's (made from the prompt)
       if (!d.name && r.projectId)
         window.ivstudio.projects
@@ -102,18 +104,80 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
     return next
   }
 
-  // done: the drop in the corner (and the pop-up says so); failed: the pop-up says so, no drop
+  // done: the drop in the corner (and the pop-up says so); failed: the pop-up says so, no drop. In quiet hours (or
+  // while editing full screen) they wait, and come together when it's over.
   const seen = useRef(new Set())
+  const held = useRef([])
+  const announce = (r) => {
+    // Just a notice (Settings → Accessibility): a short message, no drop
+    if (readyFx() === 'off') notify?.(`${readyWords(r)}: ${r.name}.`, 'ok')
+    else setDrops((d) => [r.key, ...d.filter((k) => k !== r.key)].slice(0, 4))
+  }
   useEffect(() => {
+    publishRenders(renders)
     for (const r of renders) {
       if (r.state.stage === 'done' && !seen.current.has(r.key)) {
         seen.current.add(r.key)
-        // Just a notice (Settings → Accessibility): a short message, no drop
-        if (readyFx() === 'off') notify?.(`${readyWords(r)}: ${r.name}.`, 'ok')
-        else setDrops((d) => [r.key, ...d.filter((k) => k !== r.key)].slice(0, 4))
+        if (quietNow()) held.current.push(r.key)
+        else announce(r)
       }
     }
   }, [renders])
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!held.current.length || quietNow()) return
+      const keys = held.current.splice(0)
+      for (const k of keys) {
+        const r = live.current.find((x) => x.key === k)
+        if (r) announce(r)
+      }
+      if (keys.length > 1 && readyFx() !== 'off') notify?.(`${keys.length} renders finished while it was quiet.`, 'ok')
+    }, 20000)
+    return () => clearInterval(t)
+  }, [])
+
+  // the tray: stop a render, or take a finished one off the list
+  const [hidden, setHidden] = useState(() => new Set())
+  async function cancel(r) {
+    try {
+      if (r.kind === 'image') await window.ivstudio.images.cancel(r.set.id)
+      else {
+        const ids = r.kind === 'video' ? [r.job?.id, jobs.current[r.job?.id]?.autoFinishJob] : r.ids.flatMap((id) => [id, jobs.current[id]?.autoFinishJob])
+        for (const id of ids.filter(Boolean)) if (isRunning({ state: videoState(jobs.current[id] || { status: 'queued' }) })) await window.ivstudio.jobs.cancel(id).catch(() => {})
+      }
+    } catch (err) {
+      notify?.(err.message)
+    }
+  }
+  // the reveal's next steps: Again (a new seed) and Finish this one
+  async function again(r) {
+    setOpening(null)
+    setDrops((d) => d.filter((k) => k !== r.key))
+    try {
+      if (r.kind === 'image') {
+        const s = (await window.ivstudio.images.get(r.set.id).catch(() => null)) || r.set
+        const rec = await window.ivstudio.images.create({ mode: s.mode, model: s.model, prompt: s.prompt, negative: s.negative || '', loras: s.loras || [], aspect: s.aspect, megapixels: s.megapixels, count: s.count, steps: s.steps ?? null, cfg: s.cfg ?? null, refs: s.refs || [], seed: null })
+        startRender({ kind: 'image', set: rec, name: rec.name })
+      } else {
+        const job = await window.ivstudio.render.previews(againRequest(jobs.current[r.job.id] || r.job))
+        startRender({ kind: 'video', job, projectId: job.projectId, name: r.name })
+      }
+    } catch (err) {
+      notify?.(err.message)
+    }
+  }
+  async function finishIt(r, media) {
+    setOpening(null)
+    setDrops((d) => d.filter((k) => k !== r.key))
+    try {
+      // the enhancer Check my PC (or the last finish) chose
+      const prefs = (await window.ivstudio.settings.get().catch(() => ({})))?.shotPrefs || {}
+      const job = jobs.current[media.jobId] || r.state.job
+      await track(window.ivstudio.render.finish({ jobId: job.id, candidate: media.candidate, ...(prefs.enhancer ? { enhancer: prefs.enhancer } : {}) }), { name: r.name, open: { page: 'shot', id: job.projectId }, what: 'shot' })
+    } catch (err) {
+      notify?.(err.message)
+    }
+  }
 
   const byKey = (k) => renders.find((r) => r.key === k)
   const go = (r) => {
@@ -153,7 +217,13 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
           })}
         </div>
       )}
-      {opening && byKey(opening) && <LootReveal r={byKey(opening)} onClose={() => (setOpening(null), setDrops((d) => d.filter((k) => k !== opening)))} onGo={() => go(byKey(opening))} />}
+      {opening && byKey(opening) && <LootReveal r={byKey(opening)} onClose={() => (setOpening(null), setDrops((d) => d.filter((k) => k !== opening)))} onGo={() => go(byKey(opening))} onAgain={() => again(byKey(opening))} onFinish={(m) => finishIt(byKey(opening), m)} />}
+      <RenderTray
+        renders={renders.filter((r) => !hidden.has(r.key))}
+        onOpen={(r) => (r.state.stage === 'done' ? (setPopup(null), setOpening(r.key)) : setPopup(r.key))}
+        onCancel={cancel}
+        onDismiss={(r) => setHidden((h) => new Set([...h, r.key]))}
+      />
     </>
   )
 }
@@ -238,7 +308,7 @@ function RenderPopup({ r, onClose, onOpen }) {
 }
 
 // The reveal: a crate drops in, shakes, bursts open in light, and the finished render rises out of it
-function LootReveal({ r, onClose, onGo }) {
+function LootReveal({ r, onClose, onGo, onAgain, onFinish }) {
   // Simple (Settings → Accessibility) and reduced motion go straight to the card
   const calm = reduced() || readyFx() === 'simple'
   const [phase, setPhase] = useState(calm ? 'open' : 'drop')
@@ -253,6 +323,7 @@ function LootReveal({ r, onClose, onGo }) {
     return () => window.removeEventListener('keydown', key)
   }, [onClose])
   const media = revealMedia(r, r.state, r.set)
+  const next = nextSteps(r, r.state, media)
   const src = media?.file ? fileUrl(media.file) : media?.url
   return (
     <div className={`loot ${phase} ${calm ? 'calm' : ''}`} role="dialog" aria-modal="true" aria-label={`${r.name} is ready`} onPointerDown={(e) => e.target === e.currentTarget && phase === 'open' && onClose()}>
@@ -276,6 +347,16 @@ function LootReveal({ r, onClose, onGo }) {
             <button className="btn btn-small" onClick={onClose}>
               Later
             </button>
+            {next.again && (
+              <button className="btn btn-small" onClick={onAgain} title="The same again with a new seed">
+                ↻ Again
+              </button>
+            )}
+            {next.finish && (
+              <button className="btn btn-small" onClick={() => onFinish(media)} title={`Finish take ${media.candidate} at full size with your usual enhancer`}>
+                Finish take {media.candidate}
+              </button>
+            )}
             <button className="btn btn-small btn-primary" onClick={onGo} autoFocus>
               Open it
             </button>
@@ -287,6 +368,73 @@ function LootReveal({ r, onClose, onGo }) {
           <span key={i} style={{ '--a': `${(360 / 14) * i}deg`, '--d': `${120 + (i % 4) * 40}px` }} />
         ))}
       </div>
+    </div>
+  )
+}
+
+// The tray: everything rendering and ready, across every tool, in one place. A pill in the corner; open, a list with
+// each render's progress, Open, Stop and a way to take finished ones off the list.
+function RenderTray({ renders, onOpen, onCancel, onDismiss }) {
+  const [open, setOpen] = useState(false)
+  const running = renders.filter(isRunning)
+  const ready = renders.filter((r) => r.state.stage === 'done')
+  if (!renders.length) return null
+  const canStop = (r) => isRunning(r) && (r.kind === 'image' || r.kind === 'video' || r.kind === 'jobs')
+  const words = (s) => (s.stage === 'done' ? 'Ready' : s.stage === 'failed' ? 'Stopped' : s.stage === 'finishing' ? `Finishing${s.pct ? ` · ${s.pct}%` : ''}` : s.stage === 'running' ? `${s.count > 1 ? `${s.done} of ${s.count} · ` : ''}${s.pct ? `${s.pct}%` : 'Rendering'}` : `Waiting${s.position ? ` · ${s.position} in line` : ''}`)
+  return (
+    <div className={`render-tray ${open ? 'open' : ''}`}>
+      {open && (
+        <div className="render-tray-list" role="list" aria-label="Your renders">
+          <div className="render-tray-head mono small">
+            <span>Renders</span>
+            <span className="spacer" />
+            {ready.length > 0 && (
+              <button className="link-btn mono small" onClick={() => ready.forEach(onDismiss)}>
+                Clear finished
+              </button>
+            )}
+          </div>
+          {renders.map((r) => (
+            <div key={r.key} className={`render-tray-row ${r.state.stage}`} role="listitem">
+              <div className="render-tray-text">
+                <span className="render-tray-name" title={r.name}>
+                  {r.name}
+                </span>
+                <span className="mono small dim">{words(r.state)}</span>
+                {isRunning(r) && (
+                  <span className="render-tray-bar">
+                    <span style={{ width: `${Math.max(4, r.state.pct || 0)}%` }} />
+                  </span>
+                )}
+              </div>
+              <div className="render-tray-actions">
+                {r.state.stage !== 'failed' && (
+                  <button className="btn btn-small" onClick={() => onOpen(r)}>
+                    {r.state.stage === 'done' ? 'Open' : 'Watch'}
+                  </button>
+                )}
+                {canStop(r) && (
+                  <button className="link-btn mono small" onClick={() => onCancel(r)}>
+                    Stop
+                  </button>
+                )}
+                {!isRunning(r) && (
+                  <button className="lora-chip-x" aria-label={`Take ${r.name} off the list`} onClick={() => onDismiss(r)}>
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button className={`render-tray-pill mono ${running.length ? 'busy' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)} title="Everything rendering and ready">
+        <span className="render-tray-dot" />
+        {running.length ? `${running.length} rendering` : ''}
+        {running.length && ready.length ? ' · ' : ''}
+        {ready.length ? `${ready.length} ready` : ''}
+        {!running.length && !ready.length ? `${renders.length} stopped` : ''}
+      </button>
     </div>
   )
 }

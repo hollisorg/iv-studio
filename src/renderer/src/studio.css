@@ -19030,7 +19030,7 @@ html.chat-window body {
 .ready-drops {
   position: fixed;
   right: 20px;
-  bottom: 22px;
+  bottom: 66px;
   z-index: 60;
   display: grid;
   gap: 10px;
@@ -19396,4 +19396,182 @@ html.chat-window body {
     opacity: 1;
     transform: none;
   }
+}
+
+/* the render tray (RenderHub.jsx RenderTray): everything rendering and ready, bottom right; the drops sit above it */
+.render-tray {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 59;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.render-tray-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  color: var(--paper);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+}
+.render-tray-pill:hover {
+  border-color: rgba(var(--accent-rgb), 0.7);
+}
+.render-tray-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--paper-dim);
+}
+.render-tray-pill.busy .render-tray-dot {
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red);
+  animation: tray-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tray-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.render-tray-list {
+  width: min(400px, 90vw);
+  max-height: min(60vh, 460px);
+  overflow: auto;
+  background: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.render-tray-head .spacer {
+  flex: 1;
+}
+.render-tray-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.render-tray-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.render-tray-row:last-child {
+  border-bottom: 0;
+}
+.render-tray-row.done .render-tray-name {
+  color: var(--red);
+}
+.render-tray-row.failed {
+  opacity: 0.65;
+}
+.render-tray-text {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.render-tray-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.render-tray-bar {
+  height: 3px;
+  background: var(--ink-3);
+}
+.render-tray-bar span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.6s ease;
+}
+.render-tray-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.rm .render-tray-pill.busy .render-tray-dot {
+  animation: none;
+}
+
+/* Create → Shape and size → Quick finals: One final setups in one click */
+.quick-final-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.quick-final {
+  display: inline-flex;
+  align-items: stretch;
+}
+.quick-final.on .btn {
+  border-color: var(--red);
+  background: rgba(var(--accent-rgb), 0.14);
+}
+.quick-final-x {
+  padding: 0 8px;
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-left: 0;
+  color: var(--paper-dim);
+}
+.quick-final-x:hover {
+  color: var(--paper);
+}
+
+/* Settings → Accessibility → Quiet hours */
+.quiet-hours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+.quiet-hours input[type='time'] {
+  padding: 5px 8px;
+  margin-left: 4px;
+  color-scheme: dark;
+}
+.quiet-editor {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Frame Hunt's best, and the Dashboard's "while you wait" card */
+.frame-hunt-best.new {
+  color: var(--red);
+}
+.while-you-wait {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.1), transparent 70%);
+}
+.while-you-wait-kicker {
+  color: var(--red);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.while-you-wait-name {
+  font-size: 18px;
+}
+.while-you-wait .btn {
+  margin-left: auto;
 }

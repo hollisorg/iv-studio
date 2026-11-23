@@ -231,6 +231,8 @@ function AccessCard({ n, settings, setSettings, notify }) {
       notify(err.message)
     }
   }
+  // quiet hours as saved, with their defaults
+  const quiet = { on: false, from: '22:00', to: '07:00', editor: true, ...(settings.quietHours || {}) }
   const on = ['highContrast', 'reduceMotion', 'focusRings', 'underlineLinks'].filter((k) => settings[k]).length + (settings.textSize && settings.textSize !== 'normal' ? 1 : 0) + (settings.renderPopup === false ? 1 : 0) + (settings.readyFx && settings.readyFx !== 'full' ? 1 : 0)
   return (
     <SetCard id="access" n={n} title="Accessibility" sub="Make IV Studio easier to read and to use. Each change applies straight away." aside={on ? <Pill tone="ok">{on} on</Pill> : null}>
@@ -270,6 +272,22 @@ function AccessCard({ n, settings, setSettings, notify }) {
         <SetSwitch checked={settings.renderPopup !== false} onChange={(v) => set({ renderPopup: v })}>
           {settings.renderPopup !== false ? 'On' : 'Off'}
         </SetSwitch>
+      </SetField>
+      <SetField label="Quiet hours" hint="Between these times no render window opens and nothing celebrates: finished renders wait in the tray and are announced together afterwards.">
+        <div className="quiet-hours">
+          <SetSwitch checked={!!settings.quietHours?.on} onChange={(v) => set({ quietHours: { ...quiet, on: v } })}>
+            {settings.quietHours?.on ? 'On' : 'Off'}
+          </SetSwitch>
+          <label className="small">
+            From <input type="time" value={quiet.from} onChange={(e) => e.target.value && set({ quietHours: { ...quiet, from: e.target.value } })} aria-label="Quiet from" />
+          </label>
+          <label className="small">
+            to <input type="time" value={quiet.to} onChange={(e) => e.target.value && set({ quietHours: { ...quiet, to: e.target.value } })} aria-label="Quiet until" />
+          </label>
+          <label className="small quiet-editor">
+            <input type="checkbox" checked={quiet.editor} onChange={(e) => set({ quietHours: { ...quiet, editor: e.target.checked } })} /> Also while I edit full screen
+          </label>
+        </div>
       </SetField>
       <SetField label="When a render is ready" hint={READY_FX.find(([id]) => id === (settings.readyFx || 'full'))?.[2]}>
         <div className="segmented" role="radiogroup" aria-label="When a render is ready">

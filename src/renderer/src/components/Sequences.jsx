@@ -135,6 +135,7 @@ function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete, wri
       {writing && (
         <PromptWriter
           compact
+          tool="sequences"
           context={writer.context}
           current={shot.prompt}
           onWritten={(prompt) => onChange({ prompt })}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { fileUrl } from './edit/model'
 import { ART } from './Hero'
 import Stage from './Stage'
@@ -9,7 +9,8 @@ import Loading from './Loading'
 import { AgentPanel, useAgentRun } from './AgentRun'
 import WhatsNew, { NewsChip } from './WhatsNew'
 import { askAgent, useAgentName } from './ChatPanel'
-import { ask } from './Confirm'
+import { ask } from './Confirm'
+import { frameHuntBest, isRunning, watchRenders } from '../renders'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.
 // Each quick-start card shows its page's own banner art.
@@ -60,6 +61,55 @@ function Recipes({ notify }) {
         ))}
       </div>
     </div>
+  )
+}
+
+// the game only loads when someone presses Play
+const FrameHunt = lazy(() => import('./FrameHunt'))
+
+// While something renders: Frame Hunt, with your best, a click away
+function WhileYouWait() {
+  const [running, setRunning] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [best, setBest] = useState(frameHuntBest)
+  useEffect(() => watchRenders((list) => setRunning(list.filter(isRunning).length)), [])
+  useEffect(() => {
+    if (!playing) setBest(frameHuntBest())
+  }, [playing])
+  useEffect(() => {
+    if (!playing) return
+    const key = (e) => e.key === 'Escape' && setPlaying(false)
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [playing])
+  if (!running && !playing) return null
+  return (
+    <>
+      <div className="while-you-wait">
+        <span className="mono while-you-wait-kicker">{running ? `${running} rendering · while you wait` : 'While you wait'}</span>
+        <span className="while-you-wait-name">Frame Hunt</span>
+        <span className="mono small dim">{best.score ? `Your best: ${best.score} · level ${best.level}` : 'No best yet'}</span>
+        <button className="btn btn-small btn-primary" onClick={() => setPlaying(true)}>
+          ▶ Play
+        </button>
+      </div>
+      {playing && (
+        <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && setPlaying(false)}>
+          <div className="modal render-popup" role="dialog" aria-modal="true" aria-label="Frame Hunt">
+            <div className="modal-head">
+              <span className="mono render-popup-kicker">While you wait</span>
+              <span className="spacer" />
+              <button className="lora-chip-x" aria-label="Close" onClick={() => setPlaying(false)}>
+                ×
+              </button>
+            </div>
+            <Suspense fallback={<p className="small dim">Loading the game…</p>}>
+              <FrameHunt />
+            </Suspense>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -125,6 +175,7 @@ export default function Dashboard(ctx) {
       {/* once after an update: a small button that opens what this version brought (news.js, WhatsNew.jsx); all of
           it stays on Settings → Updates */}
       <NewsChip news={ctx.news} onOpen={() => setNewsOpen(true)} onDismiss={ctx.dismissNews} />
+      <WhileYouWait />
       {newsOpen && ctx.news && <WhatsNew news={ctx.news} go={go} onClose={() => (setNewsOpen(false), ctx.dismissNews())} />}
       {macLocal && (
         <p className="notice">

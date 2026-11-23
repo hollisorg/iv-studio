@@ -153,5 +153,114 @@ export function revealMedia(render, state, set = null) {
   const file = o.path || null
   const kind = o.kind === 'audio' ? 'audio' : o.kind === 'image' ? 'image' : mediaKind(file || o.filename)
   const others = (state?.jobsDone?.length || 1) - 1 + Math.max(0, outs.filter((x) => x.kind === 'preview').length - 1)
-  return { kind, file, url: o.url || null, more: others }
+  return { kind, file, url: o.url || null, more: others, candidate: o.kind === 'preview' ? o.candidate || 1 : null, jobId: state?.job?.id || null }
 }
+
+// What the reveal can do next. again: the same H3 shot with a new seed (H3 only: Seedance would spend credits), or the
+// same pictures made again; finish: the take it shows, finished at full size (a hunt's take, not yet finished).
+export function nextSteps(render, state, media) {
+  const job = state?.job
+  const h3 = job && !job.plan?.engine
+  const again = (render.kind === 'video' && h3 && !!job.plan?.asked) || (render.kind === 'image' && ['generate', 'edit'].includes(render.set?.mode))
+  // Create's own shots only: the tools (Keyframes, Sequences...) finish through their own steps, which keep their records
+  const finish = !!(render.kind === 'video' && h3 && job.kind === 'previews' && !job.plan?.autoFinish && media?.candidate)
+  return { again, finish }
+}
+// The request for Again: the run as it was asked (its words, media and character), with a new seed; a One final
+// finishes itself again
+export function againRequest(job, seed = Math.floor(Math.random() * 1e9)) {
+  const q = job.plan?.request || {}
+  const a = job.plan?.asked || {}
+  const keep = ['engine', 'aspect', 'megapixels', 'seconds', 'previews', 'steps', 'sampler', 'scheduler', 'overlapFrames', 'refmods', 'retention', 'extraLoras', 'photoSize', 'speed', 'continueFull', 'writtenBy']
+  const af = job.plan?.autoFinish
+  return {
+    ...Object.fromEntries(keep.filter((k) => q[k] !== undefined).map((k) => [k, q[k]])),
+    prompt: a.prompt ?? q.prompt,
+    mode: a.mode || q.mode,
+    character: a.character ?? q.character ?? 'none',
+    with: a.with || [],
+    media: (a.media || []).map((m) => ({ kind: m.kind, file: m.file, ...(m.softMouth ? { softMouth: true } : {}) })),
+    voiceLine: a.voiceLine || null,
+    seed,
+    projectId: job.projectId,
+    ...(af ? { autoFinish: { megapixels: af.megapixels, enhancer: af.enhancer, ...(af.upscale2x != null ? { upscale2x: af.upscale2x } : {}) } } : {})
+  }
+}
+
+// ---------- The renders the hub follows, for whoever wants to show them (the tray, the Dashboard) ----------
+let current = []
+const watchers = new Set()
+export function publishRenders(list) {
+  current = list
+  for (const fn of watchers) fn(list)
+}
+export function watchRenders(fn) {
+  watchers.add(fn)
+  fn(current)
+  return () => watchers.delete(fn)
+}
+export const isRunning = (r) => !['done', 'failed'].includes(r?.state?.stage)
+
+// ---------- Quiet hours (Settings → Accessibility): no pop-ups or celebrations between two times, or while editing
+// full screen; finished renders wait and are announced together when it's over ----------
+let quiet = { on: false, from: '22:00', to: '07:00', editor: true }
+export function setQuietHours(q) {
+  quiet = { on: !!q?.on, from: /^\d\d:\d\d$/.test(q?.from || '') ? q.from : '22:00', to: /^\d\d:\d\d$/.test(q?.to || '') ? q.to : '07:00', editor: q?.editor !== false }
+}
+export const quietHours = () => quiet
+// whether now (minutes since midnight) is inside from..to, which may run past midnight
+export function inQuietWindow(q, minutes) {
+  if (!q?.on) return false
+  const m = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3))
+  const a = m(q.from)
+  const b = m(q.to)
+  return a === b ? false : a < b ? minutes >= a && minutes < b : minutes >= a || minutes < b
+}
+export function isQuiet(now = new Date(), editing = false) {
+  return inQuietWindow(quiet, now.getHours() * 60 + now.getMinutes()) || (quiet.editor && editing)
+}
+
+// ---------- Frame Hunt's best (kept on this PC) ----------
+const BEST_KEY = 'iv.frameHuntBest'
+export function frameHuntBest() {
+  try {
+    const b = JSON.parse(localStorage.getItem(BEST_KEY) || 'null')
+    return b && Number.isFinite(b.score) ? b : { score: 0, level: 1 }
+  } catch {
+    return { score: 0, level: 1 }
+  }
+}
+export function keepFrameHuntBest(score, level) {
+  const b = frameHuntBest()
+  if (score <= b.score) return false
+  try {
+    localStorage.setItem(BEST_KEY, JSON.stringify({ score, level, at: Date.now() }))
+  } catch {}
+  return true
+}
+
+// ---------- Quick finals (Create → Shape and size): a One final setup in one click ----------
+// built in, then the person's own (settings.quickFinals); each sets One final and only these fields
+export const QUICK_FINALS = [
+  { id: 'photo-2-none', label: 'Photo shape · 2 MP · no enhancer', matchPhoto: true, finalMp: 2, finalEnhancer: 'none', framesOnly: true },
+  { id: '2-none', label: '2 MP · no enhancer', finalMp: 2, finalEnhancer: 'none' },
+  { id: '2-dlss', label: '2 MP · DLSS 5', finalMp: 2, finalEnhancer: 'dlss' },
+  { id: '15-seedvr2', label: '1.5 MP · SeedVR2', finalMp: 1.5, finalEnhancer: 'seedvr2' }
+]
+const QUICK_KEYS = ['matchPhoto', 'aspect', 'finalMp', 'finalEnhancer', 'megapixels', 'steps']
+// a quick final from the form as it is now, named by what it does
+export function quickFinalOf(form) {
+  const q = Object.fromEntries(QUICK_KEYS.filter((k) => form[k] !== undefined).map((k) => [k, form[k]]))
+  // the photo's own shape only counts in First / last frame; elsewhere it's the aspect
+  q.matchPhoto = !!(form.matchPhoto && form.mode === 'frames')
+  const enh = { none: 'no enhancer', dlss: 'DLSS 5', seedvr2: 'SeedVR2' }[q.finalEnhancer] || q.finalEnhancer
+  return { id: `mine-${Date.now().toString(36)}`, label: `${q.matchPhoto ? 'Photo shape' : q.aspect} · ${q.finalMp} MP · ${enh}${q.steps === 4 ? ' · Draft' : ''}`, ...q }
+}
+// what a quick final changes in the form: One final on, and its own fields
+export function applyQuickFinal(form, q) {
+  const patch = { oneFinal: true }
+  for (const k of QUICK_KEYS) if (q[k] !== undefined) patch[k] = q[k]
+  if (q.matchPhoto === undefined && q.aspect) patch.matchPhoto = false
+  return { ...form, ...patch }
+}
+export const sameQuickFinal = (form, q) => !!form.oneFinal && QUICK_KEYS.every((k) => q[k] === undefined || (k === 'matchPhoto' ? !!(form.matchPhoto && form.mode === 'frames') === q[k] : k === 'aspect' && form.matchPhoto && form.mode === 'frames' ? false : form[k] === q[k]))

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { frameHuntBest, keepFrameHuntBest } from '../renders'
 
 // Frame Hunt: IV Studio's own little maze game for the render pop-up. You're the IV eye; pick up every film frame
 // while the static glitches hunt you. Arrow keys or WASD; three lives; each cleared maze makes the glitches quicker.
@@ -79,6 +80,12 @@ export default function FrameHunt() {
   const [hud, setHud] = useState({ score: 0, lives: 3, level: 1, over: false, paused: false })
   const hudRef = useRef(hud)
   hudRef.current = hud
+  // your best, kept on this PC (renders.js); a new one is saved as soon as you beat it
+  const [best, setBest] = useState(frameHuntBest)
+  const [beat, setBeat] = useState(false)
+  useEffect(() => {
+    if (hud.score > 0 && keepFrameHuntBest(hud.score, hud.level)) (setBest(frameHuntBest()), setBeat(true))
+  }, [hud.score, hud.level])
 
   useEffect(() => {
     game.current = newLevel(1)
@@ -179,6 +186,7 @@ export default function FrameHunt() {
 
   const again = () => {
     game.current = newLevel(1)
+    setBeat(false)
     setHud({ score: 0, lives: 3, level: 1, over: false, paused: false })
   }
   return (
@@ -187,6 +195,7 @@ export default function FrameHunt() {
         <span>Frame Hunt</span>
         <span className="dim">Level {hud.level}</span>
         <span>{hud.score}</span>
+        <span className={beat ? 'frame-hunt-best new' : 'frame-hunt-best dim'}>{beat ? 'New best!' : `Best ${best.score}`}</span>
         <span aria-label={`${hud.lives} lives`}>{'●'.repeat(Math.max(0, hud.lives))}</span>
         <button className="link-btn mono small" onClick={() => setHud((x) => ({ ...x, paused: !x.paused }))}>
           {hud.paused ? 'Play' : 'Pause'}
@@ -197,6 +206,7 @@ export default function FrameHunt() {
         {hud.over && (
           <div className="frame-hunt-over">
             <span className="mono">Caught · {hud.score}</span>
+            <span className="mono small dim">{beat ? 'A new best' : `Best ${best.score} · level ${best.level}`}</span>
             <button className="btn btn-small" onClick={again}>
               Play again
             </button>

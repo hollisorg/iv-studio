@@ -10,6 +10,14 @@ import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, PROMPT_WRITERS, writerFor, writerOf, writeSettings } from '../service/paths'
 import { cleanTopBar } from '../renderer/src/topbar'
+// the settings as one tool sees them: its own writer (settings.writers[tool]) in place of Settings → Prompt writer's
+const toolSettings = (s, tool) => (s.writers?.[tool] ? { ...s, promptEngine: s.writers[tool] } : s)
+// a saved quick final keeps only these, and the list at most 8
+const cleanQuickFinals = (list) =>
+  (Array.isArray(list) ? list : [])
+    .filter((q) => q && typeof q === 'object' && /^mine-[\w-]{1,30}$/.test(q.id || ''))
+    .slice(0, 8)
+    .map((q) => ({ id: q.id, label: String(q.label || '').slice(0, 80), ...(typeof q.matchPhoto === 'boolean' ? { matchPhoto: q.matchPhoto } : {}), ...(typeof q.aspect === 'string' ? { aspect: q.aspect.slice(0, 8) } : {}), ...([1, 1.5, 2].includes(q.finalMp) ? { finalMp: q.finalMp } : {}), ...(['none', 'dlss', 'seedvr2'].includes(q.finalEnhancer) ? { finalEnhancer: q.finalEnhancer } : {}), ...(Number.isFinite(q.megapixels) ? { megapixels: q.megapixels } : {}), ...(Number.isFinite(q.steps) ? { steps: q.steps } : {}) }))
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { codexWindow, EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
@@ -1214,7 +1222,7 @@ app.whenReady().then(() => {
   })
   handle('editgen:cancel', (id, genId) => editgen.cancel(id, genId))
   // ---------- Projects (a short film from script to rough cut) ----------
-  const productions = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, previs: () => previs, catalog: () => catalog, edits, localCopy, onChange: (id) => send('productions:changed', { id }), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
+  const productions = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, previs: () => previs, catalog: () => catalog, edits, localCopy, onChange: (id) => send('productions:changed', { id }), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(toolSettings(readSettings(BASE), 'films')) })
   ivWorkspace = workspaceHost({appId:'studio',dataDir:DATA,disabled:INCOGNITO,receive:(h,w)=>receiveStudio(h,w,productions)})
   ivWorkspace.capture(pendingWorkspaceArgs);ivWorkspace.ready()
   handle('workspace:call',(method,args)=>{if(!Object.hasOwn(ivWorkspace.api,method))throw Error('Unknown workspace action.');return ivWorkspace.api[method](args||{})})
@@ -1963,6 +1971,16 @@ app.whenReady().then(() => {
     // Settings → Accessibility: the render pop-up, and how a finished render is announced (renders.js)
     if ('renderPopup' in safe) safe.renderPopup = safe.renderPopup !== false
     if ('readyFx' in safe && !['full', 'simple', 'off'].includes(safe.readyFx)) delete safe.readyFx
+    // Create's own quick finals: up to 8, only their known fields
+    if ('quickFinals' in safe) safe.quickFinals = cleanQuickFinals(safe.quickFinals)
+    // each tool's own writer (Write it for me's menu remembers it per tool)
+    if ('writers' in safe) safe.writers = Object.fromEntries(Object.entries(safe.writers && typeof safe.writers === 'object' ? safe.writers : {}).filter(([k, v]) => /^[a-z]{2,20}$/.test(k) && PROMPT_WRITERS.includes(v)))
+    // quiet hours: no pop-ups or celebrations between two times (Settings → Accessibility)
+    if ('quietHours' in safe) {
+      const q = safe.quietHours || {}
+      const t = (v, d) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(v || '') ? v : d)
+      safe.quietHours = { on: !!q.on, from: t(q.from, '22:00'), to: t(q.to, '07:00'), editor: q.editor !== false }
+    }
     const s = publicSettings(writeSettings(safe, BASE))
     if ('textSize' in safe) refitZoom()
     if ('comfyUrl' in (patch || {})) makeStudio()
@@ -2935,7 +2953,8 @@ app.whenReady().then(() => {
   // song as an edit (Workflows → Music video; src/service/musicvideo.js)
   const musicVideos = new MusicVideos({ dataDir: DATA, studio: () => studio, edits })
   const mvWriter = (request) => {
-    const w = writerFor(readSettings(BASE), request)
+    // Music video's own writer (its menu), else Settings → Prompt writer's
+    const w = writerFor(toolSettings(readSettings(BASE), 'musicvideo'), request)
     return studio.writePrompt(request, { engine: w.engine, apiKey: w.engine === 'contextir' ? comfyKey() : null, model: w.model })
   }
   handle('mv:list', () => musicVideos.list())
