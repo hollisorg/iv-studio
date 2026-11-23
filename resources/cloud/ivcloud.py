@@ -13,9 +13,11 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 
 TORCH_FAMILY = re.compile(r"^\s*(torch|torchvision|torchaudio|xformers|triton|triton-windows)(\s*$|[^A-Za-z0-9_.-])", re.I)
@@ -113,9 +115,166 @@ def refusal(m, code, token):
     return f"{m['label']}: the host answered {code} for {m['url']}"
 
 
+# Big files come down in CHUNK-sized pieces over CONNECTIONS connections at once: Hugging Face's CDN limits each
+# connection's speed, not the machine's (one connection ~29 MB/s, eight ~235 MB/s on the same file, 2026-11-23),
+# and from a busy data center one connection can fall to a few MB/s. Finished pieces are written down in
+# <file>.part.json, so a download stopped part way (the pod deleted, the network gone) carries on from there.
+# 16 MB pieces: with 64 MB ones, one slow connection holding the last piece could halve a file's speed (measured).
+CHUNK = 16 << 20
+CONNECTIONS = 16
+TRIES = 6
+REFRESH_GAP = 20  # seconds between asks for a fresh signed address
+
+
+def _probe(url, token):
+    """(the address the file is served from after redirects, its size, whether it serves byte ranges)."""
+    req = urllib.request.Request(url, headers={**_hf_headers(url, token), "Range": "bytes=0-0"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        cr = r.headers.get("Content-Range") or ""
+        total = cr.rsplit("/", 1)[-1] if "/" in cr else ""
+        if r.status == 206 and total.isdigit():
+            return r.geturl(), int(total), True
+        return r.geturl(), int(r.headers.get("Content-Length") or 0), False
+
+
+def _single(m, url, token, part, report):
+    """One connection, start to end (a host that doesn't serve ranges, or a small file)."""
+    r = urllib.request.urlopen(urllib.request.Request(url, headers=_hf_headers(url, token)), timeout=60)
+    with r, open(part, "wb") as f:
+        total = int(r.headers.get("Content-Length") or m.get("size") or 0)
+        got = 0
+        while chunk := r.read(1 << 22):
+            f.write(chunk)
+            got += len(chunk)
+            report(got, total)
+
+
+class _Pieces:
+    """A file fetched in byte ranges by several threads, each writing its own pieces into one .part file."""
+
+    def __init__(self, m, cdn, size, token, part, report):
+        self.m, self.cdn, self.size, self.token, self.part, self.report = m, cdn, size, token, part, report
+        self.meta = part.with_name(part.name + ".json")
+        self.pieces = [(s, min(s + CHUNK, size) - 1) for s in range(0, size, CHUNK)]
+        self.lock = threading.Lock()
+        self.done = self._resume()
+        self.resumed = len(self.done)
+        self.got = sum(e - s + 1 for i, (s, e) in enumerate(self.pieces) if i in self.done)
+        self.resolved_at = time.time()
+        self.stop = threading.Event()
+
+    def _resume(self):
+        try:
+            old = json.loads(self.meta.read_text())
+            if old.get("url") == self.m["url"] and old.get("size") == self.size and old.get("chunk") == CHUNK and self.part.stat().st_size == self.size:
+                return set(old.get("done") or [])
+        except (OSError, ValueError):
+            pass
+        with open(self.part, "wb") as f:
+            f.truncate(self.size)
+        return set()
+
+    def _save(self):
+        tmp = self.meta.with_name(self.meta.name + ".tmp")
+        tmp.write_text(json.dumps({"url": self.m["url"], "size": self.size, "chunk": CHUNK, "done": sorted(self.done)}))
+        tmp.replace(self.meta)
+
+    def _refresh(self):
+        """The CDN address is signed and expires: ask for a fresh one (at most every REFRESH_GAP seconds)."""
+        with self.lock:
+            if time.time() - self.resolved_at >= REFRESH_GAP:
+                self.cdn = _probe(self.m["url"], self.token)[0]
+                self.resolved_at = time.time()
+
+    def piece(self, i):
+        start, end = self.pieces[i]
+        want = end + 1 - start
+        problem = ""
+        for attempt in range(TRIES):
+            if self.stop.is_set():
+                return
+            wrote = 0
+            try:
+                req = urllib.request.Request(self.cdn, headers={**_hf_headers(self.cdn, self.token), "Range": f"bytes={start}-{end}"})
+                with urllib.request.urlopen(req, timeout=60) as r, open(self.part, "r+b") as f:
+                    if r.status != 206:
+                        raise OSError(f"the host sent the whole file (HTTP {r.status}), not the piece asked for")
+                    f.seek(start)
+                    while wrote < want and not self.stop.is_set():
+                        b = r.read(min(1 << 20, want - wrote))
+                        if not b:
+                            break
+                        f.write(b)
+                        wrote += len(b)
+                        with self.lock:
+                            self.got += len(b)
+                if self.stop.is_set():
+                    return
+                if wrote != want:
+                    raise OSError("the connection closed early")
+                with self.lock:
+                    self.done.add(i)
+                    self._save()
+                return
+            except urllib.error.HTTPError as e:
+                wait_s = min(60, 2**attempt)
+                if e.code == 429:
+                    ra = e.headers.get("Retry-After") or ""
+                    wait_s = max(wait_s, int(ra) if ra.isdigit() else 10)
+                elif e.code in (401, 403, 404, 410):
+                    try:
+                        self._refresh()
+                    except Exception:
+                        pass
+                problem = f"HTTP {e.code}"
+            except Exception as e:  # a dropped connection, a timeout: that piece again
+                wait_s = min(60, 2**attempt)
+                problem = str(e) or type(e).__name__
+            with self.lock:
+                self.got -= wrote
+            if attempt < TRIES - 1:
+                self.stop.wait(wait_s)
+        raise RuntimeError(f"{self.m['label']}: part of the download kept failing ({problem}). What's downloaded is kept; try again to carry on.")
+
+    def run(self):
+        todo = [i for i in range(len(self.pieces)) if i not in self.done]
+        pool = ThreadPoolExecutor(max_workers=max(1, min(CONNECTIONS, len(todo))))
+        try:
+            futures = [pool.submit(self.piece, i) for i in todo]
+            while True:
+                finished, pending = wait(futures, timeout=1)
+                for f in finished:
+                    if f.exception():
+                        raise f.exception()
+                self.report(self.got, self.size)
+                if not pending:
+                    break
+        except BaseException:
+            self.stop.set()
+            raise
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
+        self.meta.unlink(missing_ok=True)
+
+
+def _sha256(path, report=None):
+    h = hashlib.sha256()
+    size = path.stat().st_size
+    done = 0
+    with open(path, "rb") as f:
+        while b := f.read(1 << 24):
+            h.update(b)
+            done += len(b)
+            if report:
+                report(done, size)
+    return h.hexdigest()
+
+
 def fetch(models, root, token=None, progress=None):
-    """Downloads each model root lacks. progress(event) gets {id, label, state: have|downloading|done, percent,
-    got, total, index, count}. Returns the ids now present. Raises on a refused download or a checksum mismatch."""
+    """Downloads each model root lacks. progress(event) gets {id, label, state: have|downloading|checking|done,
+    percent, got, total, index, count}, and while downloading speed (bytes a second over the last ~10 s) and
+    resumed (bytes already there from an earlier try). Returns the ids now present. Raises on a refused download or
+    a checksum mismatch; a download that fails part way keeps what it has, and the next fetch carries on."""
     progress = progress or (lambda e: None)
     done = []
     for i, m in enumerate(models, 1):
@@ -130,25 +289,43 @@ def fetch(models, root, token=None, progress=None):
             raise RuntimeError(f"{m['label']} has no published checksum, so IV Studio won't put it in your cloud storage.")
         dest.parent.mkdir(parents=True, exist_ok=True)
         part = dest.with_name(dest.name + ".part")
-        h = hashlib.sha256()
+        samples = []  # (time, bytes) over the last ~10 s, for the speed
+        last = [0.0]
+        extra = {}
+
+        def report(got, total, state="downloading", force=False):
+            t = time.time()
+            if state == "downloading":
+                samples.append((t, got))
+                while len(samples) > 2 and t - samples[0][0] > 10:
+                    samples.pop(0)
+            if force or t - last[0] > 3:
+                last[0] = t
+                span = samples[-1][0] - samples[0][0] if len(samples) > 1 else 0
+                speed = {"speed": int((samples[-1][1] - samples[0][1]) / span) if span > 0.5 else 0} if state == "downloading" else {}
+                progress({**base, "state": state, "got": got, "total": total, "percent": int(got * 100 / total) if total else 0, **speed, **extra})
+
         try:
-            r = urllib.request.urlopen(urllib.request.Request(m["url"], headers=_hf_headers(m["url"], token)), timeout=60)
+            cdn, size, ranges = _probe(m["url"], token)
         except urllib.error.HTTPError as e:  # plain text, so the reason reaches IV Studio intact
             raise RuntimeError(refusal(m, e.code, token)) from None
-        with r, open(part, "wb") as f:
-            total = int(r.headers.get("Content-Length") or m.get("size") or 0)
-            got, last = 0, 0.0
-            while chunk := r.read(1 << 22):
-                f.write(chunk)
-                h.update(chunk)
-                got += len(chunk)
-                if time.time() - last > 3:
-                    progress({**base, "state": "downloading", "got": got, "total": total, "percent": int(got * 100 / total) if total else 0})
-                    last = time.time()
-        if h.hexdigest() != want:
+        if ranges and size > CHUNK:
+            job = _Pieces(m, cdn, size, token, part, report)
+            if job.got:
+                extra["resumed"] = job.got
+            job.run()
+        else:
+            try:
+                _single(m, m["url"], token, part, report)
+            except urllib.error.HTTPError as e:
+                raise RuntimeError(refusal(m, e.code, token)) from None
+        report(0, part.stat().st_size, "checking", force=True)
+        if _sha256(part, lambda d, t: report(d, t, "checking")) != want:
             part.unlink()
+            part.with_name(part.name + ".json").unlink(missing_ok=True)
             raise RuntimeError(f"{m['label']} did not match its checksum; it was removed.")
         part.replace(dest)
+        got = dest.stat().st_size
         progress({**base, "state": "done", "got": got, "total": got, "percent": 100})
         done.append(m["id"])
     return done

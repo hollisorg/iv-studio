@@ -258,6 +258,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     runpodKey: call('cloud:runpodKey'),
     runpodCatalog: call('cloud:runpodCatalog'),
     runpodSetUp: call('cloud:runpodSetUp'),
+    runpodPause: call('cloud:runpodPause'),
     comfyCloudKey: call('cloud:comfyCloudKey'),
     comfyCloudCheck: call('cloud:comfyCloudCheck'),
     use: call('cloud:use'),

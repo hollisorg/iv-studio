@@ -157,6 +157,8 @@ export class RunPod {
     }
   }
 
+  // why a setup's wait ended when the person stopped the GPU during the model download
+  static PAUSED = 'Stopped the GPU during the model download, so it no longer bills. Your storage keeps everything downloaded so far: Set up again carries on from there.'
   static url = (podId) => `https://${podId}-${PORT}.proxy.runpod.net`
 
   // IV Studio's pods that are up or coming up.
@@ -198,10 +200,16 @@ export class RunPod {
   }
 
   // Waits for the pod's ComfyUI, logging each new boot stage. The first boot installs and downloads (30+ min).
+  // Stop the GPU, keep the download (the slow-download warning) sets paused: the wait ends with PAUSED.
   async waitReady(url, { timeoutMs = 3 * 3600 * 1000, onStage } = {}) {
     const t0 = Date.now()
     let said = ''
+    this.paused = false
     for (;;) {
+      if (this.paused) {
+        this.paused = false
+        throw new Error(RunPod.PAUSED)
+      }
       const h = await this.health(url)
       const line = h ? `${h.stage || 'booting'}: ${h.detail || ''}` : 'Waiting for the pod to boot…'
       if (line !== said) {

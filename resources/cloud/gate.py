@@ -143,7 +143,7 @@ def run_fetch(models, token):
         def say(e):
             global last_seen
             last_seen = time.time()  # a download keeps the pod up
-            fetching.update(current={k: e.get(k) for k in ("id", "label", "state", "percent", "got", "total", "index", "count")})
+            fetching.update(current={k: e.get(k) for k in ("id", "label", "state", "percent", "got", "total", "index", "count", "speed", "resumed")})
 
         done = ivcloud.fetch(models, MODELS, token=token, progress=say)
         fetching.update(state="done", done=done)

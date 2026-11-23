@@ -80,6 +80,7 @@ export default function SetupProgress({ progress: p, log = [], name }) {
           <strong>You don’t have to watch.</strong> Use the rest of IV Studio or leave this page: setup carries on, and IV Studio tells you when it’s ready. Keep IV Studio open until then.
         </p>
       )}
+      {p.slow && !p.finishedAt && p.provider === 'runpod' && <SlowDownload p={p} />}
       {done && <p className="setup-progress-leave ok">Set up and ready. Switch on The cloud to render there.</p>}
       {failed && <p className="setup-progress-leave pink">{p.error?.split('\n')[0]}</p>}
 
@@ -135,6 +136,39 @@ export default function SetupProgress({ progress: p, log = [], name }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// RunPod's model download has been slow for a few minutes (setupprogress.js SLOW_ETA / SLOW_FOR): what it would
+// cost to wait, and a way to stop the GPU now without losing what's downloaded.
+function SlowDownload({ p }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const mbs = p.slow.speed ? `${Math.max(1, Math.round(p.slow.speed / 1e6))} MB/s` : 'very slowly'
+  const cost = p.perHour ? `, roughly $${((p.slow.eta / 3600) * p.perHour).toFixed(2)} of GPU time` : ''
+  async function stop() {
+    setBusy(true)
+    setErr('')
+    try {
+      await window.ivstudio.cloud.runpodPause()
+    } catch (e) {
+      setErr(e.message)
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="setup-slow" role="alert">
+      <p className="small">
+        <strong>The model download is slow in this data center:</strong> {mbs}, {about(p.slow.eta)} left{cost}. You can stop the GPU now and billing stops. Everything downloaded so far stays on your storage, and Set up again carries on from where it stopped. Trying at another time often helps, and so does a Hugging Face token if Hugging Face is limiting this data center.
+      </p>
+      <div className="setup-slow-row">
+        <button className="btn btn-small" disabled={busy} onClick={stop}>
+          {busy ? 'Stopping…' : 'Stop the GPU, keep the download'}
+        </button>
+        <span className="small dim">Or let it carry on: it keeps going.</span>
+      </div>
+      {err && <p className="small pink">{err}</p>}
     </div>
   )
 }

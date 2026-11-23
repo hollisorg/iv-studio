@@ -3,7 +3,8 @@ import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
-import { StepHead } from './CreateKit'
+import { StepHead } from './CreateKit'
+import HfLogin from './HfLogin'
 
 // The cloud setup wizard: pick a service, connect the account, choose a GPU, set it up, switch to it. Opened from
 // Check my PC (when the cloud is picked) and from the Cloud page (Guided setup). It drives the same calls as the
@@ -329,6 +330,13 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
                       ? 'Makes a 100 GB network volume in a data center that has your GPU, installs ComfyUI and every node pack matched to this version, downloads the H3 models onto it (about 60 GB, once) and uploads your characters. It takes 20–40 minutes, under about $1 of GPU time on an L40S. The volume costs about $7 a month while it exists.'
                       : 'Builds IV Studio’s cloud image (ComfyUI and every node pack, matched to this version), downloads the H3 models into your Modal storage (about 60 GB, once) and uploads your characters. It takes 20–40 minutes and a few cents of CPU time.'}
                   </p>
+                )}
+                {p === 'runpod' && !ready && !busy && (
+                  <HfLogin
+                    notify={notify}
+                    lead="Optional: your Hugging Face token."
+                    text="The H3 models come from Hugging Face, and a busy data center can be limited when many people download from it without a login. A free Read token (huggingface.co → Settings → Access Tokens) keeps the download to your own allowance. It’s sealed on this PC and only given to your own pod."
+                  />
                 )}
                 <div className="cw-setup-row">
                   <button className="btn btn-primary" disabled={!!busy || !account || onCloud} onClick={setUp}>

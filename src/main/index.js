@@ -1849,6 +1849,8 @@ app.whenReady().then(() => {
       else t.start('storage', 'Finding a data center with network storage and a free GPU')
       const volume = known || (await runpod.ensureVolume(await runpod.pickDataCenter(gpu)))
       t.start('pod', `Starting a ${RUNPOD_GPUS.find((g) => g.id === gpu)?.label.split(' ·')[0] || 'GPU'} in ${volume.dataCenter}`)
+      // what the GPU costs an hour, for the slow-download warning's "roughly $X"
+      t.perHour = RUNPOD_GPUS.find((g) => g.id === gpu)?.perHour || null
       writeSettings({ runpodToken: seal(randomBytes(24).toString('base64url')) }, BASE)
       saveRunpod({ gpu, idleSeconds, volumeId: volume.id, dataCenter: volume.dataCenter, url: null, podId: null })
       send('cloud:log', `Starting a pod in ${volume.dataCenter}. The first time, it installs ComfyUI and downloads the H3 models onto your volume (20–40 minutes).`)
@@ -1878,6 +1880,15 @@ app.whenReady().then(() => {
       return readSettings(BASE).runpod
     }))
   )
+  // The slow-download warning's "Stop the GPU, keep the download": deletes the pod (billing stops) and ends the
+  // setup's wait in words. The volume keeps the finished pieces; Set up again carries on (ivcloud.py resumes).
+  handle('cloud:runpodPause', async () => {
+    if (provider() !== 'runpod') throw new Error('Only a RunPod setup can be stopped this way.')
+    runpod.paused = true
+    const r = await runpod.stopAll()
+    saveRunpod({ url: null, podId: null })
+    return r
+  })
   handle('cloud:use', (target) => {
     const s = readSettings(BASE)
     if (target === 'cloud' && s.cloudProvider === 'comfycloud' && !comfyCloudKey(s)) throw new Error('Save your Comfy API key first.')

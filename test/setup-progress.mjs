@@ -1,7 +1,8 @@
 // Cloud setup progress (src/service/setupprogress.js): Modal's lines and the RunPod pod's health move the right
 // steps, model downloads count by bytes, and the overall bar and time left make sense, on a made-up clock.
 import assert from 'node:assert/strict'
-import { SetupProgress, clock, about } from '../src/service/setupprogress.js'
+import { SetupProgress, clock, about, SLOW_ETA, SLOW_FOR } from '../src/service/setupprogress.js'
+import fs from 'node:fs'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -93,6 +94,72 @@ ok('time left: from a step’s own percentage once it has one', () => {
   p.update('models', { percent: 25 })
   // 100 s for 25%: about 300 s more for this step, plus the characters step's 30 s
   assert.equal(p.remaining(), 330)
+})
+
+ok('RunPod models: by bytes, with the pod’s own time left', () => {
+  let t = 0
+  const p = new SetupProgress('runpod', { now: () => t })
+  p.start('models')
+  t = 30000
+  // one 21 GB file half done is about a third of 60 GB, not "1 of 8 files"
+  p.fromHealth({ stage: 'models', detail: 'MiniMax H3 fl2va int8 (1 of 8), 50% · 120 MB/s', done: 0, total: 8, percent: 50, bytesDone: 10.5e9, bytesTotal: 60e9, speed: 120e6, eta: 412 })
+  const s = p.snapshot().steps.find((x) => x.id === 'models')
+  assert.equal(s.percent, 18)
+  // the time left is the pod's estimate for the download, plus the steps after it (ComfyUI 90 s, characters 30 s)
+  assert.equal(p.remaining(), 412 + 90 + 30)
+  p.done('models')
+  assert.equal(p.snapshot().steps.find((x) => x.id === 'models').percent, 100)
+})
+
+ok('RunPod models: slow for a few minutes brings the warning (with the GPU price), fast again takes it away', () => {
+  let t = 0
+  const p = new SetupProgress('runpod', { now: () => t })
+  p.perHour = 1.95
+  p.start('models')
+  const slow = { stage: 'models', detail: 'MiniMax H3 fl2va int8 (1 of 8), 30% · 4 MB/s', bytesDone: 6e9, bytesTotal: 60e9, speed: 4e6, eta: 13500 }
+  t = 20000
+  p.fromHealth(slow)
+  assert.equal(p.snapshot().slow, null, 'not in the first minute, while the connections get going')
+  t = 70000
+  p.fromHealth(slow)
+  t = 70000 + (SLOW_FOR - 10) * 1000
+  p.fromHealth(slow)
+  assert.equal(p.snapshot().slow, null, 'not before it has been slow for SLOW_FOR')
+  t = 70000 + SLOW_FOR * 1000
+  p.fromHealth(slow)
+  const w = p.snapshot()
+  assert.deepEqual([w.slow?.speed, w.slow?.eta, w.perHour], [4e6, 13500, 1.95])
+  t += 5000
+  p.fromHealth({ ...slow, speed: 150e6, eta: SLOW_ETA - 60 })
+  assert.equal(p.snapshot().slow, null, 'gone once it speeds up')
+  t += 5000
+  p.fromHealth(slow)
+  assert.equal(p.snapshot().slow, null, 'and it has to stay slow for SLOW_FOR again')
+  t += SLOW_FOR * 1000
+  p.fromHealth(slow)
+  assert.ok(p.snapshot().slow)
+  p.fail(new Error('Stopped'))
+  assert.equal(p.snapshot().slow, null, 'a finished setup shows no warning')
+})
+
+ok('the warning, its button, the pause and the token prompt are wired', () => {
+  const src = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8')
+  const ui = src('../src/renderer/src/components/SetupProgress.jsx')
+  assert.match(ui, /p\.slow && !p\.finishedAt && p\.provider === 'runpod' && <SlowDownload p=\{p\} \/>/)
+  assert.match(ui, /window\.ivstudio\.cloud\.runpodPause\(\)/)
+  assert.match(ui, /Stop the GPU, keep the download/)
+  const main = src('../src/main/index.js')
+  assert.match(main, /handle\('cloud:runpodPause'/)
+  assert.match(main, /runpod\.paused = true/)
+  assert.match(main, /t\.perHour = RUNPOD_GPUS\.find/)
+  assert.match(src('../src/preload/index.js'), /runpodPause: call\('cloud:runpodPause'\)/)
+  const rp = src('../src/service/runpod.js')
+  assert.match(rp, /if \(this\.paused\) \{\s*this\.paused = false\s*throw new Error\(RunPod\.PAUSED\)/)
+  const wiz = src('../src/renderer/src/components/CloudWizard.jsx')
+  assert.match(wiz, /p === 'runpod' && !ready && !busy && \(\s*<HfLogin/)
+  const boot = src('../resources/cloud/runpod_boot.py')
+  assert.match(boot, /eta=int\(left \/ speed\) if speed else None/)
+  assert.ok(!/—/.test(ui + wiz), 'no em dashes')
 })
 
 ok('clocks and words', () => {

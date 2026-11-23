@@ -18,7 +18,8 @@ export function useHfLogin() {
   return [from, refresh]
 }
 
-export default function HfLogin({ notify, pages = [], onChange }) {
+// lead / text: the words beside the box (by default, about gated models)
+export default function HfLogin({ notify, pages = [], onChange, lead = 'Some of these need a free Hugging Face login.', text = 'Open each model’s page while signed in to Hugging Face and accept its licence, then add a Read token here.' }) {
   const [from, refresh] = useHfLogin()
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
@@ -40,10 +41,7 @@ export default function HfLogin({ notify, pages = [], onChange }) {
   return (
     <div className="hf-login">
       <div className="hf-login-text small">
-        <strong>Some of these need a free Hugging Face login.</strong>{' '}
-        <span className="dim">
-          Open each model’s page while signed in to Hugging Face and accept its licence, then add a Read token here.
-        </span>
+        <strong>{lead}</strong> <span className="dim">{text}</span>
         {pages.length > 0 && (
           <span className="hf-login-pages">
             {pages.map((p) => (

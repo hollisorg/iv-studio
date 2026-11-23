@@ -24,6 +24,13 @@ export const SETUP_PLANS = {
 
 const short = (s, n = 110) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
 
+// RunPod's model download is "slow" when the pod's own estimate of the time left stays over SLOW_ETA for SLOW_FOR:
+// the GPU bills all that time, so the setup offers to stop it (the download carries on next time). The first
+// minute is left out while the connections get going.
+export const SLOW_ETA = 40 * 60
+export const SLOW_FOR = 3 * 60
+const SLOW_GRACE = 60
+
 export class SetupProgress {
   // models: [{ id, label, size }] the setup downloads (Modal), for a byte-weighted percentage
   constructor(provider, { now = Date.now, onChange = () => {}, models = [] } = {}) {
@@ -36,7 +43,11 @@ export class SetupProgress {
     this.finishedAt = null
     this.ok = null
     this.error = null
-    this.steps = (SETUP_PLANS[provider] || []).map((s) => ({ ...s, status: 'waiting', startedAt: null, doneAt: null, percent: null, detail: '' }))
+    this.steps = (SETUP_PLANS[provider] || []).map((s) => ({ ...s, status: 'waiting', startedAt: null, doneAt: null, percent: null, detail: '', eta: null }))
+    // the GPU's price an hour (RunPod), for what a slow download would cost; the slow warning, when there is one
+    this.perHour = null
+    this.slow = null
+    this.slowSince = null
   }
 
   step(id) {
@@ -53,10 +64,11 @@ export class SetupProgress {
     if (detail) s.detail = short(detail)
     this.changed()
   }
-  update(id, { percent, detail } = {}) {
+  update(id, { percent, detail, eta } = {}) {
     const s = this.step(id)
     if (!s) return
     if (s.status === 'waiting') this.start(id)
+    if (eta !== undefined) s.eta = eta
     if (percent != null) s.percent = Math.max(0, Math.min(100, Math.round(percent)))
     if (detail) s.detail = short(detail)
     this.changed()
@@ -65,7 +77,8 @@ export class SetupProgress {
     const s = this.step(id)
     if (!s) return
     if (s.status === 'waiting') this.start(id)
-    Object.assign(s, { status: 'done', doneAt: this.now(), percent: 100, ...(detail ? { detail: short(detail) } : {}) })
+    Object.assign(s, { status: 'done', doneAt: this.now(), percent: 100, eta: null, ...(detail ? { detail: short(detail) } : {}) })
+    if (id === 'models') this.slow = this.slowSince = null
     this.changed()
   }
   skip(id, detail = '') {
@@ -131,11 +144,29 @@ export class SetupProgress {
       return this.update('install', { detail, percent: n ? (Number(n[1]) / Number(n[2])) * 100 : null })
     }
     if (h.stage === 'models') {
-      const pct = h.total ? (((h.done || 0) + (h.percent || 0) / 100) / h.total) * 100 : h.percent
-      return this.update('models', { detail, percent: pct })
+      // by bytes when the pod sends them (a 21 GB model isn't the same as a 0.4 GB one), else by files
+      const pct = h.bytesTotal ? (h.bytesDone / h.bytesTotal) * 100 : h.total ? (((h.done || 0) + (h.percent || 0) / 100) / h.total) * 100 : h.percent
+      this.update('models', { detail, percent: pct, eta: h.eta ?? null })
+      return this.watchSpeed(h)
     }
     if (h.stage === 'starting') return this.update('start', { detail })
     if (h.stage === 'ready') return this.done('start', 'ComfyUI is ready')
+  }
+
+  // the slow warning: on once the time left has stayed over SLOW_ETA for SLOW_FOR, off again as soon as it isn't
+  watchSpeed(h) {
+    const s = this.step('models')
+    const t = this.now()
+    if (s?.startedAt == null || t - s.startedAt < SLOW_GRACE * 1000 || h.eta == null) return
+    if (h.eta <= SLOW_ETA) {
+      if (this.slow || this.slowSince) Object.assign(this, { slow: null, slowSince: null }), this.changed()
+      return
+    }
+    this.slowSince ??= t
+    if (t - this.slowSince >= SLOW_FOR * 1000) {
+      this.slow = { speed: h.speed || 0, eta: h.eta, since: this.slowSince }
+      this.changed()
+    }
   }
 
   // 0..1 across the plan, weighted by each step's typical time
@@ -157,6 +188,7 @@ export class SetupProgress {
     let left = 0
     for (const s of this.steps) {
       if (s.status === 'waiting') left += s.secs
+      else if (s.status === 'running' && s.eta != null) left += s.eta
       else if (s.status === 'running') {
         const spent = (t - s.startedAt) / 1000
         left += s.percent > 3 ? (spent * (100 - s.percent)) / s.percent : Math.max(s.secs - spent, Math.min(60, s.secs * 0.2))
@@ -175,6 +207,8 @@ export class SetupProgress {
       overall: Math.round(this.overall() * 1000) / 10,
       ok: this.ok,
       error: this.error,
+      perHour: this.perHour,
+      slow: this.finishedAt ? null : this.slow,
       steps: this.steps.map(({ id, label, typical, status, startedAt, doneAt, percent, detail }) => ({ id, label, typical, status, percent, detail, seconds: startedAt ? Math.round(((doneAt || t) - startedAt) / 1000) : null }))
     }
   }

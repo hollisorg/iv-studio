@@ -19703,3 +19703,25 @@ html.chat-window body {
 .create-v2 .shot-card {
   top: calc(84px - clamp(28px, 4vw, 52px));
 }
+
+/* Cloud setup: RunPod's slow-download warning */
+.setup-slow {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.setup-slow p {
+  margin: 0;
+}
+.setup-slow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.setup-slow-row .btn {
+  min-height: 44px;
+}

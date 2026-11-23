@@ -125,14 +125,28 @@ def fetch_models():
     models = ivcloud.setup_models(CLOUD, MANIFEST)
     have = len(ivcloud.present(models, MODELS))
     token = os.environ.get("HF_TOKEN") or None
+    todo = [m for m in models if not ivcloud.target(MODELS, m).exists()]
+    # bytes across the whole download, so IV Studio can show the time left and warn when it's slow
+    size = {m["id"]: m.get("size") or 0 for m in todo}
+    total = sum(size.values())
+    finished = [0]
 
     def say(e):
+        counts = dict(model=e["id"], done=have + e["index"] - 1, total=len(models), bytesTotal=total)
         if e["state"] == "downloading":
-            status("models", f"{e['label']} ({e['index']} of {e['count']}), {e['percent']}%", model=e["id"], percent=e["percent"], done=have + e["index"] - 1, total=len(models))
+            got = finished[0] + (e.get("got") or 0)
+            speed = e.get("speed") or 0
+            left = max(0, total - got)
+            mbs = f" · {speed / 1e6:.0f} MB/s" if speed else ""
+            again = " (carrying on from an earlier try)" if e.get("resumed") else ""
+            status("models", f"{e['label']} ({e['index']} of {e['count']}), {e['percent']}%{mbs}{again}", percent=e["percent"], speed=speed, bytesDone=got, eta=int(left / speed) if speed else None, **counts)
+        elif e["state"] == "checking":
+            status("models", f"Checking {e['label']} ({e['index']} of {e['count']}) against its checksum, {e['percent']}%", percent=100, bytesDone=finished[0] + size.get(e["id"], 0), **counts)
         elif e["state"] == "done":
+            finished[0] += size.get(e["id"]) or e.get("got") or 0
             print(f"[iv] model ready: {e['label']} (checksum verified)", flush=True)
 
-    ivcloud.fetch([m for m in models if not ivcloud.target(MODELS, m).exists()], MODELS, token=token, progress=say)
+    ivcloud.fetch(todo, MODELS, token=token, progress=say)
 
 
 def start_comfy():
