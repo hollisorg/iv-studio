@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.25',
+    items: [
+      { text: 'New: Replace swaps the voice too. When you swap someone for a character with a saved voice, the new person says the same words at the same moments in that voice, and H3 speaks them as it remakes the video, so the lips follow the new voice. Pick the voice per person (a character’s own voice is chosen for you), check the words in “The voice”, change a line or untick it, or keep the original voice.' },
+      { text: 'Rebuild swaps the voice too: the person painted in speaks in their saved voice, each remade shot’s lips follow its piece of it, and the first cut puts the new voice on A1. Speech only for now: a song isn’t sung in the new voice yet.' },
+      { text: 'The room sound stays under the new voice: the first time, IV Studio adds a voice splitter (Demucs, about 120 MB) to its voice engine. Replace’s node pack has an update for this; Settings → Setup offers it.' },
+      { text: 'Fixed: opening two pages that list voices at once could make a character’s ready-made voice twice.' }
+    ]
+  },
+  {
     version: '1.1.24',
     items: [
       { text: 'New: Animal Cam (Workflows). Animal videos that look filmed on a phone, in seven steps: your animal and its reference sheet (made here from a pet photo or from words), the idea, who’s filming, the place and people, what happens, the sounds, then a checklist before you film. Three takes on H3, pick one, finish it, and get a vertical phone-style clip.' },
