@@ -351,16 +351,35 @@ export function ollamaExe() {
 }
 
 // How Ollama's server is started. On Windows a detached `ollama serve` has no console of its own, so every model it
-// loads (llama-server.exe, a console program) opens a new terminal window. So: Ollama's own tray app when it's there
-// (it keeps the server and its runners hidden, as when Ollama starts with Windows), else `ollama serve` started through
-// PowerShell with a hidden console that its runners share. Mac and Linux start `ollama serve` in the background.
-export function ollamaStartCommand(exe, platform = process.platform, exists = fs.existsSync) {
+// loads (llama-server.exe, a console program) opens a new terminal window: so it's started through PowerShell with a
+// hidden console that its runners share. Not through Ollama's own app ("ollama app.exe"): since Ollama 0.12 it opens
+// its chat window every time it's launched, and IV Studio's background work (the Library describer) kept bringing that
+// window back after the person closed it (2026-11-23). Mac and Linux start `ollama serve` in the background.
+export function ollamaStartCommand(exe, platform = process.platform) {
   if (platform !== 'win32') return { command: exe, args: ['serve'] }
-  // Windows paths by Windows rules, so this answers the same on any machine (and in Linux and Mac CI)
-  const tray = path.win32.join(path.win32.dirname(exe), 'ollama app.exe')
-  if (exists(tray)) return { command: tray, args: [] }
   const q = (s) => `'${String(s).replace(/'/g, "''")}'`
   return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', `Start-Process -FilePath ${q(exe)} -ArgumentList 'serve' -WindowStyle Hidden`] }
+}
+// Whether starting Ollama here can bring this address up: it has to be on this PC and on the port a started Ollama
+// listens on (11434, or OLLAMA_HOST's). Starting it for any other address only opens Ollama for nothing.
+export function ollamaCanStart(url = ollamaUrl(), env = process.env) {
+  if (!ollamaIsLocal(url)) return false
+  let port = '11434'
+  try {
+    if (env.OLLAMA_HOST) port = new URL(normalizeOllamaUrl(env.OLLAMA_HOST)).port || port
+  } catch {}
+  try {
+    return (new URL(url).port || '11434') === port
+  } catch {
+    return false
+  }
+}
+// One start at a time, and not again for a while after one: background work asks often, and a start that didn't take
+// shouldn't be tried over and over.
+export const OLLAMA_RETRY_MS = 2 * 60 * 1000
+let lastStart = 0
+export function ollamaStartDue(now = Date.now(), last = lastStart) {
+  return !last || now - last >= OLLAMA_RETRY_MS
 }
 function startOllamaServer(exe) {
   const { command, args } = ollamaStartCommand(exe)
@@ -383,8 +402,11 @@ export async function unloadOllama() {
 export async function ensureOllama() {
   if ((await ollamaStatus()).running) return true
   if (!ollamaIsLocal()) throw new Error(`Ollama isn't answering at ${ollamaUrl()}. Check the address in Settings → Prompt writer, and that Ollama listens there (OLLAMA_HOST=0.0.0.0).`)
+  if (!ollamaCanStart()) throw new Error(`Ollama isn't answering at ${ollamaUrl()}. Start it on that port, or set the address in Settings → Prompt writer to Ollama's own (127.0.0.1:11434).`)
   const exe = ollamaExe()
   if (!exe) throw new Error('Ollama is not installed. Install it from ollama.com, or use MiniMax Context IR.')
+  if (!ollamaStartDue()) throw new Error('Ollama isn’t answering yet. IV Studio started it a moment ago; try again in a minute.')
+  lastStart = Date.now()
   startOllamaServer(exe)
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 500))

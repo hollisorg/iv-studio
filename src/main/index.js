@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, PROMPT_WRITERS, writerFor, writerOf, writeSettings } from '../service/paths'
+import { cleanTopBar } from '../renderer/src/topbar'
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { codexWindow, EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
@@ -1957,6 +1958,8 @@ app.whenReady().then(() => {
       }
     }
     if ('textSize' in safe && !(safe.textSize in TEXT_SIZES)) delete safe.textSize
+    // Settings → Top bar: true or false for the items topbar.js lists, nothing else
+    if ('topBar' in safe) safe.topBar = cleanTopBar(safe.topBar)
     const s = publicSettings(writeSettings(safe, BASE))
     if ('textSize' in safe) refitZoom()
     if ('comfyUrl' in (patch || {})) makeStudio()

@@ -2,6 +2,20 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.26',
+    items: [
+      { text: 'New in Create: One final. Pick it under Shape and size → How and H3 renders one take and finishes it at full size straight away, with no previews to pick from. Choose the final size (2 MP by default) and what runs after it: None, DLSS 5 or SeedVR2.' },
+      { text: 'Same as photo: in First / last frame, the Photo tile makes the shot in your first frame’s own shape (a 4:5 portrait stays 4:5) instead of stretching it to 16:9 or another tile.' },
+      { text: 'Finishing a take: the Enhancer now has None, for the full-size video exactly as it comes out. The Finish window also says what each setting does, and Sound reads New sound, The take’s sound or My recording.' },
+      { text: 'Workflows: an Example button on the cards shows a short clip made in IV Studio, what went in and what came out, with Try it to open the tool.' },
+      { text: 'Write it for me has a menu in its corner: switch between the local writer, Claude, ChatGPT and Hermes right there. It’s the same choice as Settings → Prompt writer.' },
+      { text: 'Choose what the top bar shows: Settings → Top bar → Customize top bar. Hide the cloud cost (the GPU time can stay), the GPU and memory meter, Chat, Incognito and more.' },
+      { text: 'Fixed: finishing a First / last frame or Keyframes shot with no character could change the face (green eyes came out brown). The full-size pass is now light enough to keep it.' },
+      { text: 'Fixed: a render ComfyUI lost (it restarted, or its queue was cleared) now shows as failed with Try again, instead of waiting for good.' },
+      { text: 'Fixed: Ollama’s window kept opening again after you closed it. IV Studio now starts Ollama hidden when the free writer needs it, and only when it can actually answer on that address.' }
+    ]
+  },
+  {
     version: '1.1.25',
     items: [
       { text: 'New: Replace swaps the voice too. When you swap someone for a character with a saved voice, the new person says the same words at the same moments in that voice, and H3 speaks them as it remakes the video, so the lips follow the new voice. Pick the voice per person (a character’s own voice is chosen for you), check the words in “The voice”, change a line or untick it, or keep the original voice.' },

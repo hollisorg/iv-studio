@@ -15,7 +15,8 @@ const clock = (s) => {
   const sec = String(Math.floor(s % 60)).padStart(2, '0')
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
 }
-export function CloudMeter({ onOpen }) {
+// showCost: false (Settings → Top bar → Cloud cost) keeps the GPU time and leaves out the money
+export function CloudMeter({ onOpen, showCost = true }) {
   const [usage, setUsage] = useState(null)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -52,9 +53,10 @@ export function CloudMeter({ onOpen }) {
   const seconds = [...seen].reduce((sum, [id, c]) => sum + Math.max(0, ((ids.has(id) ? now : c.last) - c.start) / 1000), 0)
   const cost = (seconds / 3600) * usage.perHour
   return (
-    <button className={`mono cloud-meter ${on ? 'on' : ''}`} onClick={onOpen} title={`Cloud GPU time and estimated cost since IV Studio opened (${usage.gpu} at $${usage.perHour.toFixed(2)} an hour, billed by the second). Click for the Cloud page.`}>
+    <button className={`mono cloud-meter ${on ? 'on' : ''}`} onClick={onOpen} title={showCost ? `Cloud GPU time and estimated cost since IV Studio opened (${usage.gpu} at $${usage.perHour.toFixed(2)} an hour, billed by the second). Click for the Cloud page.` : `Cloud GPU time since IV Studio opened (${usage.gpu}). Click for the Cloud page.`}>
       <span className="cloud-meter-dot" />
-      {on ? 'GPU on' : 'GPU off'} · {clock(seconds)} · ${cost.toFixed(2)}
+      {on ? 'GPU on' : 'GPU off'} · {clock(seconds)}
+      {showCost && ` · $${cost.toFixed(2)}`}
     </button>
   )
 }

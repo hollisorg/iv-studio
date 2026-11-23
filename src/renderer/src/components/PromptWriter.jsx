@@ -5,6 +5,16 @@ import StageBoard from './StageBoard'
 import { cameraWords, defaultStage, previsWords, stagingWords } from '../../../service/staging'
 
 const HARNESS_NAME = { claude: 'Claude', codex: 'ChatGPT', hermes: 'Hermes' }
+// The writers the header's menu switches between (the same setting as Settings → Prompt writer). Context IR is paid per
+// prompt, so it's chosen in Settings only; the menu shows it only while it's the one in use.
+const WRITERS = [
+  ['local', 'Local writer · free'],
+  ['claude', 'Claude · your plan'],
+  ['codex', 'ChatGPT · your plan'],
+  ['hermes', 'Hermes · your plan'],
+  ['openai', 'OpenAI-compatible · your server'],
+  ['contextir', 'Context IR · paid']
+]
 
 // An idea from somewhere else (Create's banner bar, the Dashboard's "What do you want to make?") for Create's own
 // writer: it fills in the idea and, with write, writes the prompt straight away. Kept until a listening writer takes
@@ -105,9 +115,23 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   const [undo, setUndo] = useState(null)
   const [busy, run] = useLasting(lastingKey, (text) => (setUndo(current || ''), onWritten(text)), onLate)
 
+  const loadStatus = () => window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
   useEffect(() => {
-    window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
+    loadStatus()
+    // another writer on the page (or Settings) switched the writer
+    window.addEventListener('iv:writer', loadStatus)
+    return () => window.removeEventListener('iv:writer', loadStatus)
   }, [])
+  // the header's menu: saves the writer for every Write it for me, as Settings → Prompt writer does
+  async function pickWriter(id) {
+    try {
+      await window.ivstudio.settings.set({ promptEngine: id })
+      await loadStatus()
+      window.dispatchEvent(new Event('iv:writer'))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
 
   // Context IR is MiniMax's H3 rewriter: a Seedance shot is written by the local writer instead
   const engine = context.engine === 'seedance' && status?.engine === 'contextir' ? 'local' : status?.engine || 'local'
@@ -154,7 +178,28 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     <div className={`writer ${compact ? 'compact' : ''}`}>
       <div className="writer-head">
         <span className="mono label writer-label">✦ Write it for me</span>
-        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : engine === 'openai' ? `${status?.openai?.model || 'OpenAI-compatible'} · your server` : `Local writer · free`}{context.engine === 'seedance' ? ' · Seedance guide' : ''}</span>
+        <span className="writer-engine-pick">
+          <select
+            className="writer-engine mono small"
+            aria-label="Who writes the prompt"
+            title="Who writes the prompt. The same choice as Settings → Prompt writer."
+            value={engine}
+            disabled={!status}
+            onChange={(e) => pickWriter(e.target.value)}
+          >
+            {WRITERS.filter(([id]) => id === engine || (id !== 'contextir' && (id !== 'openai' || status?.openai?.url))).map(([id, label]) => {
+              const missing = !status ? false : id === 'local' ? !status.installed : HARNESS_NAME[id] ? !status.harnesses?.[id]?.installed : id === 'openai' ? !status.openai?.model : false
+              const text = id === 'contextir' ? `Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : id === 'openai' && status?.openai?.model ? `${status.openai.model} · your server` : label
+              return (
+                <option key={id} value={id}>
+                  {text}
+                  {missing ? ' (not set up)' : ''}
+                </option>
+              )
+            })}
+          </select>
+          {context.engine === 'seedance' && <span className="mono dim small"> · Seedance guide</span>}
+        </span>
       </div>
       <div className="writer-row">
         <textarea rows={compact ? 2 : 2} value={idea} placeholder={context.sequence ? 'What happens in this shot, in plain words' : 'Your idea in plain words, e.g. Tess in a parked car at night admits she kept the letter'} onChange={(e) => setIdea(e.target.value)} />

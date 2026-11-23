@@ -37,10 +37,10 @@ export function SetField({ label, tag, hint, children, warn }) {
   )
 }
 
-export function SetSwitch({ checked, onChange, children }) {
+export function SetSwitch({ checked, onChange, children, disabled = false }) {
   return (
-    <label className="switch-toggle set-switch">
-      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className={`switch-toggle set-switch ${disabled ? 'disabled' : ''}`}>
+      <input type="checkbox" checked={!!checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="switch-track">
         <span className="switch-knob" />
       </span>

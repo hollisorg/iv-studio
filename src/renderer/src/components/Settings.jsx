@@ -10,6 +10,7 @@ import { setUnblurred } from './Loras'
 import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
 import { startTour } from '../tours'
 import { AccountCard } from './ComfyAccount'
+import { onTopBar, TOP_BAR } from '../topbar'
 import Credits from './Credits'
 import { openH3Terms, reportMisuse, useH3Terms } from './H3Terms'
 import { SAFEGUARDS_URL } from '../../../service/terms'
@@ -29,6 +30,7 @@ const SECTIONS = [
   ['you', 'You and your agent'],
   ['words', 'Words'],
   ['access', 'Accessibility'],
+  ['topbar', 'Top bar'],
   ['comfy', 'ComfyUI'],
   ['folders', 'Folders'],
   ['data', 'Data folder'],
@@ -264,6 +266,82 @@ function AccessCard({ n, settings, setSettings, notify }) {
         </SetSwitch>
       </SetField>
     </SetCard>
+  )
+}
+
+// What the top bar shows (topbar.js): one short row here, and a pop-up with a box for each item, saved as
+// settings.topBar and applied straight away
+function TopBarCard({ n, settings, setSettings, notify }) {
+  const bar = settings.topBar || {}
+  const hidden = TOP_BAR.filter(([id]) => !onTopBar(bar, id))
+  const [open, setOpen] = useState(false)
+  const set = async (patch) => {
+    try {
+      setSettings(await window.ivstudio.settings.set({ topBar: patch }))
+      window.dispatchEvent(new CustomEvent('iv:settings'))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  return (
+    <SetCard id="topbar" n={n} title="Top bar" sub="Choose what the bar across the top shows." aside={hidden.length ? <Pill>{hidden.length} hidden</Pill> : null}>
+      <SetField label="Showing" hint="The logo, the ComfyUI status and a running setup always stay.">
+        <div className="topbar-summary">
+          <span className="small">{hidden.length ? `Everything but ${hidden.map(([, label]) => label).join(', ')}` : 'Everything'}</span>
+          <button className="btn btn-small" onClick={() => setOpen(true)}>
+            Customize top bar
+          </button>
+        </div>
+      </SetField>
+      {open && <TopBarPicker bar={bar} onSet={(id, on) => set({ ...bar, [id]: on })} onReset={() => set(null)} onClose={() => setOpen(false)} />}
+    </SetCard>
+  )
+}
+
+// The top bar's pop-up: every item as a box to tick, in two columns, with Show all
+function TopBarPicker({ bar, onSet, onReset, onClose }) {
+  useEffect(() => {
+    const key = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [onClose])
+  const all = TOP_BAR.every(([id]) => onTopBar(bar, id))
+  return (
+    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal topbar-picker" role="dialog" aria-modal="true" aria-labelledby="topbar-title">
+        <div className="modal-head">
+          <h2 id="topbar-title">Top bar</h2>
+          <span className="small dim">Tick what it shows. Changes apply straight away.</span>
+          <span className="spacer" />
+          <button className="lora-chip-x" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="topbar-items">
+          {TOP_BAR.map(([id, label, hint]) => {
+            const off = id === 'cloudCost' && !onTopBar(bar, 'cloudMeter')
+            return (
+              <label key={id} className={`topbar-item ${off ? 'off' : ''}`} title={off ? 'Shows with Cloud GPU time: tick that first.' : undefined}>
+                <input type="checkbox" checked={onTopBar(bar, id)} disabled={off} onChange={(e) => onSet(id, e.target.checked)} autoFocus={id === TOP_BAR[0][0]} />
+                <span className="topbar-item-text">
+                  <span>{label}</span>
+                  <span className="small dim">{hint}</span>
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-small" disabled={all} onClick={onReset}>
+            Show all
+          </button>
+          <span className="spacer" />
+          <button className="btn btn-small btn-primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1332,6 +1410,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <YouCard n={n('you')} {...common} />
           <WordsCard n={n('words')} {...common} />
           <AccessCard n={n('access')} {...common} />
+          <TopBarCard n={n('topbar')} {...common} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
           <DataCard n={n('data')} notify={notify} />

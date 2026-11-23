@@ -52,6 +52,7 @@ import { UpdateButton } from './components/Update'
 import { SizzleList, SizzleProject } from './components/Sizzle'
 import { RebuildList, RebuildProject } from './components/Rebuild'
 import { NavIcon } from './components/NavIcons'
+import { onTopBar } from './topbar'
 
 // The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
 // Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
@@ -497,13 +498,17 @@ export default function App() {
   }
 
   const ready = setup?.ready
+  // what the top bar shows (Settings → Top bar, topbar.js)
+  const [topBar, setTopBar] = useState(null)
+  const bar = (id) => onTopBar(topBar, id)
   // the welcome wizard: on first launch, and again from Settings → Check my PC (the iv:welcome event)
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), !s.onboarded && setWelcome('first')), () => {})
-    // Simple words (words.js) and Settings → Accessibility (a11y.js), whenever the settings change (Settings, Check my PC)
-    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s)), () => {})
+    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), !s.onboarded && setWelcome('first')), () => {})
+    // Simple words (words.js), Settings → Accessibility (a11y.js) and Settings → Top bar, whenever the settings change
+    // (Settings, Check my PC)
+    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null)), () => {})
     window.addEventListener('iv:settings', words)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)
@@ -567,21 +572,29 @@ export default function App() {
           <button className="nav-arrow" onClick={foldNav} aria-label={navSmall ? 'Show the sidebar' : 'Collapse the sidebar'} aria-pressed={navSmall} title={navSmall ? 'Show the sidebar' : 'Collapse the sidebar'}>
             <NavIcon id="sidebar" className="nav-arrow-icon" />
           </button>
-          <button className="nav-arrow" onClick={() => step(-1)} disabled={!navAt.back} aria-label="Back" title="Back (Alt+Left)">
-            <NavIcon id="back" className="nav-arrow-icon" />
-          </button>
-          <button className="nav-arrow" onClick={() => step(1)} disabled={!navAt.forward} aria-label="Forward" title="Forward (Alt+Right)">
-            <NavIcon id="forward" className="nav-arrow-icon" />
-          </button>
+          {bar('arrows') && (
+            <>
+              <button className="nav-arrow" onClick={() => step(-1)} disabled={!navAt.back} aria-label="Back" title="Back (Alt+Left)">
+                <NavIcon id="back" className="nav-arrow-icon" />
+              </button>
+              <button className="nav-arrow" onClick={() => step(1)} disabled={!navAt.forward} aria-label="Forward" title="Forward (Alt+Right)">
+                <NavIcon id="forward" className="nav-arrow-icon" />
+              </button>
+            </>
+          )}
         </div>
-        <span className="mono brand-text">Infinite Variance</span>
-        <span className="mono dim brand-text">/ Studio</span>
+        {bar('brand') && (
+          <>
+            <span className="mono brand-text">Infinite Variance</span>
+            <span className="mono dim brand-text">/ Studio</span>
+          </>
+        )}
         {info?.testCopy && (
           <span className="mono test-copy">
             Test copy<span className="test-copy-more"> · separate data</span>
           </span>
         )}
-        {info && (
+        {info && (bar('incognito') || incognito) && (
           <button className={`incognito-switch mono ${incognito ? 'on' : ''}`} aria-pressed={incognito} onClick={switchIncognito} title={incognito ? 'Leave Incognito (restarts IV Studio)' : 'Go Incognito: a private space (restarts IV Studio)'}>
             {/* the IV eye: open in the normal space, shut in Incognito */}
             <svg className="incognito-eye" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -602,8 +615,8 @@ export default function App() {
             <span className="incognito-state">{incognito ? 'On' : 'Off'}</span>
           </button>
         )}
-        <AgentPill status={agentStatus} onOpen={() => window.dispatchEvent(new CustomEvent('iv:go', { detail: { page: 'home', section: 'video' } }))} />
-        <ChatButton open={chatOpen && !chatPopped} popped={chatPopped} busy={!!chatStatus?.chat?.busy} onClick={() => toggleChat(!chatOpen)} />
+        {bar('agent') && <AgentPill status={agentStatus} onOpen={() => window.dispatchEvent(new CustomEvent('iv:go', { detail: { page: 'home', section: 'video' } }))} />}
+        {(bar('chat') || (chatOpen && !chatPopped)) && <ChatButton open={chatOpen && !chatPopped} popped={chatPopped} busy={!!chatStatus?.chat?.busy} onClick={() => toggleChat(!chatOpen)} />}
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
@@ -616,8 +629,8 @@ export default function App() {
           {/* on a Mac the cloud comes first; Start ComfyUI stays on Settings → Setup */}
           {comfyDown && info?.platform !== 'darwin' && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           <SetupPill onOpen={() => setPage('cloud')} />
-          {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
-          <BalanceChip />
+          {setup?.remote ? bar('cloudMeter') && <CloudMeter onOpen={() => setPage('cloud')} showCost={bar('cloudCost')} /> : setup && bar('meter') && <SystemMeter notify={notify} />}
+          {bar('balance') && <BalanceChip />}
         </div>
       </header>
       <nav className="nav">
