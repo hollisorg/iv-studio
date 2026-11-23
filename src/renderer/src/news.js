@@ -4,7 +4,8 @@ export const NEWS = [
   {
     version: '1.1.26',
     items: [
-      { text: 'New: when you start a shot or a picture, a window shows it rendering, and you can close it and keep exploring. Bored? Play Frame Hunt in it while you wait. When it’s ready, a drop lands in the corner on any page: click it to crack it open and see what you made.' },
+      { text: 'New: when you start a render anywhere (a shot, a picture, a sequence, Keyframes, a music video, an effect, a song...), a window shows it working, and you can close it and keep exploring. Bored? Play Frame Hunt in it while you wait. When it’s ready, a drop lands in the corner on any page: click it to crack it open and see what you made.' },
+      { text: 'Too much? Settings → Accessibility turns the render window off, and makes the ready drop Simple (nothing moving) or Just a notice. The welcome setup asks too, and Reduce motion keeps it calm.' },
       { text: 'New in Create: One final. Pick it under Shape and size → How and H3 renders one take and finishes it at full size straight away, with no previews to pick from. Choose the final size (2 MP by default) and what runs after it: None, DLSS 5 or SeedVR2.' },
       { text: 'Same as photo: in First / last frame, the Photo tile makes the shot in your first frame’s own shape (a 4:5 portrait stays 4:5) instead of stretching it to 16:9 or another tile.' },
       { text: 'Finishing a take: the Enhancer now has None, for the full-size video exactly as it comes out. The Finish window also says what each setting does, and Sound reads New sound, The take’s sound or My recording.' },

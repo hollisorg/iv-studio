@@ -11,6 +11,7 @@ import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './Settings
 import { startTour } from '../tours'
 import { AccountCard } from './ComfyAccount'
 import { onTopBar, TOP_BAR } from '../topbar'
+import { READY_FX } from '../renders'
 import Credits from './Credits'
 import { openH3Terms, reportMisuse, useH3Terms } from './H3Terms'
 import { SAFEGUARDS_URL } from '../../../service/terms'
@@ -230,7 +231,7 @@ function AccessCard({ n, settings, setSettings, notify }) {
       notify(err.message)
     }
   }
-  const on = ['highContrast', 'reduceMotion', 'focusRings', 'underlineLinks'].filter((k) => settings[k]).length + (settings.textSize && settings.textSize !== 'normal' ? 1 : 0)
+  const on = ['highContrast', 'reduceMotion', 'focusRings', 'underlineLinks'].filter((k) => settings[k]).length + (settings.textSize && settings.textSize !== 'normal' ? 1 : 0) + (settings.renderPopup === false ? 1 : 0) + (settings.readyFx && settings.readyFx !== 'full' ? 1 : 0)
   return (
     <SetCard id="access" n={n} title="Accessibility" sub="Make IV Studio easier to read and to use. Each change applies straight away." aside={on ? <Pill tone="ok">{on} on</Pill> : null}>
       <SetField label="Colour" hint="The colour of buttons, highlights and the artwork. Red is the default.">
@@ -264,6 +265,20 @@ function AccessCard({ n, settings, setSettings, notify }) {
         <SetSwitch checked={settings.underlineLinks} onChange={(v) => set({ underlineLinks: v })}>
           {settings.underlineLinks ? 'On' : 'Off'}
         </SetSwitch>
+      </SetField>
+      <SetField label="Render pop-up" hint="A window with the render’s progress (and Frame Hunt) when you start a render: a shot, a picture, a sequence, a song and so on. Off, IV Studio carries on quietly.">
+        <SetSwitch checked={settings.renderPopup !== false} onChange={(v) => set({ renderPopup: v })}>
+          {settings.renderPopup !== false ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="When a render is ready" hint={READY_FX.find(([id]) => id === (settings.readyFx || 'full'))?.[2]}>
+        <div className="segmented" role="radiogroup" aria-label="When a render is ready">
+          {READY_FX.map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={(settings.readyFx || 'full') === id} className={(settings.readyFx || 'full') === id ? 'on' : ''} onClick={() => set({ readyFx: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
       </SetField>
     </SetCard>
   )

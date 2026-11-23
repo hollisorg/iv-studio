@@ -6,7 +6,8 @@ import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
-import VoiceLines from './VoiceLines'
+import VoiceLines from './VoiceLines'
+import { rebuildProgress, startRender } from '../renders'
 
 // Rebuild: a video the person made (or may rework), read into shots and made again on this PC. IV Studio reads it
 // (cuts, frames, captions, tempo); your agent (Claude Code or Codex, through IV Studio's tools) says what each shot
@@ -319,7 +320,7 @@ export function RebuildProject({ rebuildId, notify, go, openEdit }) {
             {h3.some((s) => !s.take || ['error', 'cancelled'].includes(s.take.status)) && <FirstRenders compact label="Takes" />}
             <div className="row-actions">
               {h3.some((s) => !s.take || ['error', 'cancelled'].includes(s.take.status)) && (
-                <button className="btn btn-primary" disabled={!!busy} onClick={() => act('Starting the renders', () => B().makeShots(r.id))}>
+                <button className="btn btn-primary" disabled={!!busy} onClick={() => act('Starting the renders', () => B().makeShots(r.id).then((next) => (startRender({ kind: 'poll', id: `rebuild:${r.id}`, poll: () => rebuildProgress(r.id), name: r.name, open: { page: 'rebuild', id: r.id }, what: 'take' }), next)))}>
                   {takes.length ? 'Render the rest' : 'Render the shots'}
                 </button>
               )}

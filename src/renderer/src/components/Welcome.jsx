@@ -9,6 +9,7 @@ import { setSimpleWords, simpleWords } from '../words'
 import { highContrast, setContrast } from '../a11y'
 import { applyAccent } from '../accent'
 import AccentPicker from './AccentPicker'
+import { READY_FX } from '../renders'
 import { UsageAsk } from './Privacy'
 import NewsletterBox from './NewsletterBox'
 import { openStarter } from './Starters'
@@ -77,6 +78,8 @@ export default function Welcome({ onClose, go, notify, first }) {
   // the accent colour (accent.js): shown at once, saved with the rest at the end
   const [accent, setAccent] = useState(() => document.documentElement.dataset.accent || 'red')
   const tint = (id) => (setAccent(id), applyAccent(id))
+  // "When a render is ready" (renders.js READY_FX), saved with the rest of the setup
+  const [fx, setFx] = useState('full')
   // you and your agent: names, and the app it runs on; saved with the rest at the end (Settings → You and your agent)
   const [names, setNames] = useState({ userName: '', agentName: '', chatEngine: '' })
   useEffect(() => {
@@ -142,7 +145,7 @@ export default function Welcome({ onClose, go, notify, first }) {
 
   async function finish(target, cloudWizard = false) {
     try {
-      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, highContrast: hc, accent, ...named, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, highContrast: hc, accent, readyFx: fx, ...named, ...(level ? { aiLevel: level } : {}) })
     } catch (e) {
       notify?.(e.message)
     }
@@ -157,7 +160,7 @@ export default function Welcome({ onClose, go, notify, first }) {
   async function skip() {
     if (stepRef.current === 'done') return finish()
     try {
-      await window.ivstudio.hardware.apply({ plainWords: simple, highContrast: hc, accent, ...named, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ plainWords: simple, highContrast: hc, accent, readyFx: fx, ...named, ...(level ? { aiLevel: level } : {}) })
     } catch {}
     window.dispatchEvent(new CustomEvent('iv:settings'))
     onClose()
@@ -305,7 +308,7 @@ export default function Welcome({ onClose, go, notify, first }) {
 
           <div className="welcome-body" key={`b-${step}`} ref={stepBody}>
             {step === 'hello' && <Hello level={level} knows={knows} />}
-            {step === 'you' && <MakeItYours isNew={isNew} names={names} setNames={setNames} agents={agents} simple={simple} words={words} hc={hc} contrast={contrast} accent={accent} tint={tint} />}
+            {step === 'you' && <MakeItYours isNew={isNew} names={names} setNames={setNames} agents={agents} simple={simple} words={words} hc={hc} contrast={contrast} accent={accent} tint={tint} fx={fx} setFx={setFx} />}
             {step === 'pc' && (scanned && rec ? <YourPc rec={rec} scan={data.scan} isNew={isNew} /> : <Scan rows={rows} shown={shown} error={error} retry={scan} />)}
             {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} agents={agents} scan={data.scan} notify={notify} isNew={isNew} />}
             {step === 'get' && rec && <Get isNew={isNew} rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} rescan={scan} notify={notify} />}
@@ -392,7 +395,7 @@ function Hello({ level, knows }) {
 
 // Make it yours: names (you, your agent and the app it runs on), the colour, and the words and contrast switches.
 // For someone new, the agent is called a helper, explained in a sentence, and optional.
-function MakeItYours({ isNew, names, setNames, agents, simple, words, hc, contrast, accent, tint }) {
+function MakeItYours({ isNew, names, setNames, agents, simple, words, hc, contrast, accent, tint, fx, setFx }) {
   const [chatApps, setChatApps] = useState({})
   useEffect(() => {
     window.ivstudio.chat.status().then((s) => setChatApps(s.installed || {}), () => {})
@@ -466,6 +469,17 @@ function MakeItYours({ isNew, names, setNames, agents, simple, words, hc, contra
             <span className="dim small">Grey text turns close to white. Settings → Accessibility also has bigger text and less motion.</span>
           </span>
         </label>
+      </section>
+      <section className="block create-step">
+        <StepHead title="When a render is ready" sub="How IV Studio tells you a shot or picture is done. Settings → Accessibility changes it any time." />
+        <div className="segmented" role="radiogroup" aria-label="When a render is ready">
+          {READY_FX.map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={fx === id} className={fx === id ? 'on' : ''} onClick={() => setFx(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="dim small">{READY_FX.find(([id]) => id === fx)?.[2]}</p>
       </section>
     </>
   )

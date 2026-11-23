@@ -1960,6 +1960,9 @@ app.whenReady().then(() => {
     if ('textSize' in safe && !(safe.textSize in TEXT_SIZES)) delete safe.textSize
     // Settings → Top bar: true or false for the items topbar.js lists, nothing else
     if ('topBar' in safe) safe.topBar = cleanTopBar(safe.topBar)
+    // Settings → Accessibility: the render pop-up, and how a finished render is announced (renders.js)
+    if ('renderPopup' in safe) safe.renderPopup = safe.renderPopup !== false
+    if ('readyFx' in safe && !['full', 'simple', 'off'].includes(safe.readyFx)) delete safe.readyFx
     const s = publicSettings(writeSettings(safe, BASE))
     if ('textSize' in safe) refitZoom()
     if ('comfyUrl' in (patch || {})) makeStudio()
@@ -2034,7 +2037,7 @@ app.whenReady().then(() => {
   })
   // what the wizard chose: the shot defaults and the writer, and that it's been done (so it doesn't open again)
   // plainWords / aiLevel: the welcome's "how much do you know" question (Simple words, words.js)
-  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware, plainWords, highContrast, aiLevel, accent, agentName, userName, chatEngine } = {}) => {
+  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware, plainWords, highContrast, aiLevel, accent, agentName, userName, chatEngine, readyFx } = {}) => {
     const patch = { onboarded: new Date().toISOString() }
     if (['red', 'blue', 'purple', 'orange', 'mono'].includes(accent)) patch.accent = accent
     // you and your agent (Settings → You and your agent)
@@ -2043,6 +2046,8 @@ app.whenReady().then(() => {
     if (['claude', 'codex', 'hermes', 'local'].includes(chatEngine)) patch.chatEngine = chatEngine
     if (typeof plainWords === 'boolean') patch.plainWords = plainWords
     if (typeof highContrast === 'boolean') patch.highContrast = highContrast
+    // the welcome setup's "When a render is ready" (renders.js READY_FX)
+    if (['full', 'simple', 'off'].includes(readyFx)) patch.readyFx = readyFx
     if (['new', 'some', 'lots'].includes(aiLevel)) patch.aiLevel = aiLevel
     if (shotPrefs) patch.shotPrefs = shotPrefs
     // the speed preset (speed.js) the wizard picked; Settings → Your PC can change it afterwards

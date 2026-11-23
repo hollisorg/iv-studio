@@ -10,7 +10,8 @@ import { AspectTiles } from './CreateKit'
 import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter, isWriting } from './PromptWriter'
 import { fileUrl } from './edit/model'
-import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+import { track } from '../renders'
 
 const MAX_LORAS = 4 // sequence.js MAX_SEQUENCE_LORAS
 
@@ -265,7 +266,7 @@ function RetakePanel({ version, onStart, notify }) {
   async function go() {
     setBusy(true)
     try {
-      onStart(await window.ivstudio.sequences.retake(version.seqId, { versionId: version.id, prompt, start: range[0], end: range[1], mode }))
+      onStart(await track(window.ivstudio.sequences.retake(version.seqId, { versionId: version.id, prompt, start: range[0], end: range[1], mode }), { open: { page: 'sequence', id: version.seqId }, what: 'take' }))
     } catch (err) {
       notify(err.message)
     } finally {
@@ -321,7 +322,7 @@ function RenderOutPanel({ version, method, onStart, notify, caps }) {
   async function go() {
     setBusy(true)
     try {
-      onStart(await window.ivstudio.sequences.renderOut(version.seqId, { versionId: version.id, ...opts }))
+      onStart(await track(window.ivstudio.sequences.renderOut(version.seqId, { versionId: version.id, ...opts }), { open: { page: 'sequence', id: version.seqId }, what: 'video' }))
     } catch (err) {
       notify(err.message)
     } finally {
@@ -382,7 +383,7 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
         <span className="dim small seq-row-prompt" title={shot.prompt}>
           {shot.prompt.slice(0, 90)}
         </span>
-        <button className="btn btn-small" disabled={busy || !state?.ready || !shot.prompt.trim() || (pj && !DONE.includes(pj.status))} onClick={() => act(() => window.ivstudio.sequences.huntShot(seqId, i, {}))} title={state?.ready ? '' : `Finish shot ${i} first`}>
+        <button className="btn btn-small" disabled={busy || !state?.ready || !shot.prompt.trim() || (pj && !DONE.includes(pj.status))} onClick={() => act(() => track(window.ivstudio.sequences.huntShot(seqId, i, {}), { open: { page: 'sequence', id: seqId }, what: 'take' }))} title={state?.ready ? '' : `Finish shot ${i} first`}>
           {pj ? 'Hunt again' : i === 0 ? 'Hunt 3 previews' : 'Render preview'}
         </button>
       </div>
@@ -407,7 +408,7 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
               </figure>
             ))}
           </div>
-          <button className="btn btn-primary seq-use" disabled={busy || (fj && !DONE.includes(fj.status))} onClick={() => act(() => window.ivstudio.sequences.finishShot(seqId, i, { candidate: picked }))}>
+          <button className="btn btn-primary seq-use" disabled={busy || (fj && !DONE.includes(fj.status))} onClick={() => act(() => track(window.ivstudio.sequences.finishShot(seqId, i, { candidate: picked }), { open: { page: 'sequence', id: seqId }, what: 'shot' }))}>
             Use #{picked}
           </button>
         </>
@@ -714,7 +715,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
 
       <Step n={4} title="Render" sub={`${shots.length} shot${shots.length === 1 ? '' : 's'} · ${total} s · roughly ${estimateMinutes(total, seq.megapixels)} min${seq.method === 'shots' ? ' in total, plus picking' : ''}`}>
         {seq.method === 'take' ? (
-          <button className="btn btn-primary big" disabled={busy || takeRunning || shots.some((s) => !s.prompt.trim())} onClick={() => act(() => window.ivstudio.sequences.take(sequenceId))}>
+          <button className="btn btn-primary big" disabled={busy || takeRunning || shots.some((s) => !s.prompt.trim())} onClick={() => act(() => track(window.ivstudio.sequences.take(sequenceId), { name: seq.name, open: { page: 'sequence', id: sequenceId }, what: 'take' }))}>
             {takeRunning ? 'Rendering…' : view.versions.some((v) => v.kind === 'take') ? 'Render another take' : 'Render take'}
           </button>
         ) : (

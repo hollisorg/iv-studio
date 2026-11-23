@@ -10,7 +10,8 @@ import { ClipFxDialog } from './ClipFx'
 import { ask } from '../Confirm'
 import Help from '../Help'
 import { askAgent, useAgentName } from '../ChatPanel'
-import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
+import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
+import { editGenProgress, madeFile, startRender } from '../../renders'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share
 // of the two monitors, and the timeline's height.
@@ -412,7 +413,9 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     if (!ok) return
     notify(`Reframing ${m.name} to ${shape}…`, 'info')
     try {
-      const r = await window.ivstudio.reframes.make({ file: m.path, shape, about: m.source?.label || '' })
+      const call = window.ivstudio.reframes.make({ file: m.path, shape, about: m.source?.label || '' })
+      startRender({ kind: 'task', id: `reframe:${clip.id}:${Date.now()}`, promise: call, name: `${m.name} · ${shape}`, open: { page: 'edit', id: edit.id }, what: 'video', media: madeFile })
+      const r = await call
       const e = editRef.current
       const len = clipLength(clip)
       commit({ media: { ...e.media, [r.media.id]: r.media }, clips: e.clips.map((x) => (x.id === clip.id ? { ...x, media: r.media.id, in: m.kind === 'image' ? 0 : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)), out: m.kind === 'image' ? len : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)) + Math.min(len, r.media.duration || len) } : x)) })
@@ -427,7 +430,9 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     const m = edit.media[clip.media]
     notify(`${label}: working on ${m.name}. It takes the clip's place when it's done (a few minutes).`, 'info')
     try {
-      const r = await window.ivstudio.clipfx.run({ fx, file: m.path, start: clip.in || 0, length: clipLength(clip), values, camera, size, name: `${label} · ${m.name}` })
+      const call = window.ivstudio.clipfx.run({ fx, file: m.path, start: clip.in || 0, length: clipLength(clip), values, camera, size, name: `${label} · ${m.name}` })
+      startRender({ kind: 'task', id: `clipfx:${clip.id}:${Date.now()}`, promise: call, name: `${label} · ${m.name}`, open: { page: 'edit', id: edit.id }, what: 'effect', media: madeFile })
+      const r = await call
       if (!r.media) throw new Error(`${label} made no video.`)
       const e = editRef.current
       const len = clipLength(clip)
@@ -460,7 +465,9 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     if (!what) return
     notify(`Cutting out "${what}": about half a minute for a 5 s clip.`, 'info')
     try {
-      const r = await window.ivstudio.cutouts.make({ file: m.path, what, name: m.name })
+      const call = window.ivstudio.cutouts.make({ file: m.path, what, name: m.name })
+      startRender({ kind: 'task', id: `cutout:${clip.id}:${Date.now()}`, promise: call, name: `${m.name} · ${what}`, open: { page: 'edit', id: edit.id }, what: 'video', media: madeFile })
+      const r = await call
       const e = editRef.current
       const all = tracksOf(e)
       const layers = videoLayers(all)
@@ -484,6 +491,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     await window.ivstudio.edits.save(edit.id, { name: edit.name, settings: edit.settings, media: edit.media, clips: edit.clips, tracks: edit.tracks, markers: edit.markers || [] })
     const g = await window.ivstudio.edits.generate(edit.id, spec)
     setGens((all) => [...all.filter((x) => x.id !== g.id), g])
+    startRender({ kind: 'poll', id: `gen:${g.id}`, poll: () => editGenProgress(edit.id, g.id), name: g.name, open: { page: 'edit', id: edit.id }, what: 'shot' })
     notify(`${g.name}: rendering. It shows on the timeline and lands there when it's done.`, 'info')
   }
   async function genClicked(g) {

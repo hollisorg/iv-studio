@@ -4,7 +4,8 @@ import { Step, Choices, DropZone, WorkflowNeeds } from './FlowKit'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
 import { media } from '../media'
-import RemakeFlow from './RemakeFlow'
+import RemakeFlow from './RemakeFlow'
+import { track } from '../renders'
 
 // Remake (the engine since 0.3.0): swap people or change the scene
 const REMAKE_MODES = [
@@ -122,7 +123,7 @@ export default function Replace({ notify, characters, replaceSeed, go }) {
         ...(m === 'faces' && { style: faceStyle }),
         ...(m === 'colours' && { detail })
       }
-      await R.run({ mode: m, video: video.path, pictures: m === 'mask' || m === 'colours' ? [] : pictures.map((p) => p.path), settings, characterId: mode === 'person' ? characterId || null : null })
+      await track(R.run({ mode: m, video: video.path, pictures: m === 'mask' || m === 'colours' ? [] : pictures.map((p) => p.path), settings, characterId: mode === 'person' ? characterId || null : null }), { open: { page: 'replace' }, what: 'video' })
       notify(kind === 'mask' ? 'Mask check started: it shows what will be redrawn, in about a minute.' : 'Started. Replace renders clip by clip; it shows here when it’s done.', 'info')
       await loadHistory()
     } catch (err) {

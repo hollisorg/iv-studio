@@ -102,7 +102,7 @@ await ok('the wiring: Create and Create → Image hand renders to the hub; the g
   assert.match(images, /startRender\(\{ kind: 'image', set: rec, name: rec\.name \}\)/)
   assert.match(images, /iv:image-show/)
   const app = src('../src/renderer/src/App.jsx')
-  assert.match(app, /<RenderHub openShot=\{openShot\} openImage=\{openImage\} \/>/)
+  assert.match(app, /<RenderHub openShot=\{openShot\} openImage=\{openImage\} openTarget=\{openTarget\} notify=\{notify\} \/>/)
   const hub = src('../src/renderer/src/components/RenderHub.jsx')
   assert.match(hub, /const FrameHunt = lazy\(\(\) => import\('\.\/FrameHunt'\)\)/)
   assert.match(hub, /You can close this and keep exploring/)
@@ -113,6 +113,108 @@ await ok('the wiring: Create and Create → Image hand renders to the hub; the g
 await ok('reduce motion stops the drop, the reveal and the progress sheen', () => {
   const css = src('../src/renderer/src/studio.css')
   for (const sel of ['.rm .ready-drop', '.rm .loot-card', '.rm .render-popup-bar span::after']) assert.ok(css.includes(sel), sel)
+})
+
+// ---------- every tool, and the two accessibility settings ----------
+const r2 = await import('../src/renderer/src/renders.js')
+
+await ok('several jobs: done when all are, failed when one is, counted while running', () => {
+  const jobs = { a: { id: 'a', status: 'success' }, b: { id: 'b', status: 'running', progress: { value: 1, max: 4 } } }
+  const s = r2.jobsState(['a', 'b'], jobs)
+  assert.equal(s.stage, 'running')
+  assert.equal(s.done, 1)
+  assert.equal(s.count, 2)
+  assert.equal(r2.jobsState(['a'], jobs).stage, 'done')
+  assert.equal(r2.jobsState(['a', 'c'], { ...jobs, c: { id: 'c', status: 'error', error: 'x' } }).stage, 'failed')
+})
+
+await ok('jobsOf reads every shape a tool returns, and track hands them over unchanged', async () => {
+  assert.deepEqual(r2.jobsOf({ id: 'j', promptId: 'p' }).map((j) => j.id), ['j'])
+  assert.deepEqual(r2.jobsOf([{ id: 'a', promptId: 1 }, { id: 'b', promptId: 2 }]).map((j) => j.id), ['a', 'b'])
+  assert.deepEqual(r2.jobsOf({ started: [{ jobId: 'x' }, { jobId: 'y' }] }), ['x', 'y'])
+  assert.deepEqual(r2.jobsOf({ session: {}, jobs: [{ id: 'z', promptId: 3 }] }).map((j) => j.id), ['z'])
+  assert.deepEqual(r2.jobsOf({ name: 'not a job' }), [])
+  const seen = []
+  globalThis.window = { dispatchEvent: (e) => seen.push(e.detail) }
+  globalThis.CustomEvent = class {
+    constructor(type, o) {
+      this.type = type
+      this.detail = o.detail
+    }
+  }
+  const back = await r2.track(Promise.resolve({ id: 'j', promptId: 'p' }), { open: { page: 'sequence', id: 's1' }, what: 'take' })
+  assert.equal(back.id, 'j', 'the same result back')
+  assert.equal(seen[0].kind, 'jobs')
+  assert.deepEqual(seen[0].open, { page: 'sequence', id: 's1' })
+  await r2.track(Promise.resolve({ name: 'x' }), {})
+  assert.equal(seen.length, 1, 'no jobs, nothing handed over')
+})
+
+await ok('a job’s file name reads as words', () => {
+  assert.equal(r2.jobTitle('kitchen_letter_back_and_forth_ac82a1a9_v1'), 'Kitchen letter back and forth')
+  assert.equal(r2.jobTitle('studio_shoot_keyframes_8b431f28_r1'), 'Studio shoot keyframes')
+  assert.equal(r2.jobTitle(''), '')
+})
+
+await ok('the reveal plays a song as sound, and a task or a tool shows what it made', () => {
+  assert.equal(r2.revealMedia({ kind: 'jobs' }, { job: { outputs: [{ kind: 'audio', path: 'C:/s.mp3' }] } }).kind, 'audio')
+  assert.deepEqual(r2.revealMedia({ kind: 'task' }, { media: { kind: 'video', file: 'f.mp4' } }), { kind: 'video', file: 'f.mp4' })
+  assert.equal(r2.mediaKind('a.png'), 'image')
+  assert.equal(r2.mediaKind('a.flac'), 'audio')
+  assert.equal(r2.mediaKind('a.mp4'), 'video')
+})
+
+await ok('Accessibility settings: the pop-up and how a ready render is announced', () => {
+  r2.setRenderPrefs({})
+  assert.equal(r2.renderPopupOn(), true)
+  assert.equal(r2.readyFx(), 'full')
+  r2.setRenderPrefs({ renderPopup: false, readyFx: 'off' })
+  assert.equal(r2.renderPopupOn(), false)
+  assert.equal(r2.readyFx(), 'off')
+  r2.setRenderPrefs({ readyFx: 'fireworks' })
+  assert.equal(r2.readyFx(), 'full', 'an unknown value is the default')
+  assert.deepEqual(r2.READY_FX.map(([id]) => id), ['full', 'simple', 'off'])
+  const settings = src('../src/renderer/src/components/Settings.jsx')
+  assert.match(settings, /label="Render pop-up"/)
+  assert.match(settings, /label="When a render is ready"/)
+  const welcome = src('../src/renderer/src/components/Welcome.jsx')
+  assert.match(welcome, /title="When a render is ready"/)
+  assert.equal((welcome.match(/readyFx: fx/g) || []).length, 2, 'both ways out of the welcome setup save it')
+  const main = src('../src/main/index.js')
+  assert.match(main, /if \('readyFx' in safe && !\['full', 'simple', 'off'\]\.includes\(safe\.readyFx\)\) delete safe\.readyFx/)
+  assert.match(main, /if \(\['full', 'simple', 'off'\]\.includes\(readyFx\)\) patch\.readyFx = readyFx/)
+  const hub = src('../src/renderer/src/components/RenderHub.jsx')
+  assert.match(hub, /readyFx\(\) === 'off'\) notify/)
+  assert.match(hub, /const calm = reduced\(\) \|\| readyFx\(\) === 'simple'/)
+  assert.ok(src('../src/renderer/src/studio.css').includes('.loot.calm'))
+})
+
+await ok('every tool hands its renders to the hub, and Open it goes back to it', () => {
+  const uses = {
+    'Sequences.jsx': [/track\(window\.ivstudio\.sequences\.take\(/, /track\(window\.ivstudio\.sequences\.retake\(/, /track\(window\.ivstudio\.sequences\.renderOut\(/, /track\(window\.ivstudio\.sequences\.huntShot\(/, /track\(window\.ivstudio\.sequences\.finishShot\(/],
+    'Keyframes.jsx': [/track\(api\(\)\.huntAll\(/, /track\(api\(\)\.hunt\(id, m\.index/, /track\(api\(\)\.finish\(id, 0/, /iv:open-item/],
+    'MusicVideo.jsx': [/track\(api\(\)\.huntAll\(/, /track\(api\(\)\.hunt\(id, i/, /track\(api\(\)\.finish\(id, i/, /iv:open-item/],
+    'AnimalCam.jsx': [/track\(api\(\)\.hunt\(id, \{\}\)/, /track\(api\(\)\.finish\(/, /iv:open-item/],
+    'Projects.jsx': [/track\(P\(\)\.renderScene\(v\.id, null/, /track\(P\(\)\.renderScene\(v\.id, sc\.id/, /track\(P\(\)\.render\(/, /track\(P\(\)\.finish\(/],
+    'Shot.jsx': [/track\(window\.ivstudio\.render\.enhance\(/],
+    'Replace.jsx': [/track\(R\.run\(/],
+    'RemakeFlow.jsx': [/track\(X\.render\(/],
+    'Music.jsx': [/what: 'song'/],
+    'Sounds.jsx': [/what: 'sound'/],
+    'Effects.jsx': [/kind: 'task'/],
+    'Rebuild.jsx': [/poll: \(\) => rebuildProgress\(r\.id\)/],
+    'Sizzle.jsx': [/poll: \(\) => sizzleProgress\(s\.id\)/],
+    'edit/Editor.jsx': [/poll: \(\) => editGenProgress\(edit\.id, g\.id\)/, /id: `reframe:/, /id: `clipfx:/, /id: `cutout:/]
+  }
+  for (const [file, res] of Object.entries(uses)) {
+    const text = src(`../src/renderer/src/components/${file}`)
+    for (const re of res) assert.match(text, re, `${file}: ${re}`)
+  }
+  assert.equal((src('../src/renderer/src/components/Shot.jsx').match(/track\(window\.ivstudio\.render\.finish\(/g) || []).length, 3, 'the three Finish panels')
+  const app = src('../src/renderer/src/App.jsx')
+  assert.match(app, /const openTarget = \(t = \{\}\) =>/)
+  for (const page of ['shot', 'image', 'sequence', 'project', 'sizzle', 'rebuild', 'edit']) assert.ok(app.includes(`t.page === '${page}'`), page)
+  assert.match(app, /iv:open-item/)
 })
 
 console.log(`\n${n - failed} of ${n} passed`)

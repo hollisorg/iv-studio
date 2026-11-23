@@ -13,7 +13,8 @@ import { LoraPicker } from './Loras'
 import { askAgent, useAgentName } from './ChatPanel'
 import { CinemaChips, CinemaPicker, LookbookBox, PromptTools, useSlate } from './CraftKit'
 import { SPEEDS } from '../../../service/speed'
-import { FirstRenders, useFirstRenders } from './Speed'
+import { FirstRenders, useFirstRenders } from './Speed'
+import { track } from '../renders'
 
 // Projects: a short film made step by step (src/service/productions.js). The list of films, and one film as a
 // six-step wizard: Idea, Story, Cast and places, Storyboard, Film it, Watch. The storyboard is the heart of it:
@@ -906,7 +907,7 @@ function Board({ v, act, characters, openShot, setStep, mode, filmShotToCreate }
                 </button>
               ))}
             </div>
-            <button className="btn btn-primary" disabled={!toFilm.length || !!v.filming} onClick={() => act(() => P().renderScene(v.id, null, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
+            <button className="btn btn-primary" disabled={!toFilm.length || !!v.filming} onClick={() => act(() => track(P().renderScene(v.id, null, { previews, fromSketch }), { open: { page: 'project', id: v.id }, what: 'shot' }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
               {v.filming ? 'Getting the shots ready…' : toFilm.length ? `Film ${toFilm.length === all.length ? 'every shot' : `the ${plural(toFilm.length, 'shot')} left`} · about ${estimate(toFilm, previews)} min` : 'Every shot is filmed'}
             </button>
           </div>
@@ -987,7 +988,7 @@ function Board({ v, act, characters, openShot, setStep, mode, filmShotToCreate }
             <span className="mono small dim">{clock(sc.shots.reduce((n, s) => n + s.seconds, 0))}</span>
             {sc.stale && <span className="mono small pink">script changed</span>}
             {film && sc.shots.some((s) => s.prompt && !s.projectId) && (
-              <button className="link-btn mono small" onClick={() => act(() => P().renderScene(v.id, sc.id, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
+              <button className="link-btn mono small" onClick={() => act(() => track(P().renderScene(v.id, sc.id, { previews, fromSketch }), { open: { page: 'project', id: v.id }, what: 'shot' }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
                 Film this scene
               </button>
             )}
@@ -1340,7 +1341,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, toCreate,
                 </button>
               )}
               {sh.prompt && !['rendering', 'finishing'].includes(st.status) && (
-                <button className="btn btn-small btn-primary" onClick={() => act(() => P().render(v.id, sh.id, { previews, fromSketch }), `Filming ${previews} takes.`)}>
+                <button className="btn btn-small btn-primary" onClick={() => act(() => track(P().render(v.id, sh.id, { previews, fromSketch }), { open: { page: 'project', id: v.id }, what: 'shot' }), `Filming ${previews} takes.`)}>
                   {sh.projectId ? 'Film new takes' : 'Film this shot'}
                 </button>
               )}
@@ -1410,7 +1411,7 @@ function Takes({ v, sh, act, onClose, onOpen }) {
           {(st.candidates || []).map((c) => (
             <figure key={c.n} className={st.picked === c.n ? 'on' : ''}>
               <video src={src(c)} controls loop playsInline preload="metadata" style={{ aspectRatio: ratio(v.aspect) }} />
-              <button className="btn btn-primary" disabled={st.status === 'finishing'} onClick={() => act(() => P().finish(v.id, sh.id, c.n), `Finishing take ${c.n} in full quality.`).then(onClose)}>
+              <button className="btn btn-primary" disabled={st.status === 'finishing'} onClick={() => act(() => track(P().finish(v.id, sh.id, c.n), { open: { page: 'project', id: v.id }, what: 'shot' }), `Finishing take ${c.n} in full quality.`).then(onClose)}>
                 Use take {c.n}
               </button>
             </figure>

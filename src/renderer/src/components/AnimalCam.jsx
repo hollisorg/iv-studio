@@ -7,7 +7,8 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
 import TileDelete from './TileDelete'
-import './animalcam.css'
+import './animalcam.css'
+import { track } from '../renders'
 
 // Animal Cam (src/service/animalcam.js): animal videos that look filmed on a phone, in seven steps. Each step saves as
 // you go; the checklist on the last step points back at the step that controls each miss. The parts borrow the Music
@@ -60,6 +61,12 @@ const when = (t) => new Date(t).toLocaleString(undefined, { month: 'short', day:
 
 export default function AnimalCam(props) {
   const [open, setOpen] = useState(null)
+  // Open it from the render hub's reveal (App's openTarget): this page with that one open
+  useEffect(() => {
+    const pick = (e) => e.detail?.page === 'animalcam' && e.detail.id && setOpen(e.detail.id)
+    window.addEventListener('iv:open-item', pick)
+    return () => window.removeEventListener('iv:open-item', pick)
+  }, [])
   return open ? <Wizard key={open} id={open} back={() => setOpen(null)} {...props} /> : <List openOne={setOpen} {...props} />
 }
 
@@ -600,11 +607,11 @@ function Film({ v, id, save, run, busy, notify, live, go, openEdit }) {
       </label>
       <FirstRenders compact label="Takes" />
       <div className="ac-row">
-        <button className="btn btn-primary" disabled={!!busy || s.busy || !!misses.length} onClick={() => run('hunt', () => api().hunt(id, {}))}>
+        <button className="btn btn-primary" disabled={!!busy || s.busy || !!misses.length} onClick={() => run('hunt', () => track(api().hunt(id, {}), { open: { page: 'animalcam', id }, what: 'video' }))}>
           {s.busy ? 'Rendering…' : s.previews ? 'Hunt new takes' : 'Film it: hunt takes'}
         </button>
         {misses.length > 0 && (
-          <button className="link-btn mono small" disabled={!!busy || s.busy} onClick={() => run('hunt', () => api().hunt(id, { anyway: true }))}>
+          <button className="link-btn mono small" disabled={!!busy || s.busy} onClick={() => run('hunt', () => track(api().hunt(id, { anyway: true }), { open: { page: 'animalcam', id }, what: 'video' }))}>
             Film it anyway ({misses.length} to fix)
           </button>
         )}
@@ -628,7 +635,7 @@ function Film({ v, id, save, run, busy, notify, live, go, openEdit }) {
               </figure>
             ))}
           </div>
-          <button className="btn btn-primary" disabled={!!busy || (fj && !DONE.includes(fj.status))} onClick={() => run('finish', () => api().finish(id, { candidate: picked }))}>
+          <button className="btn btn-primary" disabled={!!busy || (fj && !DONE.includes(fj.status))} onClick={() => run('finish', () => track(api().finish(id, { candidate: picked }), { open: { page: 'animalcam', id }, what: 'video' }))}>
             {fj && !DONE.includes(fj.status) ? 'Finishing…' : `Finish take #${picked}`}
           </button>
         </div>

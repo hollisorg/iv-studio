@@ -7,7 +7,8 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
 import { usePeaks, Wave } from './edit/thumbs'
-import TileDelete from './TileDelete'
+import TileDelete from './TileDelete'
+import { track } from '../renders'
 
 // Music video (src/service/musicvideo.js): a song cut into scenes on its bars, each scene an H3 shot that sings or
 // plays along to its own stretch of the song, then the finished scenes laid over the song as an edit.
@@ -19,6 +20,12 @@ const api = () => window.ivstudio.musicVideos
 
 export default function MusicVideo(props) {
   const [open, setOpen] = useState(null)
+  // Open it from the render hub's reveal (App's openTarget): this page with that one open
+  useEffect(() => {
+    const pick = (e) => e.detail?.page === 'musicvideo' && e.detail.id && setOpen(e.detail.id)
+    window.addEventListener('iv:open-item', pick)
+    return () => window.removeEventListener('iv:open-item', pick)
+  }, [])
   return open ? <Editor key={open} id={open} back={() => setOpen(null)} {...props} /> : <List openOne={setOpen} {...props} />
 }
 
@@ -271,7 +278,7 @@ function Editor({ id, back, notify, characters = [], jobs: live = {}, openEdit }
           <button className="btn btn-small" disabled={!!busy || !noPrompt} onClick={() => run('write', () => api().write(id, {}).then((r) => r.video))} title="The writer chosen in Settings writes every scene that has no prompt yet">
             {busy === 'write' ? 'Writing…' : noPrompt ? `✦ Write ${noPrompt} scene${noPrompt === 1 ? '' : 's'}` : '✦ All written'}
           </button>
-          <button className="btn btn-small" disabled={!!busy || !toHunt} onClick={() => run('huntAll', () => api().huntAll(id, {}))} title="Hunt takes for every written scene that isn't finished, one after another on this PC">
+          <button className="btn btn-small" disabled={!!busy || !toHunt} onClick={() => run('huntAll', () => track(api().huntAll(id, {}), { open: { page: 'musicvideo', id }, what: 'video' }))} title="Hunt takes for every written scene that isn't finished, one after another on this PC">
             {busy === 'huntAll' ? 'Starting…' : `Hunt ${toHunt || ''} scene${toHunt === 1 ? '' : 's'}`.replace('  ', ' ')}
           </button>
           <button className="btn btn-small btn-primary" disabled={!!busy || !v.finished} onClick={assemble} title="The finished scenes over the song, as an edit">
@@ -614,7 +621,7 @@ function ScenePanel({ v, s, i, n, setSel, live, busy, run, edit, id, notify, fac
         <button className="btn btn-small" disabled={!!busy} onClick={() => run('write', () => api().write(id, { only: [i] }).then((r) => r.video))}>
           {busy === 'write' ? 'Writing…' : s.prompt.trim() ? '✦ Write it again' : '✦ Write'}
         </button>
-        <button className="btn btn-primary" disabled={!!busy || !s.prompt.trim() || s.state.busy} onClick={() => run('hunt', () => api().hunt(id, i, {}))}>
+        <button className="btn btn-primary" disabled={!!busy || !s.prompt.trim() || s.state.busy} onClick={() => run('hunt', () => track(api().hunt(id, i, {}), { open: { page: 'musicvideo', id }, what: 'video' }))}>
           {s.state.busy ? 'Rendering…' : pj ? 'Hunt new takes' : 'Hunt takes'}
         </button>
         <span className="mv-scene2-tools">
@@ -646,7 +653,7 @@ function ScenePanel({ v, s, i, n, setSel, live, busy, run, edit, id, notify, fac
               </figure>
             ))}
           </div>
-          <button className="btn btn-primary" disabled={!!busy || (fj && !DONE.includes(fj.status))} onClick={() => run('finish', () => api().finish(id, i, { candidate: picked }))}>
+          <button className="btn btn-primary" disabled={!!busy || (fj && !DONE.includes(fj.status))} onClick={() => run('finish', () => track(api().finish(id, i, { candidate: picked }), { open: { page: 'musicvideo', id }, what: 'video' }))}>
             {fj && !DONE.includes(fj.status) ? 'Finishing…' : `Finish take #${picked}`}
           </button>
         </div>

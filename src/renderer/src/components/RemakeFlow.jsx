@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
 import { Step } from './FlowKit'
-import VoiceLines from './VoiceLines'
+import VoiceLines from './VoiceLines'
+import { track } from '../renders'
 
 // Replace's Remake engine (remake.js): swap people or change the scene. IV Studio paints a frame of each shot, the
 // person approves them, the writer writes the prompt, and Remake renders with the source's motion and soundtrack.
@@ -126,7 +127,7 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
       if (prompt && prompt !== session.prompt) await X.setPrompt(session.id, prompt)
       // a voice chosen after painting goes on the session first
       if (kind === 'swap' && JSON.stringify((session.people || []).map((p) => p.voiceId || null)) !== JSON.stringify(people.map((p) => (voiceReady ? p.voiceId || null : null)))) await X.paint(session.id, { ...paintInput(), only: [] })
-      const r = await X.render(session.id, { takes, characterId: kind === 'swap' && useLora && people.length === 1 ? face?.characterId : null, voice: true, h3voice: voiced && voiceReady && h3voice })
+      const r = await track(X.render(session.id, { takes, characterId: kind === 'swap' && useLora && people.length === 1 ? face?.characterId : null, voice: true, h3voice: voiced && voiceReady && h3voice }), { open: { page: 'replace' }, what: 'video' })
       setSession(r.session)
       notify(`Started ${r.jobs.length === 1 ? 'the remake' : `${r.jobs.length} takes`}: it shows under Runs when it’s done (a few minutes each).`, 'info')
       onStarted?.()

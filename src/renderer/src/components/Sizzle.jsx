@@ -5,7 +5,8 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
-import { fileUrl } from './edit/model'
+import { fileUrl } from './edit/model'
+import { sizzleProgress, startRender } from '../renders'
 
 // Website sizzle: a web address in, a promo film out. IV Studio captures the site; your agent writes the
 // storyboard from it; you approve it; IV Studio makes the H3 shots, pictures, music and voice-over on this
@@ -228,7 +229,7 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
                 </button>
               )}
               {s.status === 'approved' && (
-                <button className="btn btn-primary" disabled={!!busy} onClick={() => act('Starting the renders', () => Z().makeAssets(s.id))}>
+                <button className="btn btn-primary" disabled={!!busy} onClick={() => act('Starting the renders', () => Z().makeAssets(s.id).then((next) => (startRender({ kind: 'poll', id: `sizzle:${s.id}`, poll: () => sizzleProgress(s.id), name: s.name, open: { page: 'sizzle', id: s.id }, what: 'video' }), next)))}>
                   Make the pieces
                 </button>
               )}

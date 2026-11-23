@@ -54,6 +54,7 @@ import { RebuildList, RebuildProject } from './components/Rebuild'
 import { NavIcon } from './components/NavIcons'
 import { onTopBar } from './topbar'
 import RenderHub from './components/RenderHub'
+import { setRenderPrefs } from './renders'
 
 // The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
 // Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
@@ -363,6 +364,19 @@ export default function App() {
     setPage('create')
     if (setId) setTimeout(() => window.dispatchEvent(new CustomEvent('iv:image-show', { detail: { id: setId } })), 150)
   }
+  // where the render hub's Open it goes: a page, and the item on it (tools that list several listen for iv:open-item)
+  const openTarget = (t = {}) => {
+    if (!t.page) return
+    if (t.page === 'shot') return openShot(t.id)
+    if (t.page === 'image') return openImage(t.id)
+    if (t.page === 'sequence') return openSequence(t.id)
+    if (t.page === 'project') return openProject(t.id)
+    if (t.page === 'sizzle') return t.id ? openSizzle(t.id) : learnGo('sizzle')
+    if (t.page === 'rebuild') return t.id ? openRebuild(t.id) : learnGo('rebuild')
+    if (t.page === 'edit') return openEdit(t.id)
+    learnGo({ page: t.page, section: ['music', 'sounds', 'lines', 'voices'].includes(t.page) ? 'audio' : 'video' })
+    if (t.id) setTimeout(() => window.dispatchEvent(new CustomEvent('iv:open-item', { detail: t })), 250)
+  }
   const openProject = (id) => {
     setProductionId(id)
     switchSection('video')
@@ -513,10 +527,10 @@ export default function App() {
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), !s.onboarded && setWelcome('first')), () => {})
+    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s), !s.onboarded && setWelcome('first')), () => {})
     // Simple words (words.js), Settings → Accessibility (a11y.js) and Settings → Top bar, whenever the settings change
     // (Settings, Check my PC)
-    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null)), () => {})
+    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), setTopBar(s.topBar || null), setRenderPrefs(s)), () => {})
     window.addEventListener('iv:settings', words)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)
@@ -733,7 +747,7 @@ export default function App() {
       {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}
       <TourHost />
       {welcome && <Welcome first={welcome === 'first'} onClose={() => (setWelcome(null), recheck?.())} go={setPage} notify={notify} />}
-      <RenderHub openShot={openShot} openImage={openImage} />
+      <RenderHub openShot={openShot} openImage={openImage} openTarget={openTarget} notify={notify} />
       {toast && (
         <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>
           {toast.text}

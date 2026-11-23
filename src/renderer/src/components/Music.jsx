@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
 import QuickBar, { showBelow } from './AudioQuick'
 import { ask } from './Confirm'
-import { ListSearch, MoreMenu, Track } from './AudioKit'
+import { ListSearch, MoreMenu, Track } from './AudioKit'
+import { startRender } from '../renders'
 
 const M = () => window.ivstudio.music
 const DONE = ['success', 'error', 'cancelled']
@@ -357,7 +358,8 @@ export function MusicPage({ notify, sendToCreate, openEdit, go }) {
   async function make() {
     setBusy(true)
     try {
-      await M().create({ engine, ...form, seconds: Number(form.seconds), seed: form.seed === '' ? null : Number(form.seed), bpm: Number(form.bpm) })
+      const song = await M().create({ engine, ...form, seconds: Number(form.seconds), seed: form.seed === '' ? null : Number(form.seed), bpm: Number(form.bpm) })
+      if (song?.jobId) startRender({ kind: 'jobs', jobs: [song.jobId], name: song.name, open: { page: 'music', id: song.id }, what: 'song' })
       set({ seed: '' })
       reload()
     } catch (err) {

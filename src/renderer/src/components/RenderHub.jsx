@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { fileUrl } from './edit/model'
-import { imageState, POPUP_KEY, renderPopupOn as popupOn, revealMedia, videoState } from '../renders'
+import { imageState, jobsState, jobTitle, readyFx, readyWords, renderPopupOn as popupOn, revealMedia, setRenderPrefs, videoState } from '../renders'
 import { reducedMotion } from '../a11y'
 
 // The game only loads when someone presses Play
@@ -9,7 +9,7 @@ const reduced = reducedMotion
 
 // The render hub, mounted once in App: a pop-up when a render starts (startRender in renders.js), a "ready" drop in the
 // corner when it's done, on any page, and the reveal when that drop is clicked.
-export default function RenderHub({ openShot, openImage }) {
+export default function RenderHub({ openShot, openImage, openTarget, notify }) {
   const [renders, setRenders] = useState([]) // [{ key, kind, name, projectId, job, set, state, at }]
   const [popup, setPopup] = useState(null) // the key of the render the pop-up shows
   const [drops, setDrops] = useState([]) // keys ready to open
@@ -22,11 +22,20 @@ export default function RenderHub({ openShot, openImage }) {
   useEffect(() => {
     const start = (e) => {
       const d = e.detail || {}
-      const key = d.kind === 'image' ? `image:${d.set?.id}` : `video:${d.job?.id}`
-      if (!d.set?.id && !d.job?.id) return
-      if (d.job?.id) window.ivstudio.jobs.watch([d.job.id]).catch(() => {})
-      const r = { key, kind: d.kind, name: d.name || d.job?.name || d.set?.name || 'Your render', projectId: d.projectId || d.job?.projectId || null, job: d.job || null, set: d.set || null, at: Date.now() }
-      r.state = r.kind === 'image' ? imageState(r.set) : videoState(r.job, jobs.current)
+      const ids = (d.jobs || []).map((j) => (typeof j === 'string' ? j : j?.id)).filter(Boolean)
+      for (const j of d.jobs || []) if (j && typeof j === 'object' && j.id) jobs.current[j.id] = { ...j, ...(jobs.current[j.id] || {}) }
+      const key = d.kind === 'image' ? `image:${d.set?.id}` : d.kind === 'jobs' ? `jobs:${ids.join(',')}` : d.kind === 'task' || d.kind === 'poll' ? `${d.kind}:${d.id || Date.now()}` : `video:${d.job?.id}`
+      if (d.kind === 'image' ? !d.set?.id : d.kind === 'jobs' ? !ids.length : d.kind === 'task' ? !d.promise : d.kind === 'poll' ? !d.poll : !d.job?.id) return
+      const watch = d.job?.id ? [d.job.id] : ids
+      if (watch.length) window.ivstudio.jobs.watch(watch).catch(() => {})
+      const r = { key, kind: d.kind, what: d.what || null, open: d.open || null, ids, poll: d.poll || null, name: d.name || d.set?.name || jobTitle((d.jobs || []).find((j) => j && typeof j === 'object')?.name || d.job?.name) || 'Your render', unnamed: !d.name && !d.set?.name, projectId: d.projectId || d.job?.projectId || null, job: d.job || null, set: d.set || null, at: Date.now() }
+      r.state = stateOf(r)
+      // a call that returns when it's done (Effects): done, or failed, when it does
+      if (d.kind === 'task')
+        Promise.resolve(d.promise).then(
+          (result) => setRenders((all) => all.map((x) => (x.key === key ? { ...x, state: { stage: 'done', pct: 100, media: d.media?.(result) || null } } : x))),
+          (err) => setRenders((all) => all.map((x) => (x.key === key ? { ...x, state: { stage: 'failed', error: err?.message || 'It stopped.' } } : x)))
+        )
       setRenders((all) => [r, ...all.filter((x) => x.key !== key)])
       if (popupOn()) setPopup(key)
       // a shot without a name of its own takes its project's (made from the prompt)
@@ -50,10 +59,30 @@ export default function RenderHub({ openShot, openImage }) {
         jobs.current[j.id] = j
         // a One final's finish: watch it too
         if (j.autoFinishJob && !jobs.current[j.autoFinishJob]) window.ivstudio.jobs.watch([j.autoFinishJob]).catch(() => {})
-        setRenders((all) => all.map((r) => (r.kind === 'video' && (r.job?.id === j.id || r.job?.autoFinishJob === j.id) ? update(r, r.job?.id === j.id ? j : r.job) : r)))
+        setRenders((all) =>
+          all.map((r) =>
+            r.kind === 'video' && (r.job?.id === j.id || r.job?.autoFinishJob === j.id)
+              ? update(r, r.job?.id === j.id ? j : r.job)
+              : r.kind === 'jobs' && r.ids.some((id) => id === j.id || jobs.current[id]?.autoFinishJob === j.id)
+                ? { ...r, state: stateOf(r), ...(r.unnamed && r.name === 'Your render' && jobTitle(j.name) ? { name: jobTitle(j.name) } : {}) }
+                : r
+          )
+        )
       }),
     []
   )
+  // a tool that runs its own steps (Rebuild, Sizzle): asked every three seconds until it says done
+  const asking = renders.some((r) => r.kind === 'poll' && !['done', 'failed'].includes(r.state.stage))
+  useEffect(() => {
+    if (!asking) return
+    const t = setInterval(async () => {
+      for (const r of live.current.filter((x) => x.kind === 'poll' && !['done', 'failed'].includes(x.state.stage))) {
+        const s = await Promise.resolve(r.poll()).catch(() => null)
+        if (s) setRenders((all) => all.map((x) => (x.key === r.key ? { ...x, state: s } : x)))
+      }
+    }, 3000)
+    return () => clearInterval(t)
+  }, [asking])
   // picture sets: asked every two seconds while one is being made
   const making = renders.some((r) => r.kind === 'image' && !['done', 'failed'].includes(r.state.stage))
   useEffect(() => {
@@ -66,9 +95,10 @@ export default function RenderHub({ openShot, openImage }) {
     }, 2000)
     return () => clearInterval(t)
   }, [making])
+  const stateOf = (r) => (r.kind === 'image' ? imageState(r.set) : r.kind === 'jobs' ? jobsState(r.ids, jobs.current) : r.kind === 'task' || r.kind === 'poll' ? r.state || { stage: 'running', pct: 0 } : videoState(r.job, jobs.current))
   const update = (r, job, set) => {
     const next = { ...r, ...(job ? { job } : {}), ...(set ? { set } : {}) }
-    next.state = next.kind === 'image' ? imageState(next.set) : videoState(next.job, jobs.current)
+    next.state = stateOf(next)
     return next
   }
 
@@ -78,7 +108,9 @@ export default function RenderHub({ openShot, openImage }) {
     for (const r of renders) {
       if (r.state.stage === 'done' && !seen.current.has(r.key)) {
         seen.current.add(r.key)
-        setDrops((d) => [r.key, ...d.filter((k) => k !== r.key)].slice(0, 4))
+        // Just a notice (Settings → Accessibility): a short message, no drop
+        if (readyFx() === 'off') notify?.(`${readyWords(r)}: ${r.name}.`, 'ok')
+        else setDrops((d) => [r.key, ...d.filter((k) => k !== r.key)].slice(0, 4))
       }
     }
   }, [renders])
@@ -88,7 +120,8 @@ export default function RenderHub({ openShot, openImage }) {
     setOpening(null)
     setDrops((d) => d.filter((k) => k !== r.key))
     setPopup(null)
-    if (r.kind === 'image') openImage(r.set?.id)
+    if (r.open) openTarget(r.open)
+    else if (r.kind === 'image') openImage(r.set?.id)
     else openShot(r.projectId)
   }
   const shown = popup && byKey(popup)
@@ -101,13 +134,13 @@ export default function RenderHub({ openShot, openImage }) {
             const r = byKey(k)
             if (!r) return null
             return (
-              <div key={k} className="ready-drop">
+              <div key={k} className={`ready-drop ${readyFx() === 'simple' ? 'simple' : ''}`}>
                 <button className="ready-drop-open" onClick={() => (setPopup(null), setOpening(k))}>
                   <span className="ready-drop-crate" aria-hidden="true">
                     <CrateIcon />
                   </span>
                   <span className="ready-drop-text">
-                    <span className="mono ready-drop-kicker">{r.kind === 'image' ? 'Pictures ready' : 'Your shot is ready'}</span>
+                    <span className="mono ready-drop-kicker">{readyWords(r)}</span>
                     <span className="ready-drop-name">{r.name}</span>
                     <span className="mono small dim">Click to open it</span>
                   </span>
@@ -143,20 +176,22 @@ function RenderPopup({ r, onClose, onOpen }) {
         : s.stage === 'finishing'
           ? `Finishing at full size${s.pct ? ` · ${s.pct}%` : s.position ? ` · ${s.position} in the queue` : '…'}`
           : s.stage === 'running'
-            ? `Rendering${s.pct ? ` · ${s.pct}%` : '…'}`
+            ? `${s.label || 'Rendering'}${s.count > 1 ? ` · ${s.done} of ${s.count} done` : ''}${s.pct ? ` · ${s.pct}%` : '…'}`
             : `Waiting its turn${s.position ? ` · ${s.position} in the queue` : '…'}`
   const pct = s.stage === 'done' ? 100 : s.stage === 'finishing' ? 50 + s.pct / 2 : r.job?.plan?.autoFinish ? s.pct / 2 : s.pct
-  const keep = (v) => {
+  // the same switch as Settings → Accessibility → Render pop-up
+  const keep = async (v) => {
     setOff(v)
     try {
-      localStorage.setItem(POPUP_KEY, v ? 'off' : 'on')
+      setRenderPrefs(await window.ivstudio.settings.set({ renderPopup: !v }))
+      window.dispatchEvent(new CustomEvent('iv:settings'))
     } catch {}
   }
   return (
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal render-popup ${s.stage}`} role="dialog" aria-modal="true" aria-labelledby="render-popup-title">
         <div className="modal-head">
-          <span className="mono render-popup-kicker">{r.kind === 'image' ? 'Making pictures' : 'Rendering'}</span>
+          <span className="mono render-popup-kicker">{r.kind === 'image' ? 'Making pictures' : r.what === 'song' ? 'Making your song' : r.what === 'sound' ? 'Making your sound' : 'Rendering'}</span>
           <span className="spacer" />
           <button className="lora-chip-x" aria-label="Close" onClick={onClose}>
             ×
@@ -204,7 +239,9 @@ function RenderPopup({ r, onClose, onOpen }) {
 
 // The reveal: a crate drops in, shakes, bursts open in light, and the finished render rises out of it
 function LootReveal({ r, onClose, onGo }) {
-  const [phase, setPhase] = useState(reduced() ? 'open' : 'drop')
+  // Simple (Settings → Accessibility) and reduced motion go straight to the card
+  const calm = reduced() || readyFx() === 'simple'
+  const [phase, setPhase] = useState(calm ? 'open' : 'drop')
   useEffect(() => {
     if (phase === 'open') return
     const t = [setTimeout(() => setPhase('shake'), 450), setTimeout(() => setPhase('burst'), 1350), setTimeout(() => setPhase('open'), 1900)]
@@ -218,7 +255,7 @@ function LootReveal({ r, onClose, onGo }) {
   const media = revealMedia(r, r.state, r.set)
   const src = media?.file ? fileUrl(media.file) : media?.url
   return (
-    <div className={`loot ${phase}`} role="dialog" aria-modal="true" aria-label={`${r.name} is ready`} onPointerDown={(e) => e.target === e.currentTarget && phase === 'open' && onClose()}>
+    <div className={`loot ${phase} ${calm ? 'calm' : ''}`} role="dialog" aria-modal="true" aria-label={`${r.name} is ready`} onPointerDown={(e) => e.target === e.currentTarget && phase === 'open' && onClose()}>
       <div className="loot-rays" aria-hidden="true" />
       <div className="loot-stage">
         <div className="loot-crate" aria-hidden="true">
@@ -228,10 +265,13 @@ function LootReveal({ r, onClose, onGo }) {
           </span>
         </div>
         <div className="loot-card">
-          <span className="mono loot-kicker">{r.kind === 'image' ? 'Pictures ready' : 'Your shot is ready'}</span>
-          <div className="loot-media">{src ? media.kind === 'image' ? <img src={src} alt="" /> : <video src={src} muted autoPlay loop playsInline /> : <span className="mono dim">Open it to see</span>}</div>
+          <span className="mono loot-kicker">{readyWords(r)}</span>
+          <div className={`loot-media ${media?.kind === 'audio' ? 'audio' : ''}`}>
+            {src ? media.kind === 'image' ? <img src={src} alt="" /> : media.kind === 'audio' ? <audio src={src} controls autoPlay /> : <video src={src} muted autoPlay loop playsInline /> : <span className="mono dim">Open it to see</span>}
+          </div>
           <h2 className="loot-name">{r.name}</h2>
           {media?.more > 0 && <span className="small dim">and {media.more} more inside</span>}
+          {r.state?.note && <span className="small dim">{r.state.note}</span>}
           <div className="loot-actions">
             <button className="btn btn-small" onClick={onClose}>
               Later

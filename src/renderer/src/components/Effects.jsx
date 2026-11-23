@@ -3,7 +3,8 @@ import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
 import { Step, Choices, DropZone, Summary, SummaryDock, SummaryFrame, StageDrop, WorkflowNeeds } from './FlowKit'
 import { Field } from './edit/ClipFx'
-import Stage from './Stage'
+import Stage from './Stage'
+import { mediaKind, renderPopupOn, startRender } from '../renders'
 
 // Workflows → Effects: a photo becomes a short clip, three ways (Freefield's apps, freefield.js): an effect from a
 // gallery (Wan 2.1 and its effect LoRAs), a transformation that keeps the face (Flux 3 Klein + LTX-2.5), or a
@@ -57,10 +58,23 @@ export default function Effects({ notify, go, openEdit }) {
   }
   async function run() {
     setWorking((n) => n + 1)
-    notify(`${meta.label}: working. It lands below when it's done (a few minutes).`, 'info')
+    // the render pop-up while it works, and the ready drop when it's done (RenderHub.jsx)
+    if (!renderPopupOn()) notify(`${meta.label}: working. It lands below when it's done (a few minutes).`, 'info')
     try {
-      await window.ivstudio.clipfx.run({ fx: mode, file: photo, last: need2 ? last : null, values })
-      notify(`${meta.label} done.`, 'info')
+      const call = window.ivstudio.clipfx.run({ fx: mode, file: photo, last: need2 ? last : null, values })
+      startRender({
+        kind: 'task',
+        id: `effects:${mode}:${Date.now()}`,
+        promise: call,
+        name: meta.label,
+        open: { page: 'effects' },
+        what: 'effect',
+        media: (r) => {
+          const main = r?.files?.find((x) => x.kind === 'video') || r?.files?.[0]
+          return main ? { kind: mediaKind(main.file), file: main.file } : null
+        }
+      })
+      await call
     } catch (err) {
       notify(err.message)
     } finally {

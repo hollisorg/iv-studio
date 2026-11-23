@@ -19340,6 +19340,27 @@ html.chat-window body {
   transition: box-shadow 0.4s ease;
 }
 
+/* Settings → Accessibility → When a render is ready → Simple: the drop and the card, nothing moving */
+.ready-drop.simple,
+.ready-drop.simple::before,
+.ready-drop.simple .ready-drop-crate,
+.loot.calm,
+.loot.calm .loot-rays,
+.loot.calm .loot-card {
+  animation: none !important;
+  transition: none !important;
+}
+.ready-drop.simple::before,
+.loot.calm .loot-rays,
+.loot.calm .loot-crate,
+.loot.calm .loot-sparks {
+  display: none;
+}
+.loot.calm.open .loot-card {
+  opacity: 1;
+  transform: none;
+}
+
 /* Reduce motion: the same steps, nothing moving */
 .rm .render-popup-bar span::after,
 .rm .ready-drop,

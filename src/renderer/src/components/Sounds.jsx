@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
 import QuickBar, { showBelow } from './AudioQuick'
 import { ask } from './Confirm'
-import { ListSearch, MoreMenu, Track } from './AudioKit'
+import { ListSearch, MoreMenu, Track } from './AudioKit'
+import { startRender } from '../renders'
 
 // Audio -> Sounds: sound effects, ambiences, one-shots and loops from a description (Stable Audio 3, sounds.js).
 const S = () => window.ivstudio.sounds
@@ -207,7 +208,8 @@ export function SoundsPage({ notify, openEdit, go }) {
   async function make() {
     setBusy(true)
     try {
-      await S().create({ kind: form.kind, description: form.description, seconds: Number(form.seconds), takes: Number(form.takes), name: form.name, seed: form.seed === '' ? null : Number(form.seed) })
+      const sound = await S().create({ kind: form.kind, description: form.description, seconds: Number(form.seconds), takes: Number(form.takes), name: form.name, seed: form.seed === '' ? null : Number(form.seed) })
+      if (sound?.jobId) startRender({ kind: 'jobs', jobs: [sound.jobId], name: sound.name, open: { page: 'sounds', id: sound.id }, what: 'sound' })
       set({ seed: '' })
       reload()
     } catch (err) {

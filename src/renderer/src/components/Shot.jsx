@@ -12,7 +12,8 @@ import { CompareViewer, PromptDiff, runChanges } from './Compare'
 import { runTime } from '../runTime'
 import { askAgent, useAgentName } from './ChatPanel'
 import { lintPrompt } from '../../../service/lint'
-import { lintSeedance } from '../../../service/seedlint'
+import { lintSeedance } from '../../../service/seedlint'
+import { track } from '../renders'
 
 const DONE = ['success', 'error', 'cancelled']
 // A local upscaler's strength: a slider with its value, the default marked, and a line saying what it does.
@@ -198,7 +199,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, ownCloud
         spend = await confirmSpend(await window.ivstudio.render.priceFinish({ jobId: job.id, way }), { what: `take ${candidate} at 1080p` })
         if (!spend) return
       }
-      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate, way, ...(way === 'local' ? opts : {}), ...(spend ? { spend } : {}) }))
+      onStart(await track(window.ivstudio.render.finish({ jobId: job.id, candidate, way, ...(way === 'local' ? opts : {}), ...(spend ? { spend } : {}) }), { open: { page: 'shot', id: job.projectId }, what: 'shot' }))
     } catch (err) {
       notify(err.message)
     } finally {
@@ -371,7 +372,7 @@ function LtxFinishPanel({ job, candidate, onStart, notify }) {
   async function go() {
     setBusy(true)
     try {
-      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate }))
+      onStart(await track(window.ivstudio.render.finish({ jobId: job.id, candidate }), { open: { page: 'shot', id: job.projectId }, what: 'shot' }))
     } catch (err) {
       notify(err.message)
     } finally {
@@ -436,7 +437,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
   async function go() {
     setBusy(true)
     try {
-      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate, ...opts }))
+      onStart(await track(window.ivstudio.render.finish({ jobId: job.id, candidate, ...opts }), { open: { page: 'shot', id: job.projectId }, what: 'shot' }))
     } catch (err) {
       notify(err.message)
     } finally {
@@ -875,7 +876,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
   async function enhance(f, opts) {
     setEnhancing((e) => ({ ...e, [f.id]: true }))
     try {
-      onStart(await window.ivstudio.render.enhance({ jobId: f.id, ...opts }))
+      onStart(await track(window.ivstudio.render.enhance({ jobId: f.id, ...opts }), { open: { page: 'shot', id: projectId }, what: 'video' }))
       notify(opts.engine === 'faces' ? 'Refining the faces with H3 (about 5 minutes for 5 seconds). It shows here when it is done.' : `Enhancing with ${opts.engine === 'dlss' ? `DLSS 5 at ${opts.scale}×` : `SeedVR2 at ${opts.resolution}p`}. It shows here when it's done.`, 'info')
     } catch (err) {
       notify(err.message)

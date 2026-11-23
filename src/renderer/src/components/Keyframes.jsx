@@ -6,7 +6,8 @@ import { FirstRenders } from './Speed'
 import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
-import TileDelete from './TileDelete'
+import TileDelete from './TileDelete'
+import { track } from '../renders'
 
 // Keyframes (src/service/keyframes.js): pictures in order become one video moving from each to the next. The editor
 // borrows the Music video editor's parts (studio.css .mv-*): a top bar, the pictures as a strip, the video's
@@ -30,6 +31,12 @@ const dropped = (e) => [...(e.dataTransfer?.files || [])].map((f) => window.ivst
 
 export default function Keyframes(props) {
   const [open, setOpen] = useState(null)
+  // Open it from the render hub's reveal (App's openTarget): this page with that one open
+  useEffect(() => {
+    const pick = (e) => e.detail?.page === 'keyframes' && e.detail.id && setOpen(e.detail.id)
+    window.addEventListener('iv:open-item', pick)
+    return () => window.removeEventListener('iv:open-item', pick)
+  }, [])
   return open ? <Editor key={open} id={open} back={() => setOpen(null)} {...props} /> : <List openOne={setOpen} {...props} />
 }
 
@@ -173,7 +180,7 @@ function Editor({ id, back, notify, jobs: live = {}, openEdit }) {
           </span>
         </div>
         <div className="mv-top-actions">
-          <button className="btn btn-small" disabled={!!busy || !toHunt || !v.mode} onClick={() => run('huntAll', () => api().huntAll(id, {}))} title={v.mode === 'carried' ? 'A carried chain hunts its next move: each continues the one before' : 'Hunt everything that isn’t finished'}>
+          <button className="btn btn-small" disabled={!!busy || !toHunt || !v.mode} onClick={() => run('huntAll', () => track(api().huntAll(id, {}), { open: { page: 'keyframes', id }, what: 'video' }))} title={v.mode === 'carried' ? 'A carried chain hunts its next move: each continues the one before' : 'Hunt everything that isn’t finished'}>
             {busy === 'huntAll' ? 'Starting…' : v.mode === 'carried' ? 'Hunt the next move' : 'Hunt all'}
           </button>
           <button className="btn btn-small btn-primary" disabled={!!busy || !ready} onClick={assemble}>
@@ -416,12 +423,12 @@ function MovePanel({ v, m, n, setSel, live, busy, run, save, id, notify }) {
       </header>
       <MoveFields m={m} save={save} />
       <div className="mv-scene2-actions">
-        <button className="btn btn-primary" disabled={!!busy || m.state.busy || !m.state.ready} onClick={() => run('hunt', () => api().hunt(id, m.index, {}))} title={m.state.ready ? '' : `Finish move ${m.index} first: this one carries on from it`}>
+        <button className="btn btn-primary" disabled={!!busy || m.state.busy || !m.state.ready} onClick={() => run('hunt', () => track(api().hunt(id, m.index, {}), { open: { page: 'keyframes', id }, what: 'video' }))} title={m.state.ready ? '' : `Finish move ${m.index} first: this one carries on from it`}>
           {m.state.busy ? 'Rendering…' : m.state.previews ? (carried && m.index > 0 ? 'Make it again' : 'Hunt new takes') : carried && m.index > 0 ? 'Make this move' : 'Hunt takes'}
         </button>
         {carried && m.index > 0 && <span className="small dim">A carried move is made once, at its finished size, from the move before.</span>}
       </div>
-      <Takes s={m.state} live={live} busy={busy} notify={notify} finishLabel={carried && m.index > 0 ? 'Use take' : 'Finish take'} onFinish={(c) => run('finish', () => api().finish(id, m.index, { candidate: c }))} />
+      <Takes s={m.state} live={live} busy={busy} notify={notify} finishLabel={carried && m.index > 0 ? 'Use take' : 'Finish take'} onFinish={(c) => run('finish', () => track(api().finish(id, m.index, { candidate: c }), { open: { page: 'keyframes', id }, what: 'video' }))} />
     </section>
   )
 }
@@ -439,7 +446,7 @@ function TakePanel({ v, m, n, setSel, live, busy, run, save, id, notify }) {
           </span>
         </div>
         <span className={`mv-pill t-${st.tone}`}>{st.word}</span>
-        <button className="btn btn-primary" disabled={!!busy || s.busy} onClick={() => run('hunt', () => api().hunt(id, 0, {}))}>
+        <button className="btn btn-primary" disabled={!!busy || s.busy} onClick={() => run('hunt', () => track(api().hunt(id, 0, {}), { open: { page: 'keyframes', id }, what: 'video' }))}>
           {s.busy ? 'Rendering…' : s.previews ? 'Hunt new takes' : 'Hunt takes'}
         </button>
       </header>
@@ -460,7 +467,7 @@ function TakePanel({ v, m, n, setSel, live, busy, run, save, id, notify }) {
           <MoveFields m={m} save={save} />
         </div>
       )}
-      <Takes s={s} live={live} busy={busy} notify={notify} finishLabel="Finish take" onFinish={(c) => run('finish', () => api().finish(id, 0, { candidate: c }))} />
+      <Takes s={s} live={live} busy={busy} notify={notify} finishLabel="Finish take" onFinish={(c) => run('finish', () => track(api().finish(id, 0, { candidate: c }), { open: { page: 'keyframes', id }, what: 'video' }))} />
     </section>
   )
 }
