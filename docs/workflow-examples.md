@@ -160,3 +160,4 @@ Matthew: Sequences should show the shots back and forth (it was one angle); Effe
 - **Code:** steps examples can have a strip (`Strip` shared by both kinds); `long: true` lets Sequences and Effects run to 32 s (`make-examples.mjs`, the test).
 - **Checks:** `test/workflow-examples.mjs` passes; all 86 CI tests and the build pass; in a test copy the three pop-ups play with their strips and Reel has no button.
 - **Then (Matthew):** Cakeify dropped from the Effects example ("just not worth it"): the clip is the 360? orbit then Money rain, 10.1 s, no longer a long example.
+- **Then (Matthew):** the Keyframes example uses the finished version: the same take 2 finished at 2 MP with the picture-led strength 0.1 and no enhancer (`H3\final\studio_shoot_keyframes_8b431f28_r1_00002-audio.mp4`), at 968 × 540.

@@ -1,6 +1,6 @@
 {
  "note": "Made by scripts/make-examples.mjs; the Workflows cards’ Example media.",
- "total": 11183563,
+ "total": 11300657,
  "files": {
   "animalcam-photo.webp": {
    "bytes": 15440,
@@ -55,16 +55,16 @@
    "sha256": "a40260265edfca296a4d547a1af413c7d00582016ce2cf387d6dec914d5ecb0b"
   },
   "keyframes.mp4": {
-   "bytes": 674356,
-   "sha256": "9a7cdd8d740e1971059093a8ab35487f4b2b2cee3ec80263e2ef3d1db6775d26",
+   "bytes": 788500,
+   "sha256": "be03850e930d23879712a2e241128b20055ebbfcc04c659f36e01616fbaf4b7a",
    "seconds": 10.83,
-   "width": 864,
-   "height": 480,
+   "width": 968,
+   "height": 540,
    "audio": true
   },
   "keyframes.webp": {
-   "bytes": 9510,
-   "sha256": "1b06e1d1b68fdbf873db0e2a1343547393f9f749d42bcb7a8fc0ce0ca6f8dd4a"
+   "bytes": 12460,
+   "sha256": "fdb8def03e504a43d2ad9e04dd3e0eb2486591ee341af9fa288bb7eba31b462c"
   },
   "musicvideo.mp4": {
    "bytes": 860277,
