@@ -115,7 +115,7 @@ export default function SetupProgress({ progress: p, log = [], name }) {
               {(s.detail || s.status === 'running') && (
                 <span className="setup-step-detail small dim words-exact">
                   {s.detail || 'Working…'}
-                  {s.status === 'running' && s.percent != null ? ` · ${s.percent}%` : ''}
+                  {s.status === 'running' && s.percent != null ? ` · ${s.percent}%${/%/.test(s.detail) ? ' of all' : ''}` : ''}
                   {s.status === 'running' && s.percent == null ? ` · usually ${s.typical}` : ''}
                 </span>
               )}
