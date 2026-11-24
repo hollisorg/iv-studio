@@ -152,7 +152,7 @@ class VoiceHost:
         tmp = Path(tempfile.mkdtemp(prefix="ivvoice-"))
         try:
             req = {"op": body.get("op")}
-            for k in ("text", "description", "ref_text", "seed"):
+            for k in ("text", "description", "ref_text", "seed", "control", "cfg", "steps"):
                 if body.get(k) is not None:
                     req[k] = body[k]
             if body.get("ref_wav"):

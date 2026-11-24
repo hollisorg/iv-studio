@@ -91,6 +91,50 @@ function SeedField({ value, onChange, placeholder = 'Random' }) {
   )
 }
 
+// How a line is said (GitHub #52): VoxCPM2's control, CFG and steps. Empty and the defaults say it as before;
+// voices.js keeps the same ranges (lineTuning).
+const TUNE_DEFAULT = { control: '', cfg: 2, steps: 10 }
+const isDefaultTune = (t) => !t.control.trim() && Number(t.cfg) === TUNE_DEFAULT.cfg && Number(t.steps) === TUNE_DEFAULT.steps
+export function tuneLabel(l) {
+  return [l.control && `“${l.control}”`, l.cfg != null && `CFG ${l.cfg}`, l.steps != null && `${l.steps} steps`].filter(Boolean).join(' · ')
+}
+function LineTuning({ value, onChange }) {
+  const plain = isDefaultTune(value)
+  const [open, setOpen] = useState(!plain)
+  const set = (patch) => onChange({ ...value, ...patch })
+  return (
+    <div className={`line-tune ${open ? 'open' : ''}`}>
+      <button type="button" className="link-btn mono small line-tune-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        How it’s said · {plain ? 'as recorded' : tuneLabel({ control: value.control.trim(), cfg: Number(value.cfg) === TUNE_DEFAULT.cfg ? null : value.cfg, steps: Number(value.steps) === TUNE_DEFAULT.steps ? null : value.steps })} {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <div className="line-tune-body">
+          <label className="line-tune-control">
+            <span className="mono small dim">Style, in words</span>
+            <input type="text" maxLength={200} value={value.control} placeholder="whispering, out of breath · slow and warm · shouting across a room" onChange={(e) => set({ control: e.target.value })} />
+          </label>
+          {value.control.trim() && <p className="small dim line-tune-note">With a style, the voice is copied from its recording alone, so the line follows your words rather than the recording’s own delivery.</p>}
+          <label className="line-tune-range">
+            <span className="mono small dim">CFG · {Number(value.cfg).toFixed(1)}</span>
+            <input type="range" min="1" max="3" step="0.1" value={value.cfg} onChange={(e) => set({ cfg: Number(e.target.value) })} aria-label="CFG" />
+            <span className="small dim">Higher keeps closer to the voice and the words; lower sounds looser. 2.0 is the usual.</span>
+          </label>
+          <label className="line-tune-range">
+            <span className="mono small dim">Steps · {value.steps}</span>
+            <input type="range" min="4" max="30" step="1" value={value.steps} onChange={(e) => set({ steps: Number(e.target.value) })} aria-label="Steps" />
+            <span className="small dim">More is slower and can sound cleaner. 10 is the usual.</span>
+          </label>
+          {!plain && (
+            <button type="button" className="link-btn mono small" onClick={() => onChange(TUNE_DEFAULT)}>
+              Back to as recorded
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Audio > Voices: every voice IV Studio can speak in, which character has it, and two ways to make one.
 export function VoicesPage({ notify, characters, setCharacters, go }) {
   const [status, check] = useVoiceEngine()
@@ -380,6 +424,8 @@ export function LinesPage({ notify, characters, sendToCreate, go }) {
   const [voiceId, setVoiceId] = useState(null)
   const [text, setText] = useState('')
   const [seed, setSeed] = useState('')
+  const [tune, setTune] = useState(TUNE_DEFAULT)
+  const [tuneKey, setTuneKey] = useState(0) // remounts the panel when "Say it again" brings a line's settings back
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const loadLines = () => V().lines().then(setLines, () => {})
@@ -403,7 +449,7 @@ export function LinesPage({ notify, characters, sendToCreate, go }) {
   async function speak() {
     setBusy(true)
     try {
-      await V().speak({ voiceId, text, seed: seed === '' ? undefined : Number(seed) })
+      await V().speak({ voiceId, text, seed: seed === '' ? undefined : Number(seed), ...(isDefaultTune(tune) ? {} : { control: tune.control, cfg: tune.cfg, steps: tune.steps }) })
       loadLines()
     } catch (err) {
       notify(err.message)
@@ -478,6 +524,7 @@ export function LinesPage({ notify, characters, sendToCreate, go }) {
               })}
             </div>
             <textarea className="composer-text" rows={4} value={text} placeholder={LINE_EXAMPLE} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && status?.ready && !busy && speak()} />
+            <LineTuning key={tuneKey} value={tune} onChange={setTune} />
             <div className="composer-foot">
               <SeedField value={seed} onChange={setSeed} placeholder={String(voice?.seed ?? 41)} />
               <span className="mono small dim">{est.words ? `${est.words} words · about ${est.seconds} s` : 'Ctrl+Enter speaks'}</span>
@@ -507,7 +554,7 @@ export function LinesPage({ notify, characters, sendToCreate, go }) {
                 meta={
                   <>
                     <VoiceAvatar name={l.voice} picture={picOf(l.voice)} size={18} />
-                    {[l.voice, ENGINE_LABEL[l.engine] || l.engine, `seed ${l.seed}`, secs(l.duration)].filter(Boolean).join(' · ')}
+                    {[l.voice, ENGINE_LABEL[l.engine] || l.engine, `seed ${l.seed}`, tuneLabel(l), secs(l.duration)].filter(Boolean).join(' · ')}
                   </>
                 }
                 actions={
@@ -517,7 +564,7 @@ export function LinesPage({ notify, characters, sendToCreate, go }) {
                     </button>
                     <MoreMenu
                       items={[
-                        { label: 'Say it again in this voice', onClick: () => (setVoiceId(voices.find((v) => v.name === l.voice)?.id || voiceId), setText(l.text), window.scrollTo?.(0, 0), document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' })) },
+                        { label: 'Say it again in this voice', onClick: () => (setVoiceId(voices.find((v) => v.name === l.voice)?.id || voiceId), setText(l.text), setTune({ control: l.control || '', cfg: l.cfg ?? TUNE_DEFAULT.cfg, steps: l.steps ?? TUNE_DEFAULT.steps }), setTuneKey((k) => k + 1), window.scrollTo?.(0, 0), document.querySelector('.main')?.scrollTo({ top: 0, behavior: 'smooth' })) },
                         { label: 'Show file', onClick: () => window.ivstudio.files.reveal(l.file) },
                         { label: 'Delete', danger: true, onClick: () => remove(l) }
                       ]}

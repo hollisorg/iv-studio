@@ -73,6 +73,23 @@ export function modelFileMap(manifest, info, chosen = {}) {
 
 export const fileBase = base
 
+// Setup items the person has marked as not used (GitHub #53): say, MiniMax H3's models on a PC that only makes
+// LTX shots, or a node pack for a tool they skip. Kept in settings as item ids (setupNotUsed); a marked item that
+// isn't there is still reported, with notUsed: true, and no count of things to fix includes it. `ready` still
+// says whether H3 shots can render. Only models, node packs and characters can be marked, never ComfyUI or the GPU.
+export const NOT_USED_KINDS = ['model', 'node_pack', 'character']
+export function cleanNotUsed(list) {
+  const ok = (x) => typeof x === 'string' && /^(model|pack|character):[^\u0000-\u001f]{1,200}$/.test(x)
+  return [...new Set((Array.isArray(list) ? list : []).filter(ok))].slice(0, 500)
+}
+export function markNotUsed(result, ids) {
+  const marked = new Set(cleanNotUsed(ids))
+  if (!result?.items) return result
+  for (const i of result.items) if (marked.has(i.id) && NOT_USED_KINDS.includes(i.kind) && i.status !== 'ok') i.notUsed = true
+  result.toFix = result.items.filter((i) => i.status === 'missing' && !i.notUsed).length
+  return result
+}
+
 export async function checkSetup({ comfy, template, manifest, characters, chosen = {} }) {
   const items = []
   let stats

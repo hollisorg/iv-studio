@@ -5,8 +5,10 @@ large-v3 turbo (OpenAI, MIT) reads the words in a recording. Runs in IV Studio's
   python voice_server.py --download-splitter <models dir>   fetch Demucs's htdemucs weights (Replace's voice swap)
   python voice_server.py <models dir>               serve: one JSON request per stdin line, one JSON reply
                                                     per stdout line, {"id", "ok", ...} or {"id", "error"}
-Requests: {"op": "speak", "text", "out", "ref_wav", "ref_text", "seed"}
-          {"op": "design", "text", "description", "out", "seed"}
+Requests: {"op": "speak", "text", "out", "ref_wav", "ref_text", "seed", "control", "cfg", "steps"}
+          {"op": "design", "text", "description", "out", "seed", "cfg", "steps"}
+          control: how to say it, in words ("whispering, out of breath"); cfg: how closely it follows the voice and
+          the words, 1.0 to 3.0 (2.0); steps: 4 to 30 (10), more is slower and can be cleaner
           {"op": "transcribe", "file"}
           {"op": "transcribe_timed", "file"}         the words with each segment's start and end, and the language
           {"op": "separate", "file", "vocals", "background"}   voice and background apart (Demucs, MIT; optional)
@@ -77,6 +79,15 @@ def download_splitter(root):
     print(json.dumps({"done": True}), flush=True)
 
 
+def tuning(req):
+    # cfg and steps, kept to the ranges VoxCPM recommends (a request without them gets its defaults)
+    cfg = req.get("cfg")
+    steps = req.get("steps")
+    cfg = 2.0 if cfg is None else min(3.0, max(1.0, float(cfg)))
+    steps = 10 if steps is None else min(30, max(4, int(steps)))
+    return cfg, steps
+
+
 class Engine:
     def __init__(self, root):
         self.root = root
@@ -127,17 +138,23 @@ class Engine:
         torch.manual_seed(int(seed))
         torch.cuda.manual_seed_all(int(seed))
 
-    def speak(self, text, out, ref_wav, ref_text, seed=41):
-        # "ultimate" cloning: the reference and its words continue straight into the new line
+    def speak(self, text, out, ref_wav, ref_text, seed=41, control=None, cfg=2.0, steps=10):
+        # "ultimate" cloning: the reference and its words continue straight into the new line. With a control
+        # (how to say it), VoxCPM2 can't continue the reference (the CLI refuses --control with --prompt-text), so
+        # the line is cloned from the reference alone with the control in front, as VoxCPM's own clone command does
         tts = self.voxcpm()
         self.seeded(seed)
-        wav = tts.generate(text=text, prompt_wav_path=ref_wav, prompt_text=ref_text, reference_wav_path=ref_wav, cfg_value=2.0, inference_timesteps=10)
+        control = (control or "").strip()
+        if control:
+            wav = tts.generate(text=f"({control}){text}", reference_wav_path=ref_wav, cfg_value=float(cfg), inference_timesteps=int(steps))
+        else:
+            wav = tts.generate(text=text, prompt_wav_path=ref_wav, prompt_text=ref_text, reference_wav_path=ref_wav, cfg_value=float(cfg), inference_timesteps=int(steps))
         return self.save(wav, out)
 
-    def design(self, text, description, out, seed=1):
+    def design(self, text, description, out, seed=1, cfg=2.0, steps=10):
         tts = self.voxcpm()
         self.seeded(seed)
-        wav = tts.generate(text=f"({description}){text}", cfg_value=2.0, inference_timesteps=10)
+        wav = tts.generate(text=f"({description}){text}", cfg_value=float(cfg), inference_timesteps=int(steps))
         return self.save(wav, out)
 
     def transcribe(self, file):
@@ -225,9 +242,9 @@ class Engine:
     def handle(self, req):
         op = req.get("op")
         if op == "speak":
-            return self.speak(req["text"], req["out"], req["ref_wav"], req.get("ref_text") or "", req.get("seed", 41))
+            return self.speak(req["text"], req["out"], req["ref_wav"], req.get("ref_text") or "", req.get("seed", 41), req.get("control"), *tuning(req))
         if op == "design":
-            return self.design(req["text"], req["description"], req["out"], req.get("seed", 1))
+            return self.design(req["text"], req["description"], req["out"], req.get("seed", 1), *tuning(req))
         if op == "transcribe":
             return self.transcribe(req["file"])
         if op == "transcribe_timed":

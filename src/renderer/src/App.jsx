@@ -519,7 +519,8 @@ export default function App() {
     setPage('create')
   }
 
-  const ready = setup?.ready
+  // ready for H3 shots, or nothing left to fix once the person's not-used marks are left out (GitHub #53)
+  const ready = setup?.ready || (setup?.toFix === 0 && setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok'))
   // what the top bar shows (Settings → Top bar, topbar.js)
   const [topBar, setTopBar] = useState(null)
   const bar = (id) => onTopBar(topBar, id)
@@ -540,7 +541,8 @@ export default function App() {
     return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', words))
   }, [])
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, filmShotToCreate, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, shotFromVersion, pictureToEdit, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
-  const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
+  // what needs fixing, leaving out what the person marked as not used in Setup (GitHub #53)
+  const missing = setup?.toFix ?? (setup?.items?.filter((i) => i.status === 'missing' && !i.notUsed).length || 0)
   // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)
 

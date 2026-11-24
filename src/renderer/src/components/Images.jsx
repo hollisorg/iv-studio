@@ -724,27 +724,43 @@ function ImageViewer({ set, index, onIndex, onClose, onEdit, onFix, onShot, onEd
         <div className="image-viewer-side">
           <p className="image-set-name">{set.name}</p>
           <p className="small dim">{set.prompt}</p>
-          <p className="mono small dim">
-            {set.mode === 'tool' || set.mode === 'frame' ? set.familyLabel : set.engine === 'codex' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
-            {set.files.length > 1 ? ` · ${index + 1} of ${set.files.length}` : ''}
+          {/* the model's file name has no spaces: it breaks anywhere, the rest only between parts (GitHub #51) */}
+          <p className="mono small dim image-viewer-meta">
+            <span>{set.familyLabel}</span>
+            {!(set.mode === 'tool' || set.mode === 'frame' || set.engine === 'codex') && (
+              <>
+                {' · '}
+                <span className="image-viewer-model">{shortName(set.model)}</span>
+                {' · '}
+                <span className="image-viewer-keep">seed {set.seed}</span>
+              </>
+            )}
+            {set.files.length > 1 && (
+              <>
+                {' · '}
+                <span className="image-viewer-keep">
+                  {index + 1} of {set.files.length}
+                </span>
+              </>
+            )}
           </p>
           <div className="image-viewer-actions">
             <button className="btn btn-primary" onClick={() => onShot(file)}>
               Use in a shot
             </button>
-            <button className="btn" onClick={() => onEdit(file)}>
+            <button className="btn btn-small" onClick={() => onEdit(file)}>
               Edit this
             </button>
-            <button className="btn" onClick={() => onFix(file)} title="Inpaint, relight, remove the background, upscale or make a depth map">
+            <button className="btn btn-small" onClick={() => onFix(file)} title="Inpaint, relight, remove the background, upscale or make a depth map">
               Fix this…
             </button>
-            <button className="btn" onClick={() => onEditTimeline(file)}>
+            <button className="btn btn-small" onClick={() => onEditTimeline(file)}>
               Add to edit
             </button>
-            <button className="btn" onClick={onAgain}>
+            <button className="btn btn-small" onClick={onAgain}>
               Make more like this
             </button>
-            <button className="btn" onClick={() => window.ivstudio.files.reveal({ path: file })}>
+            <button className="btn btn-small" onClick={() => window.ivstudio.files.reveal({ path: file })}>
               Show file
             </button>
             <button className="link-btn mono" onClick={onClose}>

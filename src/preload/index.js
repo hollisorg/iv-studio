@@ -276,6 +276,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
   setup: {
     check: call('setup:check'),
     installNodes: call('setup:installNodes'),
+    // Not used (GitHub #53): notUsed({ ids, on }) marks or unmarks setup items, returns the marked ids
+    notUsed: call('setup:notUsed'),
     onNodes: on('setup:nodes'),
     updates: { check: call('setup:updates:check'), run: call('setup:updates:run'), undo: call('setup:updates:undo'), installManager: call('setup:updates:installManager'), onProgress: on('setup:updates') }
   },

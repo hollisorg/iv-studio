@@ -18,7 +18,7 @@ import { Cast, resolveMentions, withCast } from './cast.js'
 import { faceOf, h3Request, needsMove, normalize, pictureId, seedancePictures } from './bible.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { cleanSequenceLoras, MAX_REF_PICTURES, renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, takeKindOf, takeReferences, takeScript, validateSequence } from './sequence.js'
-import { checkSetup, comboOptions, fileBase, modelFileMap, whyUnreached } from './setup.js'
+import { checkSetup, comboOptions, fileBase, markNotUsed, modelFileMap, whyUnreached } from './setup.js'
 import { comfyPlace, installPacks, missingPacks, packsNeedingRuntime, packsOutdated } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
 import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
@@ -332,6 +332,8 @@ export class Studio {
       return { ready: false, items: [{ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message }], remote: this.comfy.remote, hosted: this.comfy.hosted }
     }
     if (result.items[0]?.status === 'ok') result.caps = await this.capabilities(true).catch(() => null)
+    // what the person marked as not used (settings' setupNotUsed, GitHub #53): set by whoever made this Studio
+    markNotUsed(result, this.notUsed?.() || [])
     return { ...result, remote: this.comfy.remote, hosted: this.comfy.hosted }
   }
 

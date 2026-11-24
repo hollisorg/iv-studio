@@ -4962,7 +4962,7 @@ button.nav-update:hover {
 }
 .image-viewer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 20px;
   width: min(1280px, 92vw);
   max-height: 90vh;
@@ -4976,16 +4976,39 @@ button.nav-update:hover {
   object-fit: contain;
   background: #000;
 }
+/* the side column stays inside the viewer and scrolls only up and down, never sideways (GitHub #51) */
 .image-viewer-side {
   display: grid;
   align-content: start;
   gap: 10px;
-  overflow: auto;
+  min-width: 0;
+  max-height: calc(90vh - 36px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.image-viewer-meta {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.image-viewer-keep {
+  white-space: nowrap;
 }
 .image-viewer-actions {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin-top: 8px;
+}
+@media (max-width: 900px) {
+  .image-viewer {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+  .image-viewer > img {
+    max-height: 55vh;
+  }
+  .image-viewer-side {
+    max-height: none;
+  }
 }
 
 /* Create: under the mode cards, a reminder that the writer looks at the references */
@@ -8046,6 +8069,51 @@ button.nav-update:hover {
 }
 .composer-foot.end {
   justify-content: flex-end;
+}
+/* Setup: items marked as not used (GitHub #53) read as set aside, not as faults */
+.setup-rows li.not-used .check-icon {
+  color: var(--paper-dim);
+}
+.setup-rows li.not-used .setup-row-name {
+  color: var(--paper-dim);
+}
+.setup-row-notused {
+  display: inline-block;
+  margin-top: 4px;
+}
+.setup-notused-all {
+  margin-bottom: 10px;
+}
+
+/* Lines: how it's said (GitHub #52), folded until asked for */
+.line-tune {
+  display: grid;
+  gap: 10px;
+}
+.line-tune-toggle {
+  justify-self: start;
+}
+.line-tune-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+}
+.line-tune-control,
+.line-tune-range {
+  display: grid;
+  gap: 6px;
+}
+.line-tune-control input {
+  width: 100%;
+  min-width: 0;
+}
+.line-tune-range input[type='range'] {
+  width: min(100%, 360px);
+  accent-color: var(--red);
+}
+.line-tune-note {
+  margin: -4px 0 0;
 }
 .seed-field {
   display: inline-flex;

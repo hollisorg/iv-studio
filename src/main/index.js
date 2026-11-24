@@ -34,7 +34,7 @@ import { CloudPrep, cloudCatalog, roomOnVolume } from '../service/cloudprep'
 import { CloudVoiceEngine } from '../service/cloudvoice'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed, savedPreviewMp } from '../service/speed'
-import { comboOptions } from '../service/setup'
+import { cleanNotUsed, comboOptions } from '../service/setup'
 import { managerReq } from '../service/comfyupdate'
 import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, STOPPED_WAITING, stopComfy, waitDown, waitUp } from '../service/comfylauncher'
 import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
@@ -322,6 +322,8 @@ function makeStudio() {
       : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
   studio.livePreview = () => !!readSettings(BASE).livePreview
+  // Setup → Not used (GitHub #53)
+  studio.notUsed = () => readSettings(BASE).setupNotUsed || []
   // Settings → Your PC → First renders: the size every hunt uses when it names none of its own
   studio.previewSize = () => savedPreviewMp(readSettings(BASE))
   if (onRunPod) studio.comfy.waker = () => runpodWake?.()
@@ -1990,6 +1992,8 @@ app.whenReady().then(() => {
     // Settings → Accessibility: the render pop-up, and how a finished render is announced (renders.js)
     if ('renderPopup' in safe) safe.renderPopup = safe.renderPopup !== false
     if ('readyFx' in safe && !['full', 'simple', 'off'].includes(safe.readyFx)) delete safe.readyFx
+    // Setup → Not used: item ids only (GitHub #53)
+    if ('setupNotUsed' in safe) safe.setupNotUsed = cleanNotUsed(safe.setupNotUsed)
     // Create's own quick finals: up to 8, only their known fields
     if ('quickFinals' in safe) safe.quickFinals = cleanQuickFinals(safe.quickFinals)
     // each tool's own writer (Write it for me's menu remembers it per tool)
@@ -2092,6 +2096,12 @@ app.whenReady().then(() => {
     if (hardware) patch.hardware = hardware
     if (promptEngine && ['local', 'claude', 'codex', 'hermes'].includes(promptEngine)) patch.promptEngine = promptEngine
     return publicSettings(writeSettings(patch, BASE))
+  })
+  // Setup → Not used (GitHub #53): mark or unmark setup items; they stop counting as things to fix
+  handle('setup:notUsed', ({ ids, on } = {}) => {
+    const now = new Set(readSettings(BASE).setupNotUsed || [])
+    for (const id of cleanNotUsed(ids)) on ? now.add(id) : now.delete(id)
+    return writeSettings({ setupNotUsed: cleanNotUsed([...now]) }, BASE).setupNotUsed
   })
   handle('setup:installNodes', () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))
 

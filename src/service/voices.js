@@ -30,6 +30,31 @@ const writeJson = (file, value) => {
   fs.renameSync(`${file}.tmp`, file)
 }
 const now = () => new Date().toISOString()
+
+// How a line is said (GitHub #52), VoxCPM2's own options: control, how to say it in words ("whispering, out of
+// breath"); cfg, how closely it keeps to the voice and the words (1.0 to 3.0, 2.0 as before); steps, 4 to 30
+// (10 as before), more is slower and can be cleaner. Only what differs from the defaults is kept, so a line said
+// the old way keeps its old file.
+export const LINE_TUNING = { cfg: { min: 1, max: 3, step: 0.1, def: 2 }, steps: { min: 4, max: 30, step: 1, def: 10 }, controlMax: 200 }
+export function lineTuning({ control, cfg, steps } = {}) {
+  const out = {}
+  const c = String(control || '').replace(/[()\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, LINE_TUNING.controlMax)
+  if (c) out.control = c
+  const num = (v) => (v === '' || v == null ? NaN : Number(v))
+  const f = num(cfg)
+  if (Number.isFinite(f)) {
+    const v = Math.round(Math.min(LINE_TUNING.cfg.max, Math.max(LINE_TUNING.cfg.min, f)) * 10) / 10
+    if (v !== LINE_TUNING.cfg.def) out.cfg = v
+  }
+  const n = num(steps)
+  if (Number.isFinite(n)) {
+    const v = Math.round(Math.min(LINE_TUNING.steps.max, Math.max(LINE_TUNING.steps.min, n)))
+    if (v !== LINE_TUNING.steps.def) out.steps = v
+  }
+  return out
+}
+// the part of a line's file name that says how it was said: empty for the defaults
+const tuningKey = (t) => (Object.keys(t).length ? [t.control || '', t.cfg ?? '', t.steps ?? ''].join('|') : null)
 const hash = (...parts) => createHash('sha1').update(parts.join('\u0000')).digest('hex').slice(0, 12)
 const WAV_SECONDS = (buf) => {
   // RIFF header: byte rate at 28, the data chunk's size follows the "data" tag
@@ -129,12 +154,12 @@ export class Voices {
   }
 
   // A line said in a voice, written to out (once: an existing file is used as it is). For Replace's voice swap.
-  async sayTo({ voiceId, text, seed = null, out }) {
+  async sayTo({ voiceId, text, seed = null, out, control, cfg, steps }) {
     const say = String(text || '').trim()
     if (!say) throw new Error('No words to say.')
     const v = this.get(voiceId)
     if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
-    if (!fs.existsSync(out)) await this.eng().call('speak', { text: say, out, ref_wav: v.reference, ref_text: v.text, seed: seed ?? v.seed ?? 41 })
+    if (!fs.existsSync(out)) await this.eng().call('speak', { text: say, out, ref_wav: v.reference, ref_text: v.text, seed: seed ?? v.seed ?? 41, ...lineTuning({ control, cfg, steps }) })
     this.releaseSoon()
     return { file: out, duration: WAV_SECONDS(fs.readFileSync(out)) }
   }
@@ -239,24 +264,27 @@ export class Voices {
   // seed give back the same file without asking the engine again.
   // keep: false says it without adding it to Lines (the chat reading its replies aloud); those files sit in
   // lines/_said and are replaced as new ones come.
-  async speak({ voiceId, text, seed = null, keep = true }) {
+  // control, cfg and steps: how it's said (lineTuning above); left out, it's said as before.
+  async speak({ voiceId, text, seed = null, keep = true, control, cfg, steps }) {
     const say = String(text || '').trim()
     if (!say) throw new Error('Type the line first.')
     const v = this.get(voiceId)
     const eng = 'voxcpm2'
     const s = seed ?? v.seed ?? 41
+    const tune = lineTuning({ control, cfg, steps })
+    const tk = tuningKey(tune)
     if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
-    const file = path.join(this.dir, 'lines', keep ? '' : '_said', `${v.id}_${hash(say, eng, s, v.text)}.wav`)
+    const file = path.join(this.dir, 'lines', keep ? '' : '_said', `${v.id}_${tk ? hash(say, eng, s, v.text, tk) : hash(say, eng, s, v.text)}.wav`)
     if (!keep) {
       fs.mkdirSync(path.dirname(file), { recursive: true })
       // only the last few read-alouds are kept
       const old = fs.readdirSync(path.dirname(file)).map((f) => path.join(path.dirname(file), f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)
       for (const f of old.slice(20)) fs.rmSync(f, { force: true })
     }
-    if (!fs.existsSync(file)) await this.eng().call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s })
+    if (!fs.existsSync(file)) await this.eng().call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s, ...tune })
     this.releaseSoon()
     if (!keep) return { voiceId: v.id, voice: v.name, text: say, file, duration: WAV_SECONDS(fs.readFileSync(file)) }
-    const line = { id: randomUUID().slice(0, 8), voiceId: v.id, voice: v.name, text: say, engine: eng, seed: s, file, duration: WAV_SECONDS(fs.readFileSync(file)), createdAt: now() }
+    const line = { id: randomUUID().slice(0, 8), voiceId: v.id, voice: v.name, text: say, engine: eng, seed: s, ...tune, file, duration: WAV_SECONDS(fs.readFileSync(file)), createdAt: now() }
     writeJson(this.linesFile(), [line, ...this.allLines()].slice(0, 500))
     return line
   }

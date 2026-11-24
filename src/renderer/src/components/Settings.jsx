@@ -1220,7 +1220,7 @@ function AboutCard({ n, info }) {
 
 // Settings and Setup (what ComfyUI has and needs) are two tabs of one page; Setup's dot shows what to fix.
 export function SettingsTabs({ tab, go, setup }) {
-  const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
+  const missing = setup?.toFix ?? (setup?.items?.filter((i) => i.status === 'missing' && !i.notUsed).length || 0)
   return (
     <div className="section-switch settings-tabs" role="tablist" aria-label="Settings or Setup">
       {[

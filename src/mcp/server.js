@@ -112,6 +112,8 @@ setLlmSource(() => {
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
 // step pictures follow the window's Live preview switch
 studio.livePreview = () => !!readSettings(BASE).livePreview
+// Setup → Not used (GitHub #53): check_setup marks those items notUsed and leaves them out of toFix
+studio.notUsed = () => readSettings(BASE).setupNotUsed || []
 studio.previewSize = () => savedPreviewMp(readSettings(BASE))
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Codex runs only tools marked read-only when its approvals are off (issue #44): mark every tool that only looks
@@ -357,7 +359,7 @@ for (const entry of START_MENU)
 server.registerPrompt('start', { title: 'Start here', description: 'Choose what to make with IV Studio from a short menu.' }, () => ({
   messages: [{ role: 'user', content: { type: 'text', text: `I'd like to make something with IV Studio. Show me the start menu (get_menu) as one multiple-choice question, then help me with what I pick.` } }]
 }))
-tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing.', {}, () => studio.checkSetup())
+tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing. Items the person marked as not used in Setup come back with notUsed: true and are left out of toFix: don\'t press them to fix those.', {}, () => studio.checkSetup())
 tool('install_node_packs', "Install the ComfyUI node packs check_setup reports missing into this PC's ComfyUI: IV Studio's own pack is copied, the others downloaded at the versions IV Studio is tested with (GitHub commit or Comfy Registry release) and given their requirements with ComfyUI's Python. Folders already in custom_nodes are left alone. ComfyUI must be running; restart it afterwards to load them.", {}, () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null }))
 tool('check_comfy_updates', "What updating this PC's ComfyUI would change, through ComfyUI-Manager: ComfyUI's version against its newest stable release, the installed custom node packs that have updates (Manager included), Manager's version and update policy, and the last update (for undo_comfy_update). Changes nothing, but Manager fetches every pack's remote first, so it takes a minute or two. manager.present false: ComfyUI-Manager isn't installed.", {}, () => studio.comfyUpdates({ launcher: launcherFor(readSettings(BASE)) }))
 tool('update_comfy', "Update this PC's ComfyUI through ComfyUI-Manager: saves a Manager snapshot, updates every custom node pack (ComfyUI-Manager included) to its newest version and ComfyUI to its newest stable release (or nightly, if Manager is set to that; the ComfyUI Desktop app updates ComfyUI itself), then restarts ComfyUI and waits for it. Refuses while ComfyUI is rendering or has jobs queued. Takes several minutes. Returns the snapshot, ComfyUI's version before and after and each pack's result; undo_comfy_update puts it all back. It changes the person's ComfyUI install: run it only when they ask.", {}, () => {
@@ -1661,11 +1663,14 @@ tool('speak_line', `Say a line in a voice (or a character's voice) and get a WAV
   text: z.string().min(1).max(600),
   voiceId: z.string().optional(),
   character: z.string().optional().describe('A character id with a voice (save_character voiceId); used when voiceId is left out'),
-  seed: z.number().int().optional()
-}, ({ text, voiceId, character, seed }) => {
+  seed: z.number().int().optional(),
+  control: z.string().max(200).optional().describe('How to say it, in plain words ("whispering, out of breath"). With a control the voice is copied from its recording alone (VoxCPM2 cannot continue the recording and take a control at once). Leave out to say it as recorded'),
+  cfg: z.number().min(1).max(3).optional().describe('How closely it keeps to the voice and the words, 1.0 to 3.0 (2.0 if left out)'),
+  steps: z.number().int().min(4).max(30).optional().describe('VoxCPM2 steps, 4 to 30 (10 if left out): more is slower and can be cleaner')
+}, ({ text, voiceId, character, seed, control, cfg, steps }) => {
   const id = voiceId || studio.characters().find((c) => c.id === character)?.voiceId
   if (!id) throw new Error(character ? `${character} has no voice yet: give them one with save_character voiceId.` : 'Give voiceId or character.')
-  return voices.speak({ voiceId: id, text, seed })
+  return voices.speak({ voiceId: id, text, seed, control, cfg, steps })
 })
 tool('list_lines', 'Lines spoken so far, newest first (optionally for one voice): text, file, duration, seed.', { voiceId: z.string().optional() }, ({ voiceId }) => ({ items: voices.lines(voiceId) }))
 tool('delete_line', 'Delete a spoken line and its file.', { id: z.string() }, ({ id }) => voices.deleteLine(id))

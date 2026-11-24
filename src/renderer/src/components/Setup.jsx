@@ -11,7 +11,8 @@ import HfLogin from './HfLogin'
 // whether shots can render and holds the one or two actions that fix it (and Restart ComfyUI). Below, five
 // folding cards: ComfyUI, Models for shots, Node packs, Optional tools (grouped by the tool that uses them, each
 // group downloadable at once) and Characters. A card opens by itself when something in it needs you, and
-// "Needs you" hides everything that's already fine.
+// "Needs you" hides everything that's already fine. A model, node pack or character the person doesn't use can be
+// marked Not used (GitHub #53): it moves to its own card at the end and stops counting as something to fix.
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
 const GB = (b) => `${(b / 1024 ** 3).toFixed(1)} GB`
 const ACTIVE = ['queued', 'downloading', 'verifying']
@@ -129,10 +130,13 @@ function NodeInstaller({ missing, recheck, notify }) {
   )
 }
 
-function Row({ i, dl, remote, recheck, notify }) {
+// which items can be marked as not used: models for shots, node packs and characters that aren't ready
+const markable = (i) => ['model', 'node_pack', 'character'].includes(i.kind) && !i.optional && i.status !== 'ok'
+
+function Row({ i, dl, remote, recheck, notify, onNotUsed }) {
   return (
-    <li className={i.status}>
-      <span className="check-icon">{ICON[i.status]}</span>
+    <li className={i.notUsed ? 'not-used' : i.status}>
+      <span className="check-icon">{i.notUsed ? '–' : ICON[i.status]}</span>
       <div className="setup-row-text">
         <div className="setup-row-name">{i.kind === 'model' ? i.name || i.label : i.label}</div>
         <div className="dim small setup-row-detail" title={i.detail}>
@@ -161,8 +165,13 @@ function Row({ i, dl, remote, recheck, notify }) {
             Its GitHub page
           </button>
         )}
+        {onNotUsed && (i.notUsed || markable(i)) && (
+          <button className="link-btn mono small setup-row-notused" onClick={() => onNotUsed([i.id], !i.notUsed)} title={i.notUsed ? 'Count it as something to fix again' : 'You don’t use what this is for: stop counting it as something to fix'}>
+            {i.notUsed ? 'Use it again' : 'I don’t use this'}
+          </button>
+        )}
       </div>
-      {i.kind === 'model' && !remote ? <ModelAction item={i} dl={dl} /> : <span />}
+      {i.kind === 'model' && !remote && !i.notUsed ? <ModelAction item={i} dl={dl} /> : <span />}
     </li>
   )
 }
@@ -205,10 +214,22 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
   const comfyItem = items.find((i) => i.id === 'comfyui')
   const gpuItem = items.find((i) => i.id === 'gpu')
   const comfyUp = comfyItem?.status === 'ok'
-  const required = items.filter((i) => i.kind === 'model' && !i.optional)
-  const optional = items.filter((i) => i.kind === 'model' && i.optional)
-  const packs = items.filter((i) => i.kind === 'node_pack')
-  const chars = items.filter((i) => i.kind === 'character')
+  // what the person marked as not used gets its own card and counts for nothing (GitHub #53)
+  const notUsed = items.filter((i) => i.notUsed)
+  const live = items.filter((i) => !i.notUsed)
+  const required = live.filter((i) => i.kind === 'model' && !i.optional)
+  const optional = live.filter((i) => i.kind === 'model' && i.optional)
+  const packs = live.filter((i) => i.kind === 'node_pack')
+  const chars = live.filter((i) => i.kind === 'character')
+  const markNotUsed = async (ids, on) => {
+    try {
+      await window.ivstudio.setup.notUsed({ ids, on })
+      if (on) setToggled((t) => ({ ...t, notused: t.notused ?? false }))
+      recheck()
+    } catch (err) {
+      notify(err.message)
+    }
+  }
   const missingModels = remote ? [] : required.filter((i) => i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
   const missingBytes = missingModels.reduce((n, i) => n + (i.size || 0), 0)
   const missingPacks = remote ? [] : packs.filter((i) => i.status !== 'ok' && i.dir && !i.restartNeeded)
@@ -221,22 +242,28 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
     { id: 'core', title: 'Models for shots', sub: 'MiniMax H3 and what every shot needs.', list: required },
     { id: 'packs', title: 'Node packs', sub: 'Extra ComfyUI nodes IV Studio’s tools use.', list: packs },
     { id: 'extras', title: 'Optional tools', sub: 'Only what you want to use. None of it is needed for shots.', list: optional, optional: true },
-    { id: 'chars', title: 'Characters', sub: 'Each character’s LoRA or RefMod.', list: chars }
+    { id: 'chars', title: 'Characters', sub: 'Each character’s LoRA or RefMod.', list: chars },
+    { id: 'notused', title: 'Not used', sub: 'You marked these as not used, so they don’t count as things to fix. What needs them won’t work until you use them again.', list: notUsed, info: true }
   ].filter((x) => x.list.length)
-  const issues = (x) => x.list.filter((i) => (x.optional ? false : i.status !== 'ok'))
+  const issues = (x) => x.list.filter((i) => (x.optional || x.info ? false : i.status !== 'ok'))
   const attention = sections.reduce((n, x) => n + issues(x).length, 0)
   const isOpen = (x) => (toggled[x.id] ?? (issues(x).length > 0 || x.id === 'comfy'))
-  // one count everywhere: what needs you (outside the optional tools); blocking is the part that stops shots
-  const blocking = items.filter((i) => i.status === 'missing' && !i.optional).length
+  // one count everywhere: what needs you (outside the optional tools and what's marked not used); blocking is the
+  // part that stops shots
+  const blocking = live.filter((i) => i.status === 'missing' && !i.optional).length
+  const h3Aside = notUsed.some((i) => i.kind === 'model')
   const verdict = !setup
     ? { tone: '', title: 'Checking this PC…', sub: '' }
     : !comfyUp
       ? { tone: 'warn', title: comfyItem?.busy ? 'ComfyUI is busy' : 'ComfyUI isn’t running', sub: comfyItem?.detail || '' }
       : blocking
         ? { tone: 'warn', title: `${attention} thing${attention === 1 ? '' : 's'} need${attention === 1 ? 's' : ''} you`, sub: `${blocking === attention ? 'They stop' : `${blocking} of them stop`} shots rendering. Use the buttons here, or open the cards below.` }
-        : attention
-          ? { tone: 'ok', title: 'Ready to make shots', sub: `${attention} thing${attention === 1 ? '' : 's'} only some tools need: see the cards below.` }
-          : { tone: 'ok', title: 'Ready to make shots', sub: `${optional.filter((i) => i.status === 'ok').length} of ${optional.length} optional tools’ models downloaded.` }
+        : h3Aside && !setup.ready
+          ? // H3's models set aside (GitHub #53): nothing to fix, but don't say shots are ready
+            { tone: 'ok', title: attention ? `${attention} thing${attention === 1 ? '' : 's'} only some tools need` : 'Nothing needs you', sub: `You set aside ${notUsed.length} thing${notUsed.length === 1 ? '' : 's'} as not used, including models MiniMax H3 shots need. Other video models and tools work as usual.` }
+          : attention
+            ? { tone: 'ok', title: 'Ready to make shots', sub: `${attention} thing${attention === 1 ? '' : 's'} only some tools need: see the cards below.` }
+            : { tone: 'ok', title: 'Ready to make shots', sub: `${optional.filter((i) => i.status === 'ok').length} of ${optional.length} optional tools’ models downloaded.${notUsed.length ? ` ${notUsed.length} marked as not used.` : ''}` }
 
   const groups = useMemo(() => {
     const m = new Map()
@@ -254,7 +281,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
   const rows = (list) => (
     <ul className="checks setup-rows">
       {list.map((i) => (
-        <Row key={i.id} i={i} dl={dl} remote={remote} recheck={recheck} notify={notify} />
+        <Row key={i.id} i={i} dl={dl} remote={remote} recheck={recheck} notify={notify} onNotUsed={markNotUsed} />
       ))}
     </ul>
   )
@@ -326,8 +353,21 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
       {sections.map((x, k) => {
         const bad = issues(x)
         const okCount = x.list.filter((i) => i.status === 'ok').length
-        const pill = x.optional ? <Pill>{`${okCount} of ${x.list.length} downloaded`}</Pill> : bad.length ? <Pill tone="warn">{`${bad.length} to fix`}</Pill> : <Pill tone="ok">{`All ${x.list.length} ready`}</Pill>
+        const pill = x.info ? <Pill>{`${x.list.length} marked`}</Pill> : x.optional ? <Pill>{`${okCount} of ${x.list.length} downloaded`}</Pill> : bad.length ? <Pill tone="warn">{`${bad.length} to fix`}</Pill> : <Pill tone="ok">{`All ${x.list.length} ready`}</Pill>
         const shown = view === 'all' ? x.list : bad
+        if (x.info)
+          return (
+            <Section key={x.id} n={k + 1} id={x.id} title={x.title} sub={x.sub} pill={pill} open={!!toggled[x.id]} onToggle={() => setToggled((t) => ({ ...t, [x.id]: !t[x.id] }))}>
+              {x.list.length > 1 && (
+                <div className="setup-inline">
+                  <button className="btn btn-small" onClick={() => markNotUsed(x.list.map((i) => i.id), false)}>
+                    Use all {x.list.length} again
+                  </button>
+                </div>
+              )}
+              {rows(x.list)}
+            </Section>
+          )
         if (view === 'attention' && !bad.length && x.id !== 'comfy' && x.id !== 'extras') return <Section key={x.id} n={k + 1} id={x.id} title={x.title} sub={x.sub} pill={pill} open={!!toggled[x.id]} onToggle={() => setToggled((t) => ({ ...t, [x.id]: !t[x.id] }))}>{rows(x.list)}</Section>
         return (
           <Section key={x.id} n={k + 1} id={x.id} title={x.title} sub={x.sub} pill={pill} open={isOpen(x)} onToggle={() => setToggled((t) => ({ ...t, [x.id]: !isOpen(x) }))}>
@@ -385,6 +425,15 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
                   </div>
                 )
               })}
+            {/* a PC that makes only LTX or picture work can set MiniMax H3's models aside in one go (GitHub #53) */}
+            {x.id === 'core' && bad.filter(markable).length > 1 && (
+              <div className="setup-inline setup-notused-all">
+                <button className="btn btn-small" onClick={() => markNotUsed(bad.filter(markable).map((i) => i.id), true)}>
+                  I don’t make MiniMax H3 shots · set these {bad.filter(markable).length} aside
+                </button>
+                <span className="dim small">They move to Not used at the end and stop counting. Undo it there any time.</span>
+              </div>
+            )}
             {(x.id === 'core' || x.id === 'chars') && (shown.length ? rows(shown) : <p className="dim small">All ready.</p>)}
           </Section>
         )
