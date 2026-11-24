@@ -2,6 +2,14 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.28',
+    items: [
+      { text: 'New on Lines: How it’s said. Give a line a style in words (“whispering, out of breath”), and set CFG and steps, VoxCPM2’s own controls. Each line lists what it used, and Say it again brings it back. Left alone, lines are said as before.' },
+      { text: 'New in Setup: mark a model, node pack or character you don’t use as not used, or set MiniMax H3’s models aside in one go if you make LTX or picture work only. They move to a Not used card and stop counting as things to fix.' },
+      { text: 'Your Pictures: the picture viewer’s buttons stay inside the window, and a long model name wraps instead of scrolling sideways.' }
+    ]
+  },
+  {
     version: '1.1.27',
     items: [
       { text: 'New: Write it for me on the Images page. Say what you want in plain words and it writes the prompt the way your picture model reads prompts. Krea 2, Flux.2, Flux 3, Qwen Image 2.1, Z-Image Turbo, Moss, SDXL (Pony and Illustrious too), MiniMax H3 Image, ChatGPT Images and H3 stills each have their own guide, from their makers’ own advice. Leave the idea empty to rewrite the prompt that’s there for the model you picked.' },
