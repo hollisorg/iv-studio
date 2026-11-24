@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.27',
+    items: [
+      { text: 'New: Write it for me on the Images page. Say what you want in plain words and it writes the prompt the way your picture model reads prompts. Krea 2, Flux.2, Flux 3, Qwen Image 2.1, Z-Image Turbo, Moss, SDXL (Pony and Illustrious too), MiniMax H3 Image, ChatGPT Images and H3 stills each have their own guide, from their makers’ own advice. Leave the idea empty to rewrite the prompt that’s there for the model you picked.' },
+      { text: 'For an edit, it looks at your pictures and writes the change the way that model wants it. SDXL and Moss get a negative prompt too (under More), and LoRA trigger words stay at the front. Pick who writes from its menu: the local writer, Claude, ChatGPT, Hermes or your OpenAI-compatible server.' },
+      { text: 'Seed: choose Random each time or Fixed, on Create (now out in Shape and size) and on Images. Fixed keeps one number, so the same settings give the same result; on Images it starts from your last picture’s seed.' },
+      { text: 'The renders tray closes the way you’d expect: its × button, Escape, or a click anywhere else.' }
+    ]
+  },
+  {
     version: '1.1.26',
     items: [
       { text: 'New: when you start a render anywhere (a shot, a picture, a sequence, Keyframes, a music video, an effect, a song...), a window shows it working, and you can close it and keep exploring. Bored? Play Frame Hunt in it while you wait. When it’s ready, a drop lands in the corner on any page: click it to crack it open and see what you made.' },
