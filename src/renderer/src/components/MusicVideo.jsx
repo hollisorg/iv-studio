@@ -7,7 +7,7 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
 import { usePeaks, Wave } from './edit/thumbs'
-import TileDelete from './TileDelete'
+import TileDelete from './TileDelete'
 import { track } from '../renders'
 import { ToolWriter } from './PromptWriter'
 

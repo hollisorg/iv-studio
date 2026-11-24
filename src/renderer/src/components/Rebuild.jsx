@@ -6,7 +6,7 @@ import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
-import VoiceLines from './VoiceLines'
+import VoiceLines from './VoiceLines'
 import { rebuildProgress, startRender } from '../renders'
 
 // Rebuild: a video the person made (or may rework), read into shots and made again on this PC. IV Studio reads it

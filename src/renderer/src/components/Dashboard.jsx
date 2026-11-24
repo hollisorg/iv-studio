@@ -9,7 +9,7 @@ import Loading from './Loading'
 import { AgentPanel, useAgentRun } from './AgentRun'
 import WhatsNew, { NewsChip } from './WhatsNew'
 import { askAgent, useAgentName } from './ChatPanel'
-import { ask } from './Confirm'
+import { ask } from './Confirm'
 import { frameHuntBest, isRunning, watchRenders } from '../renders'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.

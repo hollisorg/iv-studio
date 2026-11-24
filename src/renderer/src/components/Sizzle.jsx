@@ -5,7 +5,7 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
-import { fileUrl } from './edit/model'
+import { fileUrl } from './edit/model'
 import { sizzleProgress, startRender } from '../renders'
 
 // Website sizzle: a web address in, a promo film out. IV Studio captures the site; your agent writes the

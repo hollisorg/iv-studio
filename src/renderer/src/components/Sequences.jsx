@@ -10,7 +10,7 @@ import { AspectTiles } from './CreateKit'
 import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter, isWriting } from './PromptWriter'
 import { fileUrl } from './edit/model'
-import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import { track } from '../renders'
 
 const MAX_LORAS = 4 // sequence.js MAX_SEQUENCE_LORAS

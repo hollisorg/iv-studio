@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
 import { Step } from './FlowKit'
-import VoiceLines from './VoiceLines'
+import VoiceLines from './VoiceLines'
 import { track } from '../renders'
 
 // Replace's Remake engine (remake.js): swap people or change the scene. IV Studio paints a frame of each shot, the

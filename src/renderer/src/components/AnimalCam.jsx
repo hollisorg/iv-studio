@@ -7,7 +7,7 @@ import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
 import TileDelete from './TileDelete'
-import './animalcam.css'
+import './animalcam.css'
 import { track } from '../renders'
 
 // Animal Cam (src/service/animalcam.js): animal videos that look filmed on a phone, in seven steps. Each step saves as

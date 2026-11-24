@@ -13,7 +13,7 @@ import { LoraPicker } from './Loras'
 import { askAgent, useAgentName } from './ChatPanel'
 import { CinemaChips, CinemaPicker, LookbookBox, PromptTools, useSlate } from './CraftKit'
 import { SPEEDS } from '../../../service/speed'
-import { FirstRenders, useFirstRenders } from './Speed'
+import { FirstRenders, useFirstRenders } from './Speed'
 import { track } from '../renders'
 import { ToolWriter } from './PromptWriter'
 

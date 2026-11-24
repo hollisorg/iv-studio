@@ -10,7 +10,7 @@ import { ClipFxDialog } from './ClipFx'
 import { ask } from '../Confirm'
 import Help from '../Help'
 import { askAgent, useAgentName } from '../ChatPanel'
-import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
+import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
 import { editGenProgress, madeFile, startRender } from '../../renders'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share

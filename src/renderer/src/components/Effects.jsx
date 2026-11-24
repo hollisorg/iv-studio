@@ -3,7 +3,7 @@ import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
 import { Step, Choices, DropZone, Summary, SummaryDock, SummaryFrame, StageDrop, WorkflowNeeds } from './FlowKit'
 import { Field } from './edit/ClipFx'
-import Stage from './Stage'
+import Stage from './Stage'
 import { mediaKind, renderPopupOn, startRender } from '../renders'
 
 // Workflows → Effects: a photo becomes a short clip, three ways (Freefield's apps, freefield.js): an effect from a

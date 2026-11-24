@@ -4,7 +4,7 @@ import { Step, Choices, DropZone, WorkflowNeeds } from './FlowKit'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
 import { media } from '../media'
-import RemakeFlow from './RemakeFlow'
+import RemakeFlow from './RemakeFlow'
 import { track } from '../renders'
 
 // Remake (the engine since 0.3.0): swap people or change the scene

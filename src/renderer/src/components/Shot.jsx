@@ -12,7 +12,7 @@ import { CompareViewer, PromptDiff, runChanges } from './Compare'
 import { runTime } from '../runTime'
 import { askAgent, useAgentName } from './ChatPanel'
 import { lintPrompt } from '../../../service/lint'
-import { lintSeedance } from '../../../service/seedlint'
+import { lintSeedance } from '../../../service/seedlint'
 import { track } from '../renders'
 import { writerName } from './PromptWriter'
 

@@ -6,7 +6,7 @@ import { FirstRenders } from './Speed'
 import Stage from './Stage'
 import { ToolShelf, ShelfTile, WorkflowNeeds } from './FlowKit'
 import { fileUrl } from './edit/model'
-import TileDelete from './TileDelete'
+import TileDelete from './TileDelete'
 import { track } from '../renders'
 
 // Keyframes (src/service/keyframes.js): pictures in order become one video moving from each to the next. The editor

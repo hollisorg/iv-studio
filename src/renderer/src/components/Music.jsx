@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Stage from './Stage'
 import QuickBar, { showBelow } from './AudioQuick'
 import { ask } from './Confirm'
-import { ListSearch, MoreMenu, Track } from './AudioKit'
+import { ListSearch, MoreMenu, Track } from './AudioKit'
 import { startRender } from '../renders'
 
 const M = () => window.ivstudio.music

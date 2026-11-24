@@ -3,7 +3,7 @@ import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
-import { StepHead } from './CreateKit'
+import { StepHead } from './CreateKit'
 import HfLogin from './HfLogin'
 
 // The cloud setup wizard: pick a service, connect the account, choose a GPU, set it up, switch to it. Opened from
