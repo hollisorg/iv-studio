@@ -199,3 +199,33 @@ export function ImageModeIcon({ id }) {
     </svg>
   )
 }
+
+// The seed, as a choice: a new one every run (each result keeps the one it used), or one fixed number so the same
+// settings give the same result. seed: '' for random, else the number. lastSeed: what Fixed starts from (the last
+// result's seed, so "keep that one" is one click), else a new random number.
+export function SeedPick({ seed, onChange, lastSeed = null, max = 2 ** 31 }) {
+  const fixed = seed !== '' && seed != null
+  const roll = () => Math.floor(Math.random() * max)
+  return (
+    <div className="create-field seed-pick">
+      <span className="create-label mono">Seed</span>
+      <div className="segmented" role="radiogroup" aria-label="Seed">
+        <button role="radio" aria-checked={!fixed} className={!fixed ? 'on' : ''} onClick={() => onChange('')}>
+          Random each time
+        </button>
+        <button role="radio" aria-checked={fixed} className={fixed ? 'on' : ''} onClick={() => !fixed && onChange(lastSeed ?? roll())}>
+          Fixed
+        </button>
+      </div>
+      {fixed && (
+        <div className="seed">
+          <input type="number" min={0} value={seed} onChange={(e) => onChange(e.target.value === '' ? 0 : Math.max(0, Math.floor(Number(e.target.value)) || 0))} aria-label="The fixed seed" />
+          <button className="seed-roll" onClick={() => onChange(roll())} title="Another fixed seed" aria-label="Another fixed seed">
+            ⟳
+          </button>
+        </div>
+      )}
+      <span className="dim small">{fixed ? 'This seed every run: the same settings give the same result.' : 'A new seed every run; each result keeps the seed it used.'}</span>
+    </div>
+  )
+}

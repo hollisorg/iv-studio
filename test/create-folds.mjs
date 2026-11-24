@@ -78,13 +78,15 @@ ok(
   },
 );
 
-ok('Advanced holds preview size, takes, quality and seed with steps and sampler, says what they are, and stays as left', () => {
+// since the seed choice (Matthew, 2026-11-24: "pick if they want randomized or fixed seed") the seed is out in Shape and size
+ok('Advanced holds preview size, takes and quality with steps and sampler, says what they are, and stays as left; the seed choice is out in Shape and size', () => {
   const adv = create.slice(create.indexOf('<div className="more-settings-body">'), create.indexOf('<div className="adv-grid">'))
-  for (const label of ["{oneFinal ? 'First pass size' : 'Preview size'}", 'Previews</span>', 'Quality</span>', 'Seed</span>']) assert.ok(adv.includes(label), `${label} is under Advanced`)
+  for (const label of ["{oneFinal ? 'First pass size' : 'Preview size'}", 'Previews</span>', 'Quality</span>']) assert.ok(adv.includes(label), `${label} is under Advanced`)
   const shape = create.slice(create.indexOf("<section {...stepBox('shape')}>"), create.indexOf('<div className="more-settings-body">'))
-  assert.ok(!shape.includes("'First pass size' : 'Preview size'") && !shape.includes('aria-label="Seed"'), 'and not out in Shape and size')
+  assert.ok(!shape.includes("'First pass size' : 'Preview size'"), 'and not out in Shape and size')
+  assert.ok(shape.includes('<SeedPick seed={form.seed}') && !adv.includes('SeedPick') && !adv.includes('Seed</span>'), 'the seed choice is in Shape and size, not under Advanced')
   assert.ok(create.includes("{advanced ? '−' : '+'} Advanced") && create.includes('<span className="dim">{advancedLine}</span>'), 'the Advanced line says what they are set to')
-  assert.ok(create.includes('`seed ${form.seed}`'))
+  assert.ok(create.includes('`seed ${form.seed}`') && !/advancedLine = \[[^\]]*seed/.test(create), 'the shot card names the seed; the Advanced line no longer does')
   assert.ok(create.includes("localStorage.setItem('iv.create.advanced', v ? '1' : '0')"), 'open or shut is remembered')
 })
 

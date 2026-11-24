@@ -4,12 +4,15 @@ import Hero from './Hero'
 import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
-import { AspectTiles, DropIcon, ImageModeIcon, StepHead } from './CreateKit'
+import { AspectTiles, DropIcon, ImageModeIcon, SeedPick, StepHead } from './CreateKit'
 import PictureTools from './PictureTools'
 import HfLogin from './HfLogin'
 import TemplateBar from './Templates'
+import { ImageWriter } from './PromptWriter'
 
 const I = () => window.ivstudio.images
+// the families whose sampler uses a negative prompt: Write it for me writes one for them (service/imagewriter.js)
+const WRITES_NEGATIVE = ['sdxl', 'moss']
 const MODES = [
   ['generate', 'Generate', 'Make pictures from a prompt.'],
   ['edit', 'Edit', 'Change a picture with an instruction. Only models that can edit.'],
@@ -467,6 +470,26 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
 
           <section className="create-step">
             <StepHead n={n.prompt} title={editMode ? 'What to change' : 'What it shows'} sub={editMode ? 'Say what to change, and what to keep.' : 'Subject, place, light and style.'} />
+            {fam && (
+              <ImageWriter
+                family={fam.id}
+                familyLabel={fam.label}
+                model={form.model}
+                mode={form.mode}
+                aspect={form.aspect}
+                refs={editMode ? form.refs : []}
+                triggers={form.loras.flatMap((l) => loraInfo(l.name)?.prefs?.triggers || loraInfo(l.name)?.civitai?.trainedWords || []).filter((w) => w && form.prompt.includes(w))}
+                current={form.prompt}
+                negative={form.negative}
+                usesNegative={WRITES_NEGATIVE.includes(fam.id)}
+                notify={notify}
+                go={go}
+                onWritten={(out) => {
+                  set({ prompt: out.prompt, ...(typeof out.negative === 'string' ? { negative: out.negative } : {}) })
+                  if (out.negative) setMore(true)
+                }}
+              />
+            )}
             <textarea className="prompt image-prompt" value={form.prompt} placeholder={editMode ? 'Make it night, keep her face and pose.' : 'An old farmer kneeling in a golden field at sunset, a 3D animated film still.'} onChange={(e) => set({ prompt: e.target.value })} aria-label={editMode ? 'What to change' : 'Prompt'} />
             {fam?.tips && (
               <details className="image-tips small">
@@ -530,17 +553,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                   ))}
                 </div>
               </div>
-              {!codex && (
-                <div className="create-field">
-                  <span className="create-label mono">Seed</span>
-                  <div className="seed">
-                    <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} aria-label="Seed" />
-                    <button className="seed-roll" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })} title="A new seed" aria-label="A new seed">
-                      ⟳
-                    </button>
-                  </div>
-                </div>
-              )}
+              {!codex && <SeedPick seed={form.seed} lastSeed={sets.find((x) => x.engine !== 'codex' && Number.isFinite(Number(x.seed)) && x.seed !== null && x.seed !== '')?.seed ?? null} onChange={(seed) => set({ seed: seed === '' ? '' : String(seed) })} />}
             </div>
           </section>
         </div>

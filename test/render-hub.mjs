@@ -217,5 +217,17 @@ await ok('every tool hands its renders to the hub, and Open it goes back to it',
   assert.match(app, /iv:open-item/)
 })
 
+// Matthew, 2026-11-24: "this pop-up should be exitable": the tray's list closes with x, Escape, a click elsewhere, or
+// by opening a render from it
+await ok('the renders tray closes with its close button, Escape, a click elsewhere, or Watch/Open', () => {
+  const hub = src('../src/renderer/src/components/RenderHub.jsx')
+  const tray = hub.slice(hub.indexOf('function RenderTray('), hub.indexOf('function CrateIcon('))
+  assert.match(tray, /e\.key === 'Escape' && setOpen\(false\)/)
+  assert.match(tray, /!box\.current\.contains\(e\.target\) && setOpen\(false\)/)
+  assert.match(tray, /className="lora-chip-x render-tray-close" aria-label="Close the list"/)
+  assert.match(tray, /onClick=\{\(\) => \(setOpen\(false\), onOpen\(r\)\)\}/)
+  assert.ok(tray.indexOf('useEffect(') < tray.indexOf('if (!renders.length) return null'), 'its hooks run before it can return nothing')
+})
+
 console.log(`\n${n - failed} of ${n} passed`)
 if (failed) process.exit(1)

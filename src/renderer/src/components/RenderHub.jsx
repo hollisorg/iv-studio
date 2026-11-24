@@ -376,13 +376,23 @@ function LootReveal({ r, onClose, onGo, onAgain, onFinish }) {
 // each render's progress, Open, Stop and a way to take finished ones off the list.
 function RenderTray({ renders, onOpen, onCancel, onDismiss }) {
   const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  // open, it closes with ×, Escape, a click anywhere else, or by opening a render from it
+  useEffect(() => {
+    if (!open) return
+    const key = (e) => e.key === 'Escape' && setOpen(false)
+    const away = (e) => box.current && !box.current.contains(e.target) && setOpen(false)
+    window.addEventListener('keydown', key)
+    document.addEventListener('pointerdown', away)
+    return () => (window.removeEventListener('keydown', key), document.removeEventListener('pointerdown', away))
+  }, [open])
   const running = renders.filter(isRunning)
   const ready = renders.filter((r) => r.state.stage === 'done')
   if (!renders.length) return null
   const canStop = (r) => isRunning(r) && (r.kind === 'image' || r.kind === 'video' || r.kind === 'jobs')
   const words = (s) => (s.stage === 'done' ? 'Ready' : s.stage === 'failed' ? 'Stopped' : s.stage === 'finishing' ? `Finishing${s.pct ? ` · ${s.pct}%` : ''}` : s.stage === 'running' ? `${s.count > 1 ? `${s.done} of ${s.count} · ` : ''}${s.pct ? `${s.pct}%` : 'Rendering'}` : `Waiting${s.position ? ` · ${s.position} in line` : ''}`)
   return (
-    <div className={`render-tray ${open ? 'open' : ''}`}>
+    <div className={`render-tray ${open ? 'open' : ''}`} ref={box}>
       {open && (
         <div className="render-tray-list" role="list" aria-label="Your renders">
           <div className="render-tray-head mono small">
@@ -393,6 +403,9 @@ function RenderTray({ renders, onOpen, onCancel, onDismiss }) {
                 Clear finished
               </button>
             )}
+            <button className="lora-chip-x render-tray-close" aria-label="Close the list" title="Close (Esc)" onClick={() => setOpen(false)}>
+              ×
+            </button>
           </div>
           {renders.map((r) => (
             <div key={r.key} className={`render-tray-row ${r.state.stage}`} role="listitem">
@@ -409,7 +422,7 @@ function RenderTray({ renders, onOpen, onCancel, onDismiss }) {
               </div>
               <div className="render-tray-actions">
                 {r.state.stage !== 'failed' && (
-                  <button className="btn btn-small" onClick={() => onOpen(r)}>
+                  <button className="btn btn-small" onClick={() => (setOpen(false), onOpen(r))}>
                     {r.state.stage === 'done' ? 'Open' : 'Watch'}
                   </button>
                 )}

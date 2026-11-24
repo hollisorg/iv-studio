@@ -123,6 +123,22 @@ export function ToolWriter({ tool, notify }) {
     </span>
   )
 }
+// Why the chosen writer can't write yet (not installed, not set up), or null when it can.
+export function writerBlocker(status, engine) {
+  const harness = engine === 'claude' || engine === 'codex' || engine === 'hermes'
+  return (
+    status &&
+    (engine === 'contextir'
+      ? !status.hasComfyKey && 'MiniMax Context IR needs your Comfy.org API key.'
+      : harness
+        ? !status.harnesses?.[engine]?.installed && `${HARNESS_NAME[engine]} isn't installed on this PC.`
+        : engine === 'openai'
+        ? (!status.openai?.url ? 'Set up the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.model ? 'Choose a model for the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.ok && `The OpenAI-compatible server isn't answering: ${status.openai.error}`)
+        : !status.installed
+        ? 'The free writer needs Ollama.'
+        : status.running && !status.models.some((m) => m.name === status.model) && `The writer model ${status.model} isn't installed yet.`)
+  )
+}
 // a writer's name for the run history ("written by Claude")
 export const writerName = (id) => ({ local: 'the local writer', claude: 'Claude', codex: 'ChatGPT', hermes: 'Hermes', openai: 'your OpenAI-compatible server', contextir: 'Context IR' })[id] || id
 
@@ -181,17 +197,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   // Context IR is MiniMax's H3 rewriter: a Seedance shot is written by the local writer instead
   const engine = context.engine === 'seedance' && chosen === 'contextir' ? 'local' : chosen
   const harness = engine === 'claude' || engine === 'codex' || engine === 'hermes'
-  const blocker =
-    status &&
-    (engine === 'contextir'
-      ? !status.hasComfyKey && 'MiniMax Context IR needs your Comfy.org API key.'
-      : harness
-        ? !status.harnesses?.[engine]?.installed && `${HARNESS_NAME[engine]} isn't installed on this PC.`
-        : engine === 'openai'
-        ? (!status.openai?.url ? 'Set up the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.model ? 'Choose a model for the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.ok && `The OpenAI-compatible server isn't answering: ${status.openai.error}`)
-        : !status.installed
-        ? 'The free writer needs Ollama.'
-        : status.running && !status.models.some((m) => m.name === status.model) && `The writer model ${status.model} isn't installed yet.`)
+  const blocker = writerBlocker(status, engine)
 
   // What the local writer will look at: pictures, frames from videos, or the clip a Continue shot carries on.
   const visual = (context.media || []).filter((m) => m.kind === 'picture' || m.kind === 'video')
@@ -404,6 +410,79 @@ export function StoryWriter({ character, shotSeconds, existing, onShots, notify,
         </button>
       </div>
       <p className="small dim writer-note">Uses the writer chosen in Settings (the local one if that's Context IR). Each shot follows the join rules so they play as one take.</p>
+    </div>
+  )
+}
+
+// Write it for me on the Images page: the idea in plain words, the prompt written for the chosen picture model with
+// its own guide (service/imagewriter.js). With no idea but a prompt, it rewrites that prompt for this model. The
+// menu is the Images page's own writer (remembered like every tool's); Context IR writes H3 shots only, so pictures
+// go to the local writer then. A model that uses a negative prompt gets one written too.
+export function ImageWriter({ family, familyLabel, model, mode, aspect, refs = [], triggers = [], current = '', negative = '', usesNegative = false, onWritten, notify, go }) {
+  const [idea, setIdea] = useState('')
+  const { status, engine: chosen, pick } = useToolWriter('images')
+  const engine = chosen === 'contextir' ? 'local' : chosen
+  const [busy, setBusy] = useState(false)
+  const [undo, setUndo] = useState(null)
+  const blocker = writerBlocker(status, engine)
+  const edit = mode === 'edit'
+  const harness = engine === 'claude' || engine === 'codex' || engine === 'hermes'
+  const sees = harness || (engine === 'openai' ? status?.openai?.vision : status?.models?.find((m) => m.name === status.model)?.vision)
+  const rewriteOnly = !idea.trim() && !!current.trim()
+  async function write() {
+    setBusy(true)
+    try {
+      const out = await window.ivstudio.prompts.image({ family, model, mode, aspect, idea: idea.trim(), current, refs, triggers, writer: engine })
+      setUndo({ prompt: current, negative })
+      onWritten(out, engine)
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="writer image-writer">
+      <div className="writer-head">
+        <span className="mono label writer-label">✦ Write it for me</span>
+        <span className="writer-engine-pick">
+          <WriterMenu status={status} engine={engine} onPick={(id) => pick(id).catch((err) => notify(err.message))} title="Who writes the prompt on the Images page. Settings → Prompt writer sets the one every tool starts with." />
+          <span className="mono dim small"> · {familyLabel} guide</span>
+        </span>
+      </div>
+      <div className="writer-row">
+        <textarea rows={2} value={idea} placeholder={edit ? 'What to change, in plain words, e.g. make it night and keep her face' : 'Your idea in plain words, e.g. an old farmer in a golden field at sunset'} onChange={(e) => setIdea(e.target.value)} aria-label="Your idea in plain words" />
+        <button className="btn btn-primary" disabled={busy || (!idea.trim() && !current.trim()) || !!blocker} onClick={write} title={rewriteOnly ? `Rewrites the prompt below the way ${familyLabel} reads prompts` : undefined}>
+          {busy ? 'Writing…' : rewriteOnly ? `Rewrite for ${familyLabel}` : current.trim() ? 'Rewrite prompt' : 'Write my prompt'}
+        </button>
+      </div>
+      {edit && refs.length > 0 && !blocker && (
+        <p className={`small writer-note ${sees ? 'dim' : 'pink'}`}>
+          ✦ {sees ? `Looks at your ${refs.length === 1 ? 'picture' : `${refs.length} pictures`} and writes the change for them.` : engine === 'openai' ? `The OpenAI-compatible writer is set to not see pictures, so it writes from your words alone.` : `${status?.model || 'The writer model'} can't see pictures, so it writes from your words alone.`}
+        </p>
+      )}
+      {blocker && (
+        <p className="small pink writer-note">
+          {blocker}{' '}
+          <button className="link-btn" onClick={() => go('settings')}>
+            Set it up in Settings
+          </button>
+        </p>
+      )}
+      {undo && !busy && (
+        <p className="small dim writer-note">
+          Prompt written below{usesNegative ? ', with a negative prompt under More' : ''}; edit it freely.{' '}
+          <button
+            className="link-btn"
+            onClick={() => {
+              onWritten(undo, null)
+              setUndo(null)
+            }}
+          >
+            Undo
+          </button>
+        </p>
+      )}
     </div>
   )
 }

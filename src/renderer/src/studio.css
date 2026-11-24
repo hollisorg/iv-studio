@@ -19725,3 +19725,11 @@ html.chat-window body {
 .setup-slow-row .btn {
   min-height: 44px;
 }
+
+/* Seed: Random each time or Fixed (CreateKit SeedPick), on Create and Images */
+.seed-pick .segmented { flex-wrap: wrap; }
+.seed-pick .seed { margin-top: 8px; }
+/* the renders tray closes with its own × too */
+.render-tray-close { margin-left: 10px; min-width: 28px; min-height: 28px; }
+/* Write it for me on the Images page sits above the prompt */
+.image-writer { margin-bottom: 14px; }

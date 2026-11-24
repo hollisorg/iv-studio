@@ -272,7 +272,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onPrep: on('cloud:prep'),
     hfToken: call('cloud:hfToken')
   },
-  prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), openai: call('prompts:openai'), onPull: on('prompts:pull') },
+  prompts: { status: call('prompts:status'), write: call('prompts:write'), image: call('prompts:image'), story: call('prompts:story'), pull: call('prompts:pull'), openai: call('prompts:openai'), onPull: on('prompts:pull') },
   setup: {
     check: call('setup:check'),
     installNodes: call('setup:installNodes'),

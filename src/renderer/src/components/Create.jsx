@@ -10,7 +10,7 @@ import Findings from './Findings'
 import { MentionBox, MentionNotes, PlaceDialog } from './Mentions'
 import { blocking, lintPrompt } from '../../../service/lint'
 import { fileUrl } from './edit/model'
-import { AspectGlyph, DropIcon, showStep, StepHead, StepJump, useFolds } from './CreateKit'
+import { AspectGlyph, DropIcon, SeedPick, showStep, StepHead, StepJump, useFolds } from './CreateKit'
 import { pretty as refmodTitle, RefModIcon, RefModPicker } from './CharacterSources'
 import { lintSeedance } from '../../../service/seedlint'
 import { confirmSpend, dollars } from './ComfyAccount'
@@ -693,12 +693,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     return { folded: s?.folded, summary: s?.summary, warn: s?.warn, onToggle: () => folds.toggle(id) }
   }
   const jumpTo = (id) => (folds.open(id), showStep(id))
-  // what the settings folded under Advanced are now, so nothing hidden is a mystery: "0.4 MP · 3 previews · Standard · seed 4242"
+  // what the settings folded under Advanced are now, so nothing hidden is a mystery: "0.4 MP · 3 previews · Standard"
   const advancedLine = [
     `${oneFinal ? 'first pass ' : ''}${form.megapixels} MP`,
     !oneFinal && `${form.previews} preview${form.previews === 1 ? '' : 's'}`,
     QUALITY.find(([st]) => st === form.steps)?.[1] || `${form.steps} steps`,
-    form.seed === '' ? 'random seed' : `seed ${form.seed}`,
     form.sampler !== SAMPLER_DEFAULT && form.sampler,
     form.scheduler !== SCHEDULER_DEFAULT && form.scheduler
   ]
@@ -1246,6 +1245,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant" onChange={(e) => set({ projectName: e.target.value })} />
             </div>
 
+            {h3 && <SeedPick seed={form.seed} max={1e9} onChange={(seed) => set({ seed })} />}
             {h3 && (
             <div className={`more-settings ${advanced ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
@@ -1287,23 +1287,6 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                         ))}
                       </div>
                       <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set below)`}</span>
-                    </div>
-                    <div className="create-field">
-                      <span className="create-label mono">Seed</span>
-                      <div className="seed">
-                        <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
-                        <button className="seed-roll" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })} title="A new seed" aria-label="A new seed">
-                          ⟳
-                        </button>
-                      </div>
-                      <span className="dim small">
-                        {form.seed === '' ? 'Empty: a new seed every run (the shot keeps the one it used). Type one to use it every time.' : 'This seed every run. '}
-                        {form.seed !== '' && (
-                          <button className="link-btn" onClick={() => set({ seed: '' })}>
-                            Random again
-                          </button>
-                        )}
-                      </span>
                     </div>
                   </div>
                 <div className="adv-grid">

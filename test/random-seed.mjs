@@ -29,14 +29,19 @@ ok('every video path picks one: H3, LTX and Seedance runs, new sequences and ret
   assert.match(src('../src/mcp/server.js'), /seed: z\.number\(\)\.int\(\)\.min\(0\)\.optional\(\)\.describe\('Previews use seed/)
 })
 
-ok('Create: an empty seed box is random, says so, and old 4242 setups go random', () => {
+ok('Create and Images: Seed is a choice, Random each time or Fixed, says so, and old 4242 setups go random', () => {
   const create = src('../src/renderer/src/components/Create.jsx')
   assert.match(create, /seed: '', \/\/ '' is a new seed every run/)
-  assert.match(create, /placeholder="Random"/)
+  assert.match(create, /<SeedPick seed=\{form\.seed\} max=\{1e9\} onChange=\{\(seed\) => set\(\{ seed \}\)\} \/>/)
   assert.match(create, /seed: r\.seed === '' \|\| r\.seed == null \? undefined : r\.seed/)
   assert.match(create, /\.\.\.\(saved\.seed === 4242 \? \{ seed: '' \} : \{\}\)/)
   assert.match(create, /form\.seed === '' \? 'random seed' : `seed \$\{form\.seed\}`/)
-  assert.match(create, /Random again/)
+  const kit = src('../src/renderer/src/components/CreateKit.jsx')
+  for (const w of ['Random each time', 'Fixed', 'role="radiogroup"', 'This seed every run', 'A new seed every run']) assert.ok(kit.includes(w), `the seed choice says ${w}`)
+  assert.match(kit, /onClick=\{\(\) => onChange\(''\)\}/, 'Random each time empties the seed')
+  assert.match(kit, /onChange\(lastSeed \?\? roll\(\)\)/, 'Fixed starts from the last seed, or a new one')
+  const images = src('../src/renderer/src/components/Images.jsx')
+  assert.match(images, /<SeedPick seed=\{form\.seed\} lastSeed=/, 'Images has the same choice, starting from its last picture’s seed')
 })
 
 console.log(`\n${n} of 3 passed`)

@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import { writeImagePrompt } from '../service/imagewriter'
 import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, PROMPT_WRITERS, writerFor, writerOf, writeSettings } from '../service/paths'
 import { cleanTopBar } from '../renderer/src/topbar'
 // the settings as one tool sees them: its own writer (settings.writers[tool]) in place of Settings → Prompt writer's
@@ -1951,6 +1952,13 @@ app.whenReady().then(() => {
     const s = readSettings(BASE)
     const w = writerFor(s, request)
     return studio.writePrompt(request, { engine: w.engine, apiKey: w.engine === 'contextir' ? comfyKey() : null, model: w.model })
+  })
+  // Write it for me on the Images page: the picture model's own guide (imagewriter.js); Context IR only writes H3
+  // shots, so it hands pictures to the local writer
+  handle('prompts:image', async (request) => {
+    const w = writerFor(toolSettings(readSettings(BASE), 'images'), request)
+    const writer = w.engine === 'contextir' ? writerOf({ ...readSettings(BASE), promptEngine: 'local' }) : w
+    return writeImagePrompt({ ...request, writer, resourcesDir: studio.resourcesDir, cpu: writer.engine === 'local' && (await studio.gpuBusy()) })
   })
   handle('prompts:story', (request) => {
     const w = writerOf(readSettings(BASE))
