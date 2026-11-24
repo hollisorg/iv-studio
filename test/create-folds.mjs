@@ -78,4 +78,14 @@ ok(
   },
 );
 
-console.log(`\n${n} of 4 passed`);
+ok('Advanced holds preview size, takes, quality and seed with steps and sampler, says what they are, and stays as left', () => {
+  const adv = create.slice(create.indexOf('<div className="more-settings-body">'), create.indexOf('<div className="adv-grid">'))
+  for (const label of ["{oneFinal ? 'First pass size' : 'Preview size'}", 'Previews</span>', 'Quality</span>', 'Seed</span>']) assert.ok(adv.includes(label), `${label} is under Advanced`)
+  const shape = create.slice(create.indexOf("<section {...stepBox('shape')}>"), create.indexOf('<div className="more-settings-body">'))
+  assert.ok(!shape.includes("'First pass size' : 'Preview size'") && !shape.includes('aria-label="Seed"'), 'and not out in Shape and size')
+  assert.ok(create.includes("{advanced ? '−' : '+'} Advanced") && create.includes('<span className="dim">{advancedLine}</span>'), 'the Advanced line says what they are set to')
+  assert.ok(create.includes('`seed ${form.seed}`'))
+  assert.ok(create.includes("localStorage.setItem('iv.create.advanced', v ? '1' : '0')"), 'open or shut is remembered')
+})
+
+console.log(`\n${n} of 5 passed`);

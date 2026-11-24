@@ -167,7 +167,22 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   }
   const [form, setForm] = useState(() => structuredClone(FRESH_FORM))
 
-  const [advanced, setAdvanced] = useState(false)
+  // Advanced (preview size, takes, quality, seed, steps, sampler): open or shut as you last left it
+  const [advanced, setAdvancedState] = useState(() => {
+    try {
+      return localStorage.getItem('iv.create.advanced') === '1'
+    } catch {
+      return false
+    }
+  })
+  const setAdvanced = (v) => {
+    setAdvancedState(v)
+    try {
+      localStorage.setItem('iv.create.advanced', v ? '1' : '0')
+    } catch {
+      // not remembered, that's all
+    }
+  }
   const [pickingRefmod, setPickingRefmod] = useState(false)
   // the samplers and schedulers this ComfyUI offers, read when Advanced first opens
   const [samplers, setSamplers] = useState(null)
@@ -676,6 +691,17 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     return { folded: s?.folded, summary: s?.summary, warn: s?.warn, onToggle: () => folds.toggle(id) }
   }
   const jumpTo = (id) => (folds.open(id), showStep(id))
+  // what the settings folded under Advanced are now, so nothing hidden is a mystery: "0.4 MP · 3 previews · Standard · seed 4242"
+  const advancedLine = [
+    `${oneFinal ? 'first pass ' : ''}${form.megapixels} MP`,
+    !oneFinal && `${form.previews} preview${form.previews === 1 ? '' : 's'}`,
+    QUALITY.find(([st]) => st === form.steps)?.[1] || `${form.steps} steps`,
+    `seed ${form.seed}`,
+    form.sampler !== SAMPLER_DEFAULT && form.sampler,
+    form.scheduler !== SCHEDULER_DEFAULT && form.scheduler
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="create create-v2">
@@ -1211,52 +1237,6 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               </div>
             )}
             {h3 && !oneFinal && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
-            {h3 && (
-            <div className="create-grid">
-              <div className="create-field">
-                <span className="create-label mono">{oneFinal ? 'First pass size' : 'Preview size'}</span>
-                <div className="segmented">
-                  {PREVIEW_MP.map((mp) => (
-                    <button key={mp} className={form.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
-                      {mp} MP
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {!oneFinal && (
-                <div className="create-field">
-                  <span className="create-label mono">Previews</span>
-                  <div className="segmented">
-                    {[1, 2, 3].map((n) => (
-                      <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="create-field">
-                <span className="create-label mono">Quality</span>
-                <div className="segmented">
-                  {QUALITY.map(([steps, label]) => (
-                    <button key={steps} className={form.steps === steps ? 'on' : ''} onClick={() => set({ steps })} title={QUALITY.find(([s]) => s === steps)?.[2]}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set under Advanced)`}</span>
-              </div>
-              <div className="create-field">
-                <span className="create-label mono">Seed</span>
-                <div className="seed">
-                  <input type="number" value={form.seed} onChange={(e) => set({ seed: Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
-                  <button className="seed-roll" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })} title="A new seed" aria-label="A new seed">
-                    ⟳
-                  </button>
-                </div>
-              </div>
-            </div>
-            )}
             <div className="create-field">
               <span className="create-label mono">
                 Shot name <span className="dim">· optional</span>
@@ -1267,11 +1247,56 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             {h3 && (
             <div className={`more-settings ${advanced ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
-                {advanced ? '−' : '+'} Advanced: steps, sampler, scheduler
-                <span className="dim">{[form.steps !== 8 && form.steps !== 4 && `${form.steps} steps`, form.sampler !== SAMPLER_DEFAULT && form.sampler, form.scheduler !== SCHEDULER_DEFAULT && form.scheduler].filter(Boolean).join(' · ')}</span>
+                {advanced ? '−' : '+'} Advanced
+                <span className="dim">{advancedLine}</span>
               </button>
               {advanced && (
-                <div className="more-settings-body adv-grid">
+                <div className="more-settings-body">
+                  <div className="create-grid">
+                    <div className="create-field">
+                      <span className="create-label mono">{oneFinal ? 'First pass size' : 'Preview size'}</span>
+                      <div className="segmented">
+                        {PREVIEW_MP.map((mp) => (
+                          <button key={mp} className={form.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
+                            {mp} MP
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {!oneFinal && (
+                      <div className="create-field">
+                        <span className="create-label mono">Previews</span>
+                        <div className="segmented">
+                          {[1, 2, 3].map((n) => (
+                            <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="create-field">
+                      <span className="create-label mono">Quality</span>
+                      <div className="segmented">
+                        {QUALITY.map(([steps, label]) => (
+                          <button key={steps} className={form.steps === steps ? 'on' : ''} onClick={() => set({ steps })} title={QUALITY.find(([s]) => s === steps)?.[2]}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set below)`}</span>
+                    </div>
+                    <div className="create-field">
+                      <span className="create-label mono">Seed</span>
+                      <div className="seed">
+                        <input type="number" value={form.seed} onChange={(e) => set({ seed: Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
+                        <button className="seed-roll" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })} title="A new seed" aria-label="A new seed">
+                          ⟳
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                <div className="adv-grid">
                   <div className="create-field inline">
                     <span className="create-label mono">Steps</span>
                     <input className="mini" type="number" min={4} max={20} value={form.steps} onChange={(e) => set({ steps: Number(e.target.value) || 8 })} />
@@ -1309,6 +1334,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                       </>
                     )}
                   </p>
+                </div>
                 </div>
               )}
             </div>
