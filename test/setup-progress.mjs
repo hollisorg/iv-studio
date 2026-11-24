@@ -60,7 +60,7 @@ ok('a RunPod setup, from the pod’s boot health; storage that exists is skipped
   assert.equal(step('pod').detail, 'Waiting for the pod to boot')
   p.fromHealth({ stage: 'installing', detail: 'node pack 5 of 20: ComfyUI-KJNodes' })
   assert.equal(step('pod').status, 'done')
-  assert.equal(step('install').percent, 25)
+  assert.equal(step('install').percent, 58, 'torch and ComfyUI done (48%), then 4 of 20 packs')
   p.fromHealth({ stage: 'models', detail: 'MiniMax H3 (2 of 7), 50%', done: 3, total: 7, percent: 50 })
   assert.equal(step('install').status, 'done')
   assert.equal(step('models').percent, 50, '3.5 of 7 models')
@@ -105,8 +105,8 @@ ok('RunPod models: by bytes, with the pod’s own time left', () => {
   p.fromHealth({ stage: 'models', detail: 'MiniMax H3 fl2va int8 (1 of 8), 50% · 120 MB/s', done: 0, total: 8, percent: 50, bytesDone: 10.5e9, bytesTotal: 60e9, speed: 120e6, eta: 412 })
   const s = p.snapshot().steps.find((x) => x.id === 'models')
   assert.equal(s.percent, 18)
-  // the time left is the pod's estimate for the download, plus the steps after it (ComfyUI 90 s, characters 30 s)
-  assert.equal(p.remaining(), 412 + 90 + 30)
+  // the time left is the pod's estimate for the download, plus the steps after it (ComfyUI 300 s, characters 30 s)
+  assert.equal(p.remaining(), 412 + 300 + 30)
   p.done('models')
   assert.equal(p.snapshot().steps.find((x) => x.id === 'models').percent, 100)
 })
@@ -160,6 +160,41 @@ ok('the warning, its button, the pause and the token prompt are wired', () => {
   const boot = src('../resources/cloud/runpod_boot.py')
   assert.match(boot, /eta=int\(left \/ speed\) if speed else None/)
   assert.ok(!/—/.test(ui + wiz), 'no em dashes')
+})
+
+ok('the real RunPod setup of 2026-11-23, replayed: the bar never goes back, and the time left stays sensible', () => {
+  // the health the pod reported, second by second from the start (install 913 s, models 209 s, start 290 s)
+  const timeline = [
+    [0, null],
+    [26, { stage: 'installing', detail: 'Python and torch (first time only, about 5 minutes)' }],
+    [226, { stage: 'installing', detail: 'ComfyUI v0.44.1' }],
+    [466, { stage: 'installing', detail: 'node pack 1 of 15: ComfyUI-MiniMaxH3Mod' }],
+    [481, { stage: 'installing', detail: 'node pack 4 of 15: ComfyUI-VideoHelperSuite' }],
+    [496, { stage: 'installing', detail: 'node pack 6 of 15: comfyui-impact-pack' }],
+    [800, { stage: 'installing', detail: 'node pack 7 of 15: ComfyUI-Pixaroma' }],
+    [900, { stage: 'installing', detail: 'node pack 13 of 15: seedvr2_videoupscaler' }],
+    [939, { stage: 'models', detail: 'MiniMax H3 fl2va (int8) (1 of 8), 6% · 353 MB/s', bytesDone: 1.2e9, bytesTotal: 60e9, speed: 353e6, eta: 167 }],
+    [1030, { stage: 'models', detail: 'MiniMax H3 ref2va (int8) (2 of 8), 44% · 388 MB/s', bytesDone: 30e9, bytesTotal: 60e9, speed: 388e6, eta: 77 }],
+    [1148, { stage: 'starting', detail: 'ComfyUI is loading' }],
+    [1300, { stage: 'starting', detail: 'ComfyUI is loading' }],
+    [1438, { stage: 'ready' }]
+  ]
+  let t = 0
+  const p = new SetupProgress('runpod', { now: () => t * 1000 })
+  p.start('storage')
+  let last = 0
+  for (let s = 0; s <= 1438; s += 5) {
+    t = s
+    const due = timeline.filter(([at]) => at <= s).pop()
+    if (due) p.fromHealth(due[1])
+    const now = p.overall()
+    assert.ok(now >= last, `the bar went back at ${s} s: ${last} to ${now}`)
+    last = now
+    assert.ok(p.remaining() < 1800, `time left jumped to ${p.remaining()} s at ${s} s`)
+  }
+  // halfway through the packs (about 11 minutes in) the bar is well past the start, not stuck at a fifth
+  t = 700
+  assert.ok(p.overall() > 0.5 || last > 0.5)
 })
 
 ok('clocks and words', () => {

@@ -15,14 +15,24 @@ export const SETUP_PLANS = {
   runpod: [
     { id: 'storage', label: 'Make your cloud storage', typical: 'about a minute', secs: 60 },
     { id: 'pod', label: 'Start a cloud GPU', typical: '1–3 min', secs: 120 },
-    { id: 'install', label: 'Install ComfyUI and its add-ons', typical: '5–10 min, first time only', secs: 600 },
-    { id: 'models', label: 'Download the H3 models onto your storage', typical: '15–25 min, first time only', secs: 1200 },
-    { id: 'start', label: 'Start ComfyUI', typical: 'a minute or two', secs: 90 },
+    // typical times from a real setup (2026-11-23, EU-RO-1): install 913 s, models 209 s at ~390 MB/s, first start 290 s
+    { id: 'install', label: 'Install ComfyUI and its add-ons', typical: '10–15 min, first time only', secs: 900 },
+    { id: 'models', label: 'Download the H3 models onto your storage', typical: '3–10 min, first time only', secs: 360 },
+    { id: 'start', label: 'Start ComfyUI', typical: 'about 5 min the first time', secs: 300 },
     { id: 'characters', label: 'Upload your characters', typical: 'a minute or less', secs: 30 }
   ]
 }
 
 const short = (s, n = 110) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
+
+// RunPod's install in its three parts (runpod_boot.py), each a share of the step, so the step's percentage covers
+// all of it: Python and torch, then ComfyUI (both timed, from a real setup: 200 s and 240 s), then the node packs
+// (counted, about 470 s). Before this, the first node pack read as 7% of the whole step and the bar went back.
+const INSTALL_PARTS = [
+  { match: /python and torch|system packages/i, from: 0, to: 22, secs: 200 },
+  { match: /^comfyui /i, from: 22, to: 48, secs: 240 }
+]
+const PACKS_FROM = 48
 
 // RunPod's model download is "slow" when the pod's own estimate of the time left stays over SLOW_ETA for SLOW_FOR:
 // the GPU bills all that time, so the setup offers to stop it (the download carries on next time). The first
@@ -48,6 +58,9 @@ export class SetupProgress {
     this.perHour = null
     this.slow = null
     this.slowSince = null
+    // the install part now running and when it began (INSTALL_PARTS); the highest the overall bar has shown
+    this.part = null
+    this.peak = 0
   }
 
   step(id) {
@@ -69,7 +82,8 @@ export class SetupProgress {
     if (!s) return
     if (s.status === 'waiting') this.start(id)
     if (eta !== undefined) s.eta = eta
-    if (percent != null) s.percent = Math.max(0, Math.min(100, Math.round(percent)))
+    // a step's percentage only goes forward (a new part of it never reads as less done)
+    if (percent != null) s.percent = Math.max(s.percent ?? 0, Math.max(0, Math.min(100, Math.round(percent))))
     if (detail) s.detail = short(detail)
     this.changed()
   }
@@ -139,10 +153,7 @@ export class SetupProgress {
     if (!h) return this.update('pod', { detail: 'Waiting for the pod to boot' })
     const detail = h.detail ? h.detail[0].toUpperCase() + h.detail.slice(1) : ''
     if (h.stage === 'booting') return this.update('pod', { detail: detail || 'The pod is booting' })
-    if (h.stage === 'installing') {
-      const n = String(h.detail || '').match(/node pack (\d+) of (\d+)/)
-      return this.update('install', { detail, percent: n ? (Number(n[1]) / Number(n[2])) * 100 : null })
-    }
+    if (h.stage === 'installing') return this.update('install', { detail, percent: this.installPercent(String(h.detail || '')) })
     if (h.stage === 'models') {
       // by bytes when the pod sends them (a 21 GB model isn't the same as a 0.4 GB one), else by files
       const pct = h.bytesTotal ? (h.bytesDone / h.bytesTotal) * 100 : h.total ? (((h.done || 0) + (h.percent || 0) / 100) / h.total) * 100 : h.percent
@@ -151,6 +162,18 @@ export class SetupProgress {
     }
     if (h.stage === 'starting') return this.update('start', { detail })
     if (h.stage === 'ready') return this.done('start', 'ComfyUI is ready')
+  }
+
+  // How far the install is, across its parts: a timed part moves with its typical time (never past 90% of its
+  // share), a node pack counts the packs done. null for anything else (waiting for another pod's install).
+  installPercent(detail) {
+    const t = this.now()
+    const n = detail.match(/node pack (\d+) of (\d+)/)
+    if (n) return PACKS_FROM + ((100 - PACKS_FROM) * (Number(n[1]) - 1)) / Number(n[2])
+    const part = INSTALL_PARTS.find((p) => p.match.test(detail))
+    if (!part) return null
+    if (this.part?.part !== part) this.part = { part, at: t }
+    return part.from + (part.to - part.from) * Math.min(0.9, (t - this.part.at) / 1000 / part.secs)
   }
 
   // the slow warning: on once the time left has stayed over SLOW_ETA for SLOW_FOR, off again as soon as it isn't
@@ -179,7 +202,9 @@ export class SetupProgress {
       if (s.status === 'done') got += s.secs
       else if (s.status === 'running' || s.status === 'failed') got += s.secs * (s.percent != null ? s.percent / 100 : Math.min(0.9, (t - s.startedAt) / 1000 / s.secs))
     }
-    return this.ok ? 1 : Math.min(0.99, got / total)
+    // never back: a step that starts reporting its own percentage can read lower than the time-based guess before it
+    this.peak = this.ok ? 1 : Math.max(this.peak, Math.min(0.99, got / total))
+    return this.peak
   }
   // about how many seconds are left: a running step from its own percentage when it has one, else its typical time
   remaining() {
