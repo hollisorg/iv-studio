@@ -123,7 +123,7 @@ const FRESH_FORM = {
   megapixels: 0.4,
   seconds: 5,
   previews: 3,
-  seed: 4242,
+  seed: '', // '' is a new seed every run (studio.js withSeed); a number keeps that one
   steps: 8,
   sampler: SAMPLER_DEFAULT,
   scheduler: SCHEDULER_DEFAULT,
@@ -260,6 +260,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       ...(media ? { media } : {}),
       ...(voice !== undefined ? { voiceLine: voice?.path || null, voiceItem: voice } : {}),
       ...(saved.character && !known(saved.character) ? { character: 'none' } : {}),
+      // 4242 was everyone's fixed seed before 1.1.26: a setup remembered or saved with it goes random
+      ...(saved.seed === 4242 ? { seed: '' } : {}),
       ...(saved.with ? { with: saved.with.filter(known) } : {})
     }
   }
@@ -334,7 +336,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     // "Same as photo": the picture's size, and the standard aspect nearest it for everything that files shots by aspect
     const shape = photo ? { photoSize: photo, aspect: nearestAspect(photo) } : {}
     // a Continue shot made here hunts takes and gets the full finish (plan.js continueFull)
-    return { ...r, ...auto, ...shape, ...(r.mode === 'continue' && r.engine !== 'seedance' ? { continueFull: true } : {}), speed: oneFinal ? undefined : speedOfForm(form) || undefined, character: r.character ?? 'none', with: r.engine === 'seedance' ? undefined : (r.with || []).filter((id) => id !== r.character), media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
+    return { ...r, seed: r.seed === '' || r.seed == null ? undefined : r.seed, ...auto, ...shape, ...(r.mode === 'continue' && r.engine !== 'seedance' ? { continueFull: true } : {}), speed: oneFinal ? undefined : speedOfForm(form) || undefined, character: r.character ?? 'none', with: r.engine === 'seedance' ? undefined : (r.with || []).filter((id) => id !== r.character), media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
   }, [form, photo?.width, photo?.height, oneFinal])
   const speed = request.speed || null
   // a Custom shot finishes like the saved preset (the Finish panel's default too)
@@ -696,7 +698,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     `${oneFinal ? 'first pass ' : ''}${form.megapixels} MP`,
     !oneFinal && `${form.previews} preview${form.previews === 1 ? '' : 's'}`,
     QUALITY.find(([st]) => st === form.steps)?.[1] || `${form.steps} steps`,
-    `seed ${form.seed}`,
+    form.seed === '' ? 'random seed' : `seed ${form.seed}`,
     form.sampler !== SAMPLER_DEFAULT && form.sampler,
     form.scheduler !== SCHEDULER_DEFAULT && form.scheduler
   ]
@@ -1289,11 +1291,19 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                     <div className="create-field">
                       <span className="create-label mono">Seed</span>
                       <div className="seed">
-                        <input type="number" value={form.seed} onChange={(e) => set({ seed: Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
+                        <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
                         <button className="seed-roll" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })} title="A new seed" aria-label="A new seed">
                           ⟳
                         </button>
                       </div>
+                      <span className="dim small">
+                        {form.seed === '' ? 'Empty: a new seed every run (the shot keeps the one it used). Type one to use it every time.' : 'This seed every run. '}
+                        {form.seed !== '' && (
+                          <button className="link-btn" onClick={() => set({ seed: '' })}>
+                            Random again
+                          </button>
+                        )}
+                      </span>
                     </div>
                   </div>
                 <div className="adv-grid">
@@ -1402,7 +1412,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             ) : null}
             <div>
               <dt>Quality</dt>
-              <dd>{sd ? `${TIERS.find(([id]) => id === form.tier)?.[1]} · ${form.audio ? 'with sound' : 'silent'}` : `${QUALITY.find(([s]) => s === form.steps)?.[1] || `${form.steps} steps`} · seed ${form.seed}`}</dd>
+              <dd>{sd ? `${TIERS.find(([id]) => id === form.tier)?.[1]} · ${form.audio ? 'with sound' : 'silent'}` : `${QUALITY.find(([s]) => s === form.steps)?.[1] || `${form.steps} steps`} · ${form.seed === '' ? 'random seed' : `seed ${form.seed}`}`}</dd>
             </div>
           </dl>
           {!r && planError && <p className="shot-card-error small">{planError}</p>}

@@ -28,7 +28,12 @@ import { writeSeedance } from './seedwriter.js'
 import { REFINE_DEFAULTS, refineGraph } from './h3refine.js'
 import { explainFailure } from './failures.js'
 import { FACE_DETECTOR, FACE_NODES, FACE_STRENGTHS, FACE_TURBO, PLUS_NODES, faceRefineGraph } from './facerefine.js'
-import { LTX, LTX_FILES, ltxGraph, ltxTakes, planLtx, writeLtx } from './ltx.js'
+import { LTX, LTX_FILES, ltxGraph, ltxTakes, planLtx, writeLtx } from './ltx.js'
+
+// A video run with no seed gets a new one each time (as pictures do); the run keeps the seed it used, so a take
+// can be made again. 4242 was everyone's seed until 1.1.26, so every shot started from the same noise.
+export const newSeed = () => Math.floor(Math.random() * 2 ** 31)
+export const withSeed = (r) => (r.seed == null || r.seed === '' ? { ...r, seed: newSeed() } : r)
 
 const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
@@ -499,7 +504,7 @@ export class Studio {
     const { projectId, projectName, characterOverride, members: extra = [], autoFinish, ...given } = input
     // a speed preset (speed.js) fills the preview size, steps and takes the request leaves out
     // and the saved first-render size (Settings → Your PC) where the request names none
-    const asked = applySpeed(withPreviewSize(given, this.previewSize?.()))
+    const asked = withSeed(applySpeed(withPreviewSize(given, this.previewSize?.())))
     // @ mentions (cast.js): the picked character's becomes {char}; anyone or anywhere else with a picture is attached.
     // extra: members only this shot can mention (a music video's references: people, products, places, things)
     const members = [...this.cast.members(), ...extra.filter((m) => m?.handle && m.picture)]
@@ -579,7 +584,8 @@ export class Studio {
     if (missing.length) throw new Error(`LTX 2.5 needs ${missing.join(', ')}. Download them in Settings → Setup (LTX 2.5 shots).`)
   }
   async ltxPreviews(input) {
-    const { projectId, projectName, ...asked } = input
+    const { projectId, projectName, ...given } = input
+    const asked = withSeed(given)
     const plan = planLtx(asked)
     await this.ltxCheck()
     const character = this.characters().find((c) => c.id === plan.request.character)
@@ -679,7 +685,8 @@ export class Studio {
   }
 
   async seedancePreviews(input) {
-    const { projectId, projectName, spend, ...asked } = input
+    const { projectId, projectName, spend, ...given } = input
+    const asked = withSeed(given)
     const plan = this.seedanceRequest(asked)
     const key = this.partnerKey?.()
     if (!key) throw new Error('Seedance runs on your Comfy.org credits: add your Comfy.org API key in Settings → Comfy account.')
@@ -1195,7 +1202,8 @@ export class Studio {
     return s
   }
   createSequence(init = {}) {
-    const s = { ...SEQUENCE_DEFAULTS, name: 'Untitled sequence', shots: [{ id: randomUUID().slice(0, 6), prompt: '', mode: 'text', media: [] }], ...init, id: randomUUID().slice(0, 8), createdAt: now(), projectId: null, shotJobs: {}, versions: [], renders: [], jobs: [] }
+    // a new sequence has its own seed (every shot of it shares it, so takes can be made again), not everyone's 4242
+    const s = { ...SEQUENCE_DEFAULTS, seed: newSeed(), name: 'Untitled sequence', shots: [{ id: randomUUID().slice(0, 6), prompt: '', mode: 'text', media: [] }], ...init, id: randomUUID().slice(0, 8), createdAt: now(), projectId: null, shotJobs: {}, versions: [], renders: [], jobs: [] }
     return this.writeSequence(s)
   }
   // Edits name, settings and shots. Renders already made stay; shot-by-shot shots go stale when their inputs change.
@@ -1329,7 +1337,7 @@ export class Studio {
     const base = `${slug(name)}_${randomUUID().slice(0, 6)}`
     // the person's own cloud reads the clip from ComfyUI's input folder (uploaded), not from this PC's path
     const src = await this.videoSource(sourcePath)
-    const { graph } = retakeGraph({ template: this.template, seq: { ...SEQUENCE_DEFAULTS }, character: ch, name: base, sourcePath: src.video, prompt, start, end, mode, seed: seed ?? SEQUENCE_DEFAULTS.seed, unet: this.models.retake })
+    const { graph } = retakeGraph({ template: this.template, seq: { ...SEQUENCE_DEFAULTS }, character: ch, name: base, sourcePath: src.video, prompt, start, end, mode, seed: seed ?? newSeed(), unet: this.models.retake })
     graph.src.class_type = src.cls
     return this.submitGraph({ kind: 'retake', graph, name: base, plan: { saves: SAVES, resolved: { start, end, mode } } })
   }

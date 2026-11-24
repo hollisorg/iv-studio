@@ -302,7 +302,7 @@ const request = {
   megapixels: z.number().min(0.1).max(2.5).optional().describe('Preview size; default from the speed preset (Quality 0.4).'),
   seconds: z.number().min(1).max(30).default(5).describe('H3: 1-15. seedance: 4-30, whole seconds'),
   previews: z.number().int().min(1).max(3).optional().describe('How many takes; default from the speed preset (Quality 3)'),
-  seed: z.number().int().min(0).default(4242).describe('Previews use seed, seed+1000, seed+2000'),
+  seed: z.number().int().min(0).optional().describe('Previews use seed, seed+1000, seed+2000. Leave it out for a new seed each run (the run keeps the one it used); give one to repeat a take.'),
   steps: z.number().int().min(4).max(20).optional().describe('Default from the speed preset: 8, or 4 on Fast and Low memory'),
   sampler: z.string().optional().describe('Preview sampler (list_samplers); default er_sde'),
   scheduler: z.string().optional().describe('Preview scheduler (list_samplers); default beta'),
