@@ -906,7 +906,8 @@ export class Trainings {
     const vols = RunPod.list(await rp.req('/network-volumes'), 'networkVolumes', 'items', 'data')
     const have = vols.find((v) => v.name === VOLUME)
     if (have) return have
-    const dc = await rp.pickDataCenter(gpu)
+    // training falls back across its own GPU list, so any data center with ours will do (not the render setup's strict pick)
+    const dc = await rp.pickDataCenter(gpu, { strict: false })
     this.onLog?.(`Creating your ${RP_VOLUME_GB} GB training volume "${VOLUME}" in ${dc}…`)
     return rp.req('/network-volumes', { method: 'POST', json: { name: VOLUME, size: RP_VOLUME_GB, dataCenter: dc } })
   }

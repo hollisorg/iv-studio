@@ -80,31 +80,54 @@ export class RunPod {
     return { volumes: vols.length }
   }
 
-  // The curated GPUs with RunPod's live price and stock, and which data centers have each.
+  // The data centers that can hold a network volume (IV Studio keeps the models on one), each with the GPUs
+  // free there now. A GPU free only where there's no network storage is no use to IV Studio.
+  async storageCenters() {
+    const dcs = RunPod.list(await this.req('/catalog/datacenters?include=GPU_AVAILABILITY'), 'dataCenters')
+    return dcs.filter((d) => (d.networkVolumeTypes || []).length).map((d) => ({ id: d.id, free: (d.gpuAvailability || []).filter((g) => g.availability !== 'NONE').map((g) => g.id) }))
+  }
+
+  // The curated GPUs with RunPod's live price, and whether each is free now in a data center with network
+  // storage (dataCenters: those data centers). inStock is false for a GPU free only where storage isn't offered.
   async catalog() {
-    const body = await this.req('/catalog/gpus?include=AVAILABILITY&product=POD&cloud=SECURE&minCudaVersion=12.8')
+    const [body, centers] = await Promise.all([this.req('/catalog/gpus?include=AVAILABILITY&product=POD&cloud=SECURE&minCudaVersion=12.8'), this.storageCenters()])
     const live = new Map(RunPod.list(body, 'gpus').map((g) => [g.id, g]))
     return GPUS.map((g) => {
-      const l = live.get(g.id)
-      return { ...g, perHour: l?.price?.secure || g.perHour, inStock: !!l && l.availability !== 'NONE', dataCenters: (l?.dataCenters || []).map((d) => d.id) }
+      const dataCenters = centers.filter((c) => c.free.includes(g.id)).map((c) => c.id)
+      return { ...g, perHour: live.get(g.id)?.price?.secure || g.perHour, inStock: dataCenters.length > 0, dataCenters }
     })
   }
 
-  // A data center that can hold a network volume and has the chosen GPU now (or, failing that, another of
-  // ours), preferring the one with the most of our GPUs so later wakes have somewhere to fall back to.
-  async pickDataCenter(gpu) {
-    const dcs = RunPod.list(await this.req('/catalog/datacenters?include=GPU_AVAILABILITY'), 'dataCenters')
+  // "RTX 4090 · 24 GB ($0.89 an hour), A100 · 80 GB ($2.09 an hour)": ours in `list`, cheapest first
+  static priced(list) {
+    return [...list]
+      .sort((a, b) => a.perHour - b.perHour)
+      .map((g) => `${g.label} ($${g.perHour.toFixed(2)} an hour)`)
+      .join(', ')
+  }
+
+  // A data center that can hold a network volume and has the chosen GPU free now, preferring the one with the
+  // most of our GPUs so later wakes have somewhere to fall back to. When the chosen GPU isn't free in any of
+  // them, nothing is made: the person is told what is free, and at what price, and chooses. strict: false (training,
+  // which falls back across its own GPU list) takes the data center with the most of ours instead.
+  async pickDataCenter(gpu, { strict = true } = {}) {
+    const [centers, cat] = await Promise.all([this.storageCenters(), this.catalog().catch(() => GPUS)])
     const ours = new Set(GPUS.map((g) => g.id))
-    const scored = dcs
-      .filter((d) => (d.networkVolumeTypes || []).length)
-      .map((d) => {
-        const have = (d.gpuAvailability || []).filter((g) => g.availability !== 'NONE').map((g) => g.id)
-        return { id: d.id, hasChosen: have.includes(gpu), count: have.filter((id) => ours.has(id)).length }
-      })
-      .filter((d) => d.count > 0)
-      .sort((a, b) => b.hasChosen - a.hasChosen || b.count - a.count)
-    if (!scored.length) throw new Error('No RunPod data center with network storage has an H3-ready GPU free right now. Try again in a few minutes.')
-    return scored[0].id
+    const withChosen = centers.filter((c) => c.free.includes(gpu)).sort((a, b) => b.free.filter((id) => ours.has(id)).length - a.free.filter((id) => ours.has(id)).length)
+    if (withChosen.length) return withChosen[0].id
+    if (!strict) {
+      const most = centers.map((c) => ({ id: c.id, n: c.free.filter((id) => ours.has(id)).length })).filter((c) => c.n > 0).sort((a, b) => b.n - a.n)[0]
+      if (most) return most.id
+      throw new Error('No RunPod data center with network storage has an H3-ready GPU free right now. Try again in a few minutes.')
+    }
+    const label = GPUS.find((g) => g.id === gpu)?.label || gpu
+    const free = cat.filter((g) => g.id !== gpu && centers.some((c) => c.free.includes(g.id)))
+    const err = new Error(
+      `No ${label} is free right now in a RunPod data center that can keep your storage, so nothing was made or billed.` +
+        (free.length ? ` Free now: ${RunPod.priced(free)}. Choose one of those, or try again in a little while.` : ' No other H3-ready GPU is free there either. Try again in a little while.')
+    )
+    err.gpuTaken = true
+    throw err
   }
 
   // The account's iv-studio volume, or a new one (VOLUME_GB in dataCenter). Storage bills until it's deleted.
@@ -169,9 +192,19 @@ export class RunPod {
       .map((p) => ({ id: p.id, status: p.status, gpu: p.gpu?.id, perHour: p.cost, startedAt: p.startedAt || p.createdAt, url: RunPod.url(p.id) }))
   }
 
-  // Starts a pod on the chosen GPU, or the first of ours that's free in the volume's data center.
+  // The GPUs a pod may start on: the chosen one, then ours that cost no more an hour (live prices), the most
+  // memory first. Never a pricier one: the person chose their price (a taken L40S once became a $2.09 A100).
+  static fallbacks(gpu, cat = GPUS) {
+    const price = (id) => cat.find((g) => g.id === id)?.perHour ?? GPUS.find((g) => g.id === id)?.perHour ?? Infinity
+    const memory = (id) => Number(GPUS.find((g) => g.id === id)?.label.match(/(\d+) GB/)?.[1] || 0)
+    const cap = price(gpu)
+    return [gpu, ...GPUS.map((g) => g.id).filter((id) => id !== gpu && price(id) <= cap).sort((a, b) => memory(b) - memory(a) || price(a) - price(b))]
+  }
+
+  // Starts a pod on the chosen GPU, or one of ours that costs no more and is free in the volume's data center.
   async createPod({ gpu, volume, token, idleSeconds, hf = null }) {
-    const order = [gpu, ...GPUS.map((g) => g.id).filter((id) => id !== gpu)]
+    const cat = await this.catalog().catch(() => GPUS)
+    const order = RunPod.fallbacks(gpu, cat)
     let last
     for (const id of order) {
       try {
@@ -184,7 +217,15 @@ export class RunPod {
         if (!(err.status >= 400 && err.status < 500 && /capacity|available|no (gpu|machine|instance)|stock|resources/i.test(err.message))) throw err
       }
     }
-    throw new Error(`No H3-ready GPU is free in ${volume.dataCenter} right now. Try again in a few minutes. (${last?.message})`)
+    const label = GPUS.find((g) => g.id === gpu)?.label || gpu
+    const pricier = cat.filter((g) => !order.includes(g.id) && (g.dataCenters || []).includes(volume.dataCenter))
+    const err = new Error(
+      `The ${label} is taken in ${volume.dataCenter} (where your storage is), and no GPU that costs the same or less is free there right now.` +
+        (pricier.length ? ` Free there: ${RunPod.priced(pricier)}. Choose one on the Cloud page to use it, or try again in a few minutes.` : ' Try again in a few minutes.')
+    )
+    err.gpuTaken = true
+    err.detail = last?.message
+    throw err
   }
 
   // What the pod's gate says about the boot ({gate, stage, detail, percent}), or null while it's unreachable.

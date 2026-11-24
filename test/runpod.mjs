@@ -39,17 +39,21 @@ function mockApi() {
     if (route === '/catalog/gpus') {
       return json(200, {
         gpus: [
-          { id: 'NVIDIA L40S', availability: 'NONE', price: { secure: 1.09 } },
-          { id: 'NVIDIA RTX 6000 Ada Generation', availability: 'LOW', price: { secure: 0.99 }, dataCenters: [{ id: 'US-WA-1' }] }
+          { id: 'NVIDIA L40S', availability: 'LOW', price: { secure: 1.09 }, dataCenters: [{ id: 'US-MO-1' }, { id: 'US-NC-1' }] },
+          { id: 'NVIDIA RTX 6000 Ada Generation', availability: 'LOW', price: { secure: 0.99 }, dataCenters: [{ id: 'US-WA-1' }, { id: 'US-NC-1' }] },
+          { id: 'NVIDIA A100 80GB PCIe', availability: 'LOW', price: { secure: 2.09 }, dataCenters: [{ id: 'US-NC-1' }] }
         ]
       })
     }
     if (route === '/catalog/datacenters') {
+      // state.l40sOnlyWithoutStorage: the L40S is free only in US-MO-1, which offers no network storage (RunPod's
+      // own stock on 2026-11-23, when a setup that asked for an L40S started a $2.09 A100)
+      const l40s = state.l40sOnlyWithoutStorage ? [] : [{ id: 'NVIDIA L40S', availability: 'LOW' }]
       return json(200, {
         dataCenters: [
           { id: 'US-MO-1', networkVolumeTypes: [], gpuAvailability: [{ id: 'NVIDIA L40S', availability: 'HIGH' }] },
           { id: 'US-WA-1', networkVolumeTypes: ['STANDARD'], gpuAvailability: [{ id: 'NVIDIA RTX 6000 Ada Generation', availability: 'LOW' }] },
-          { id: 'US-NC-1', networkVolumeTypes: ['STANDARD'], gpuAvailability: [{ id: 'NVIDIA L40S', availability: 'LOW' }, { id: 'NVIDIA A100 80GB PCIe', availability: 'LOW' }, { id: 'NVIDIA H200', availability: 'LOW' }] }
+          { id: 'US-NC-1', networkVolumeTypes: ['STANDARD'], gpuAvailability: [...l40s, { id: 'NVIDIA RTX 6000 Ada Generation', availability: 'LOW' }, { id: 'NVIDIA A100 80GB PCIe', availability: 'LOW' }, { id: 'NVIDIA GeForce RTX 4090', availability: 'LOW' }, { id: 'NVIDIA H200', availability: 'LOW' }] }
         ]
       })
     }
@@ -79,10 +83,21 @@ async function serviceTests() {
   ok((await rp.check()).volumes === 0, 'a good key reads the account')
 
   const cat = await rp.catalog()
-  ok(cat.length === GPUS.length && cat[0].inStock === false && cat[1].inStock === true && cat[1].dataCenters[0] === 'US-WA-1', 'catalog: live stock and data centers for our GPUs')
+  ok(cat.length === GPUS.length && cat[0].inStock === true && cat[0].dataCenters.join() === 'US-NC-1' && cat[1].dataCenters.join() === 'US-WA-1,US-NC-1' && cat[2].perHour === 2.09, 'catalog: live prices, and stock only where there is network storage')
+  api.state.l40sOnlyWithoutStorage = true
+  const taken = await rp.catalog()
+  ok(taken[0].inStock === false && taken[0].dataCenters.length === 0, 'catalog: an L40S free only where storage isn’t offered shows as busy, not "free now"')
 
+  ok(await rp.pickDataCenter('NVIDIA L40S').then(() => false, (e) => e.gpuTaken && /No L40S · 48 GB is free right now/.test(e.message) && /nothing was made or billed/.test(e.message) && /RTX 4090 · 24 GB \(\$0\.89 an hour\), RTX 6000 Ada · 48 GB \(\$0\.99 an hour\), A100 · 80 GB \(\$2\.09 an hour\)/.test(e.message)), 'data center: the chosen GPU free nowhere with storage stops setup before anything is made, listing what is free, cheapest first')
+  ok(!api.calls.some((c) => c.method === 'POST'), 'data center: so no volume or pod was made')
+  api.state.l40sOnlyWithoutStorage = false
   ok((await rp.pickDataCenter('NVIDIA L40S')) === 'US-NC-1', 'data center: has the chosen GPU and network storage (not US-MO-1, which has no storage)')
-  ok((await rp.pickDataCenter('NVIDIA H100 80GB HBM3')) === 'US-NC-1', 'data center: without the chosen GPU, the one with most of ours')
+  ok((await rp.pickDataCenter('NVIDIA RTX 6000 Ada Generation')) === 'US-NC-1', 'data center: of those with the chosen GPU, the one with most of ours')
+  ok((await rp.pickDataCenter('NVIDIA H200', { strict: false })) === 'US-NC-1', 'data center: training (not strict) takes the one with most of ours when its GPU is free nowhere')
+
+  ok(RunPod.fallbacks('NVIDIA L40S', cat).join() === ['NVIDIA L40S', 'NVIDIA RTX 6000 Ada Generation', 'NVIDIA GeForce RTX 4090'].join(), 'fallbacks: an L40S falls back only to GPUs that cost no more (RTX 6000 Ada, RTX 4090), never the $2.09 A100')
+  ok(RunPod.fallbacks('NVIDIA GeForce RTX 4090', cat).join() === 'NVIDIA GeForce RTX 4090', 'fallbacks: the cheapest has nothing to fall back to')
+  ok(RunPod.fallbacks('NVIDIA H100 80GB HBM3', cat)[1] === 'NVIDIA A100 80GB PCIe', 'fallbacks: an H100 may fall back to the A100, the most memory first')
 
   const vol = await rp.ensureVolume('US-NC-1')
   const create = api.calls.find((c) => c.method === 'POST' && c.route === '/network-volumes')
@@ -109,6 +124,12 @@ async function serviceTests() {
   rp.onLog = (l) => logs.push(l)
   const pod = await rp.createPod({ gpu: 'NVIDIA L40S', volume: vol, token: 'tok', idleSeconds: 300 })
   ok(pod.gpu === GPUS[1].id && pod.url === 'https://pod1-8189.proxy.runpod.net' && logs.some((l) => /taken in US-NC-1/.test(l)), 'pod: chosen GPU out of capacity falls back to the next one, and says so')
+  api.state.noCapacity.add('NVIDIA RTX 6000 Ada Generation')
+  api.state.noCapacity.add('NVIDIA GeForce RTX 4090')
+  const tried = api.calls.length
+  ok(await rp.createPod({ gpu: 'NVIDIA L40S', volume: vol, token: 'tok', idleSeconds: 300 }).then(() => false, (e) => e.gpuTaken && /no GPU that costs the same or less is free there/.test(e.message) && /A100 · 80 GB \(\$2\.09 an hour\)/.test(e.message)), 'pod: with the L40S and every cheaper GPU taken, it stops and names the pricier one free there, instead of starting it')
+  ok(!api.calls.slice(tried).some((c) => c.method === 'POST' && c.body?.gpu?.id === 'NVIDIA A100 80GB PCIe'), 'pod: the A100 was never asked for')
+  api.state.noCapacity.clear()
 
   api.state.pods.push({ id: 'other', name: 'my-own-pod', status: 'RUNNING' }, { id: 'old', name: 'iv-studio-x', status: 'EXITED' })
   const mine = await rp.pods()
