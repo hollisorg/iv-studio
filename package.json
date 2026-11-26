@@ -14,8 +14,10 @@
     "start": "electron-vite preview",
     "test": "node test/graph-parity.mjs",
     "dist": "electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:win-release": "node scripts/windows-release.cjs",
     "dist:portable": "electron-vite build && electron-builder --win --x64 --publish never --config electron-builder.portable.cjs && node scripts/portable-feed.mjs",
-    "release": "electron-vite build && electron-builder --win --x64 --publish always",
+    "dist:win-release:portable": "node scripts/windows-release.cjs --portable",
+    "release": "node scripts/windows-release.cjs --publish",
     "dist:linux": "electron-vite build && electron-builder --linux --x64 --publish never",
     "dist:mac": "node scripts/mac-ffmpeg.mjs && electron-vite build && electron-builder --mac --publish never"
   },
