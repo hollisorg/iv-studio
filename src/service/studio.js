@@ -10,6 +10,7 @@ import path from 'node:path'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { Comfy } from './comfy.js'
 import { probe } from './media.js'
+import { fitForUpload } from './uploadfit.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { applyPatch, planFinish, planPreviews, skipsDlss } from './plan.js'
 import { applyFinishSpeed, applySpeed, withPreviewSize } from './speed.js'
@@ -55,6 +56,7 @@ export function shotName(prompt, character) {
 
 // the bundled ffprobe, outside the asar in a packaged app
 const FFPROBE = ffmpegStatic.ffprobePath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+const FFMPEG = ffmpegStatic.ffmpegPath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
 const DEFAULT_CHARACTERS = [
   { id: 'tess', name: 'Tess Marlow', lora: 'MiniMax H3\\tess\\tess_mmh3-000040.safetensors', strength: 0.8, trigger: 't3ss4', voiceRefmod: 'characters/tess_audio', visualRefmod: 'characters/tess_visual' }
@@ -181,6 +183,8 @@ export class Studio {
     this.manifest = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'models.json'), 'utf8'))
     this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken, comfyApiKey)
     this.comfy.fileMapper = () => this.modelFiles()
+    // a video over ComfyUI's 100 MB upload limit goes up as a smaller copy (GitHub #58)
+    this.comfy.fitter = (file) => fitForUpload(file, { ffmpeg: FFMPEG, ffprobe: FFPROBE, dir: path.join(dataDir, 'media') })
     this.outputDir = outputDir || null
     this.progress = new Map() // promptId -> {value, max, node}
     this.live = new Map() // promptId -> the latest live preview step { image (data URL), step, total, take, at }

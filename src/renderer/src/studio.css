@@ -8848,6 +8848,14 @@ button.nav-update:hover {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
   gap: 18px 22px;
 }
+/* a field next to a taller one (the Seed picker with its fixed seed) keeps its own height: its label and buttons
+   sit at the top instead of stretching tall (GitHub #61) */
+.create-grid > .create-field {
+  align-content: start;
+}
+.create-field > .segmented {
+  justify-self: start;
+}
 .create-v2 .shot-name-input {
   width: 100%;
   max-width: 420px;

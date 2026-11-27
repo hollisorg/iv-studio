@@ -382,7 +382,11 @@ async function pump() {
         // finished previews are ranked in the background (ranking.js); the window hears when it's done
         if (job.kind === 'previews' && job.status === 'success' && !job.ranking && ranker) ranker.rank(id).then((r) => r && send('jobs:update', studio.publicJob(studio.getJob(id))), () => {})
       } catch (err) {
-        send('jobs:update', { id, status: 'unknown', note: err.message })
+        // its job file is gone (the shot or picture set was deleted): the window takes it off the Renders list
+        // (GitHub #63) and it stops being asked about
+        const gone = /^No job /.test(err.message)
+        send('jobs:update', { id, status: gone ? 'gone' : 'unknown', note: err.message })
+        if (gone) pending.delete(id)
       }
     }
   } finally {
@@ -3139,6 +3143,8 @@ app.whenReady().then(() => {
     return true
   })
   handle('jobs:cancel', (id) => studio.cancelJob(id))
+  // which of these jobs no longer have a file (their shot or picture set was deleted): the Renders list drops them
+  handle('jobs:gone', (ids) => (ids || []).filter((id) => !fs.existsSync(studio.jobFile(id))))
   // The sidebar's render queue, and its cancel (only for IV Studio's own work, never someone else's).
   handle('queue:list', () => studio.renderQueue())
   handle('queue:cancel', async (promptId) => {

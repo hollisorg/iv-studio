@@ -29,6 +29,8 @@ export class Comfy {
     // The person's own cloud (Modal, RunPod): a CloudPrep (cloudprep.js), set by the app. It answers model lists
     // without waking the GPU and puts a graph's models and LoRAs in the cloud's storage before it's queued.
     this.prep = null
+    // Studio: async (file) => the file to upload in its place when it's over ComfyUI's upload limit (uploadfit.js)
+    this.fitter = null
   }
 
   // Whether this ComfyUI runs on Linux or a Mac, where its model lists use forward slashes. IV Studio's own cloud and
@@ -183,7 +185,10 @@ export class Comfy {
   }
 
   // Copies a local file into ComfyUI's input folder (any type) and returns its name relative to input.
+  // A file over ComfyUI's upload limit goes through fitter first (Studio sets it: uploadfit.js makes a smaller copy of
+  // a long video, GitHub #58).
   async upload(filePath, subfolder = 'iv_studio') {
+    if (this.fitter) filePath = await this.fitter(filePath)
     const into = cleanFolder(this.folders.input)
     if (into) subfolder = `${into}/${subfolder}`
     const form = new FormData()
@@ -192,7 +197,10 @@ export class Comfy {
     form.append('subfolder', subfolder)
     form.append('type', 'input')
     form.append('overwrite', 'true')
-    const r = await this.req('/upload/image', { method: 'POST', body: form, timeout: 120000 })
+    const r = await this.req('/upload/image', { method: 'POST', body: form, timeout: 120000 }).catch((err) => {
+      if (err.status !== 413) throw err
+      throw Object.assign(new Error(`${name} is too big for ComfyUI's upload limit (100 MB unless ComfyUI was started with a bigger --max-upload-size). Use a shorter or smaller file.`), { status: 413 })
+    })
     return r.subfolder ? `${r.subfolder}/${r.name}` : r.name
   }
 

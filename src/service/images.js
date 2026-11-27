@@ -377,7 +377,9 @@ export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [
       loadRefs().forEach((img, i) => (inputs[`images.image_${i + 1}`] = img))
     }
     const enc = add('TextEncodeQwenImage21', inputs)
-    const latent = mode === 'edit' ? repeat([enc, 2]) : [add('EmptyLatentImage', { width, height, batch_size: batch }), 0]
+    // an edit's latent comes from the encoder in its first picture's shape; keepAspect (a film's sketch, GitHub #56)
+    // asks for width x height instead, so a portrait face first doesn't make a 16:9 film's sketch portrait
+    const latent = mode === 'edit' && !keepAspect ? repeat([enc, 2]) : [add('EmptyLatentImage', { width, height, batch_size: batch }), 0]
     save(ksample(cached, [enc, 0], [enc, 1], latent))
   } else if (family === 'h3image') {
     // ComfyUI's MiniMax-H3-Image templates: H3 Image conditioning (the prompt, the size and, for an edit, the
@@ -484,7 +486,7 @@ export class Images {
   // Queues a set of pictures. request: { mode: generate|edit, model (a checkpoint), prompt, negative, loras
   // [{name, strength}], aspect, megapixels, count 1-4, seed, steps, cfg, refs [local picture paths] (Edit), name,
   // tag (keeps the set out of the gallery), keepAspect (an edit comes out at aspect, not its picture's shape;
-  // Flux.2 and Flux 3 only) }.
+  // Flux.2, Flux 3, H3 Image and Qwen Image 2.1) }.
   async create({ mode = 'generate', model, prompt = '', negative = '', loras = [], aspect = IMAGE_DEFAULTS.aspect, megapixels = IMAGE_DEFAULTS.megapixels, count = IMAGE_DEFAULTS.count, seed = null, steps = null, cfg = null, refs = [], name, tag = null, keepAspect = false } = {}) {
     const text = String(prompt || '').trim()
     if (!text) throw new Error(mode === 'edit' ? 'Say what to change in the picture.' : 'Describe the picture first.')
@@ -519,7 +521,7 @@ export class Images {
     }
     const id = randomUUID().slice(0, 8)
     const title = String(name || '').trim() || text.split(/[.,\n]/)[0].slice(0, 48)
-    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, turbo: fam.turbo || null, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3', 'h3image'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
+    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, turbo: fam.turbo || null, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3', 'h3image', 'qwen21'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
     const project = this.studio.createProject(`Image · ${title}`, null, null, 'image')
     const job = await this.studio.submitGraph({ kind: `picture:${fam.id}`, graph, projectId: project.id, name: title, plan: { images: true, request: { prompt: text } } })
     const record = { id, name: title, mode, family: fam.id, familyLabel: fam.label, model, prompt: text, negative, loras: loras.filter((l) => l?.name), aspect, megapixels: Number(megapixels) || 1, width: mode === 'edit' ? null : width, height: mode === 'edit' ? null : height, count: Math.max(1, Math.min(4, Math.round(count))), seed: s, steps: usedSteps, cfg: usedCfg, refs, ...(tag ? { tag } : {}), projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }

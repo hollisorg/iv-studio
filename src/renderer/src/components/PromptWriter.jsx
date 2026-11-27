@@ -25,6 +25,20 @@ export function sendIdea(idea, write = true) {
   window.dispatchEvent(new CustomEvent('iv:idea'))
 }
 
+// Text typed into a writer that outlives the page it's on (GitHub #62): Create's Video and Image sides are separate
+// pages, so switching between them used to empty Write it for me while the prompt boxes (kept in the form) stayed.
+// key: where the text belongs ('create:writer'...); null keeps it only while the card is on screen. Kept for this
+// session of the app.
+const keptText = new Map()
+export function useKeptText(key) {
+  const [text, setText] = useState(() => (key && keptText.get(key)) || '')
+  const set = (v) => {
+    if (key) keptText.set(key, v)
+    setText(v)
+  }
+  return [text, set]
+}
+
 // Writes that outlive the card that started them (GitHub #40): leaving a sequence while its writer works no longer
 // loses the prompt. A write started with a key keeps running; while a card with that key is on screen the result
 // goes to it (and it shows "Writing…" when you come back), otherwise to the onLate the last card gave.
@@ -142,8 +156,9 @@ export function writerBlocker(status, engine) {
 // a writer's name for the run history ("written by Claude")
 export const writerName = (id) => ({ local: 'the local writer', claude: 'Claude', codex: 'ChatGPT', hermes: 'Hermes', openai: 'your OpenAI-compatible server', contextir: 'Context IR' })[id] || id
 
-export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null, listen = false, idea: ideaProp, onIdea, lastingKey = null, onLate = null, tool = 'create' }) {
-  const [ideaLocal, setIdeaLocal] = useState('')
+// keep: a key that keeps the idea typed here when the page goes away (useKeptText)
+export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null, listen = false, idea: ideaProp, onIdea, lastingKey = null, onLate = null, tool = 'create', keep = null }) {
+  const [ideaLocal, setIdeaLocal] = useKeptText(keep)
   const idea = ideaProp ?? ideaLocal
   const setIdea = onIdea || setIdeaLocal
   // listen (Create's writer only): take ideas sent with sendIdea, and write them when asked to
@@ -419,7 +434,8 @@ export function StoryWriter({ character, shotSeconds, existing, onShots, notify,
 // menu is the Images page's own writer (remembered like every tool's); Context IR writes H3 shots only, so pictures
 // go to the local writer then. A model that uses a negative prompt gets one written too.
 export function ImageWriter({ family, familyLabel, model, mode, aspect, refs = [], triggers = [], current = '', negative = '', usesNegative = false, onWritten, notify, go }) {
-  const [idea, setIdea] = useState('')
+  // kept when switching to Video and back (GitHub #62)
+  const [idea, setIdea] = useKeptText('images:writer')
   const { status, engine: chosen, pick } = useToolWriter('images')
   const engine = chosen === 'contextir' ? 'local' : chosen
   const [busy, setBusy] = useState(false)

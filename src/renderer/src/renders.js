@@ -96,6 +96,8 @@ export function jobTitle(name = '') {
 // { stage: 'queued' | 'running' | 'finishing' | 'done' | 'failed', pct, position, job (the one that matters), error }
 export function videoState(job, jobs = {}) {
   if (!job) return { stage: 'queued', pct: 0 }
+  // deleted while it was followed (GitHub #63)
+  if (job.status === 'gone') return { stage: 'gone', job }
   const finish = job.autoFinishJob ? jobs[job.autoFinishJob] || { id: job.autoFinishJob, status: 'queued' } : null
   const pctOf = (j) => (j?.progress?.max ? Math.round((100 * j.progress.value) / j.progress.max) : 0)
   if (job.status === 'error' || job.status === 'cancelled') return { stage: 'failed', job, error: job.explain?.title || job.error || 'It stopped.' }
@@ -199,7 +201,9 @@ export function watchRenders(fn) {
   fn(current)
   return () => watchers.delete(fn)
 }
-export const isRunning = (r) => !['done', 'failed'].includes(r?.state?.stage)
+export const isRunning = (r) => !['done', 'failed', 'gone'].includes(r?.state?.stage)
+// A picture set that no longer exists: images.get's error for it
+export const noSet = (err) => /^No picture set /.test(String(err?.message || '').replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
 
 // ---------- Quiet hours (Settings → Accessibility): no pop-ups or celebrations between two times, or while editing
 // full screen; finished renders wait and are announced together when it's over ----------
