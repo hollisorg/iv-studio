@@ -173,7 +173,7 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
   // the tray: stop a render, or take a finished one off the list
   const [hidden, setHidden] = useState(() => new Set())
   // Stop: the render is stopped and leaves the list (GitHub #63: a stopped render stayed, with Watch opening onto
-  // nothing); one that finished meanwhile stays, ready
+  // nothing); one that finished meanwhile stays, ready, and one ComfyUI couldn't be asked to stop stays, with why
   async function cancel(r) {
     try {
       let finished = false
@@ -186,7 +186,10 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
         finished = !gone && out?.status === 'success'
       } else {
         const ids = r.kind === 'video' ? [r.job?.id, jobs.current[r.job?.id]?.autoFinishJob] : r.ids.flatMap((id) => [id, jobs.current[id]?.autoFinishJob])
-        for (const id of ids.filter(Boolean)) if (isRunning({ state: videoState(jobs.current[id] || { status: 'queued' }) })) await window.ivstudio.jobs.cancel(id).catch(() => {})
+        // a stop that didn't reach ComfyUI keeps the render on the list: it may well still be running
+        let problem = null
+        for (const id of ids.filter(Boolean)) if (isRunning({ state: videoState(jobs.current[id] || { status: 'queued' }) })) await window.ivstudio.jobs.cancel(id).catch((err) => (problem ||= err))
+        if (problem) throw new Error(`Couldn't stop ${r.name}: ${problem.message}`)
         finished = stateOf(live.current.find((x) => x.key === r.key) || r).stage === 'done'
       }
       if (!finished) forget([r.key])

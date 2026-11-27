@@ -110,6 +110,7 @@ check('#63 a deleted picture set is recognised', noSet(new Error('No picture set
 const hub = src('src/renderer/src/components/RenderHub.jsx')
 const main = src('src/main/index.js')
 check('#63 Stop takes the render off the list unless it finished', /if \(!finished\) forget\(\[r\.key\]\)/.test(hub))
+check('#63 a Stop that ComfyUI never got keeps the render, and says why', /if \(problem\) throw new Error\(`Couldn't stop/.test(hub))
 check('#63 forget clears the list, the drop, the pop-up and the reveal', /setRenders\(\(all\) => all\.filter\(\(x\) => !keys\.includes\(x\.key\)\)\)/.test(hub) && /setDrops\(\(d\) => d\.filter\(\(k\) => !keys\.includes\(k\)\)\)/.test(hub) && /setPopup/.test(hub) && /setOpening/.test(hub))
 check('#63 a job update saying gone forgets its renders', /j\.status === 'gone'\) return forget/.test(hub))
 check('#63 finished renders are checked for deletion', /window\.ivstudio\.jobs\.gone\(ids\)/.test(hub) && /handle\('jobs:gone'/.test(main) && /gone: call\('jobs:gone'\)/.test(src('src/preload/index.js')))
