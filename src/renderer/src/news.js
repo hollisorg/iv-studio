@@ -2,6 +2,16 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.29',
+    items: [
+      { text: 'Storyboard sketches drawn with Qwen Image 2.1 keep your film’s shape (16:9, 9:16 and the rest) instead of taking the shape of the first face picture.' },
+      { text: 'Continue and Extend work with long or sharp clips: a video over ComfyUI’s 100 MB upload limit goes up as a smaller copy (same size, frame rate and sound), and your own file is untouched.' },
+      { text: 'Create: Write it for me and the idea bar keep what you typed when you switch between Video and Image. On Image, the Size and How many buttons keep their own size next to the Seed picker.' },
+      { text: 'The renders tray lets go of what’s gone: Stop takes a render off the list (if ComfyUI couldn’t be reached it stays, and says so), and a render whose shot or pictures you deleted leaves the list and its ready drop leaves the corner, instead of waiting forever or opening a blank picture.' },
+      { text: 'The Windows installer and app are now signed by Hollis Organization Inc.' }
+    ]
+  },
+  {
     version: '1.1.28',
     items: [
       { text: 'New on Lines: How it’s said. Give a line a style in words (“whispering, out of breath”), and set CFG and steps, VoxCPM2’s own controls. Each line lists what it used, and Say it again brings it back. Left alone, lines are said as before.' },
