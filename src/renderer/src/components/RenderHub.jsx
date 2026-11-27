@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { fileUrl } from './edit/model'
-import { againRequest, imageState, isQuiet, isRunning, jobsState, jobTitle, nextSteps, publishRenders, readyFx, readyWords, renderPopupOn as popupOn, revealMedia, setRenderPrefs, startRender, track, videoState } from '../renders'
+import { againRequest, imageState, isQuiet, isRunning, jobsState, jobTitle, nextSteps, noSet, publishRenders, readyFx, readyWords, renderPopupOn as popupOn, revealMedia, setRenderPrefs, startRender, track, videoState } from '../renders'
 import { reducedMotion } from '../a11y'
 
 // The game only loads when someone presses Play
@@ -54,10 +54,22 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
     return () => window.removeEventListener('iv:render', start)
   }, [])
 
+  // Off the list, the corner and the pop-up: a render that was deleted, or that the person stopped (GitHub #63)
+  const forget = (keys) => {
+    if (!keys.length) return
+    setRenders((all) => all.filter((x) => !keys.includes(x.key)))
+    setDrops((d) => d.filter((k) => !keys.includes(k)))
+    setPopup((p) => (keys.includes(p) ? null : p))
+    setOpening((o) => (keys.includes(o) ? null : o))
+  }
+  const usesJob = (r, id) => (r.kind === 'video' ? r.job?.id === id || r.job?.autoFinishJob === id : r.kind === 'jobs' && r.ids.some((x) => x === id || jobs.current[x]?.autoFinishJob === id))
+
   // the jobs it follows, as the app hears about them
   useEffect(
     () =>
       window.ivstudio.jobs.onUpdate((j) => {
+        // its job was deleted (the shot, or the picture set it made)
+        if (j.status === 'gone') return forget(live.current.filter((r) => usesJob(r, j.id)).map((r) => r.key))
         jobs.current[j.id] = j
         // a One final's finish: watch it too
         if (j.autoFinishJob && !jobs.current[j.autoFinishJob]) window.ivstudio.jobs.watch([j.autoFinishJob]).catch(() => {})
@@ -91,12 +103,34 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
     if (!making) return
     const t = setInterval(async () => {
       for (const r of live.current.filter((x) => x.kind === 'image' && !['done', 'failed'].includes(x.state.stage))) {
-        const set = await window.ivstudio.images.get(r.set.id).catch(() => null)
-        if (set) setRenders((all) => all.map((x) => (x.key === r.key ? update(x, null, set) : x)))
+        let gone = false
+        const set = await window.ivstudio.images.get(r.set.id).catch((err) => ((gone = noSet(err)), null))
+        if (gone) forget([r.key])
+        else if (set) setRenders((all) => all.map((x) => (x.key === r.key ? update(x, null, set) : x)))
       }
     }, 2000)
     return () => clearInterval(t)
   }, [making])
+  // finished and stopped renders: still there? A picture set or shot deleted on its page leaves the list, and its
+  // "ready" drop the corner, instead of opening onto a blank picture (GitHub #63). Asked every eight seconds.
+  const settled = renders.some((r) => !isRunning(r) && (r.kind === 'image' || r.kind === 'video' || r.kind === 'jobs'))
+  useEffect(() => {
+    if (!settled) return
+    const t = setInterval(async () => {
+      const ids = []
+      for (const r of live.current.filter((x) => !isRunning(x))) {
+        if (r.kind === 'image') {
+          let gone = false
+          await window.ivstudio.images.get(r.set.id).catch((err) => (gone = noSet(err)))
+          if (gone) forget([r.key])
+        } else if (r.kind === 'video' && r.job?.id) ids.push(r.job.id)
+        else if (r.kind === 'jobs') ids.push(...r.ids)
+      }
+      const gone = ids.length ? await window.ivstudio.jobs.gone(ids).catch(() => []) : []
+      if (gone.length) forget(live.current.filter((r) => gone.some((id) => usesJob(r, id))).map((r) => r.key))
+    }, 8000)
+    return () => clearInterval(t)
+  }, [settled])
   const stateOf = (r) => (r.kind === 'image' ? imageState(r.set) : r.kind === 'jobs' ? jobsState(r.ids, jobs.current) : r.kind === 'task' || r.kind === 'poll' ? r.state || { stage: 'running', pct: 0 } : videoState(r.job, jobs.current))
   const update = (r, job, set) => {
     const next = { ...r, ...(job ? { job } : {}), ...(set ? { set } : {}) }
@@ -138,13 +172,27 @@ export default function RenderHub({ openShot, openImage, openTarget, notify }) {
 
   // the tray: stop a render, or take a finished one off the list
   const [hidden, setHidden] = useState(() => new Set())
+  // Stop: the render is stopped and leaves the list (GitHub #63: a stopped render stayed, with Watch opening onto
+  // nothing); one that finished meanwhile stays, ready, and one ComfyUI couldn't be asked to stop stays, with why
   async function cancel(r) {
     try {
-      if (r.kind === 'image') await window.ivstudio.images.cancel(r.set.id)
-      else {
+      let finished = false
+      if (r.kind === 'image') {
+        let gone = false
+        const out = await window.ivstudio.images.cancel(r.set.id).catch((err) => {
+          if (!(gone = noSet(err))) throw err
+          return null
+        })
+        finished = !gone && out?.status === 'success'
+      } else {
         const ids = r.kind === 'video' ? [r.job?.id, jobs.current[r.job?.id]?.autoFinishJob] : r.ids.flatMap((id) => [id, jobs.current[id]?.autoFinishJob])
-        for (const id of ids.filter(Boolean)) if (isRunning({ state: videoState(jobs.current[id] || { status: 'queued' }) })) await window.ivstudio.jobs.cancel(id).catch(() => {})
+        // a stop that didn't reach ComfyUI keeps the render on the list: it may well still be running
+        let problem = null
+        for (const id of ids.filter(Boolean)) if (isRunning({ state: videoState(jobs.current[id] || { status: 'queued' }) })) await window.ivstudio.jobs.cancel(id).catch((err) => (problem ||= err))
+        if (problem) throw new Error(`Couldn't stop ${r.name}: ${problem.message}`)
+        finished = stateOf(live.current.find((x) => x.key === r.key) || r).stage === 'done'
       }
+      if (!finished) forget([r.key])
     } catch (err) {
       notify?.(err.message)
     }

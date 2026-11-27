@@ -384,7 +384,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   createMemory: { get: call('createmem:get'), saveLast: call('createmem:saveLast'), clearLast: call('createmem:clearLast'), saveTemplate: call('createmem:saveTemplate'), deleteTemplate: call('createmem:deleteTemplate') },
   cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), price: call('render:price'), priceFinish: call('render:priceFinish'), previews: call('render:previews'), finish: call('render:finish'), enhance: call('render:enhance'), seedanceTiers: call('render:seedanceTiers') },
-  jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },
+  jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), gone: call('jobs:gone'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },
   files: { pick: call('files:pick'), reveal: call('files:reveal'), open: call('files:open') },
   links: { open: call('links:open') },
   terms: { state: call('terms:state'), accept: call('terms:accept'), answer: call('terms:answer'), report: call('terms:report'), openLicense: call('terms:openLicense'), onAsk: on('terms:ask'), onChanged: on('terms:changed') }
